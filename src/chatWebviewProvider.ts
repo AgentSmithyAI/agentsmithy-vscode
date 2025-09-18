@@ -46,6 +46,16 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
                 case 'sendMessage':
                     await this._handleSendMessage(message.text);
                     break;
+                case 'openFile': {
+                    try {
+                        const uri = vscode.Uri.file(message.file);
+                        const doc = await vscode.workspace.openTextDocument(uri);
+                        await vscode.window.showTextDocument(doc, { preview: false });
+                    } catch (err) {
+                        vscode.window.showErrorMessage(`Failed to open file: ${message.file}`);
+                    }
+                    break;
+                }
                 case 'ready':
                     // Webview is ready, send initial state if needed
                     break;
@@ -217,15 +227,16 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
         .user-message {
             background-color: var(--vscode-input-background);
             color: var(--vscode-editor-foreground);
-            align-self: flex-start;
+            align-self: flex-start; /* align user messages to the left */
             border: 1px solid var(--vscode-input-border);
-        }
-        
+            white-space: pre-wrap;
+        }        
         .assistant-message {
             background-color: var(--vscode-editor-background);
             color: var(--vscode-editor-foreground);
             align-self: flex-start;
             border: 1px solid var(--vscode-editorWidget-border);
+            white-space: pre-wrap;
         }
         
         .assistant-message pre {
@@ -262,6 +273,52 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
             border-radius: 4px;
             color: var(--vscode-editor-foreground);
         }
+        .file-edit .file-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+        }
+        .file-edit .file-link {
+            color: var(--vscode-textLink-foreground);
+            cursor: pointer;
+            text-decoration: none;
+        }
+        .file-edit .file-link:hover {
+            text-decoration: underline;
+        }
+        .file-edit details.diff-block {
+            margin-top: 8px;
+        }
+        .diff {
+            font-family: var(--vscode-editor-font-family);
+            font-size: var(--vscode-editor-font-size);
+            background: var(--vscode-editor-background);
+            border-radius: 4px;
+            border: 1px solid var(--vscode-editorWidget-border);
+            overflow: auto;
+        }
+        .diff pre {
+            margin: 0;
+            padding: 8px;
+            white-space: pre;
+        }
+        .diff-line { display: block; }
+        .diff-line.added { color: var(--vscode-gitDecoration-addedResourceForeground); }
+        .diff-line.removed { color: var(--vscode-gitDecoration-deletedResourceForeground); }
+        .diff-line.hunk { color: var(--vscode-descriptionForeground); }
+        .diff-line.meta { color: var(--vscode-descriptionForeground); }
+        
+        .assistant-message h1,
+        .assistant-message h2,
+        .assistant-message h3 {
+            margin: 0.5em 0 0.25em;
+        }
+        .assistant-message p { margin: 0.25em 0; }
+        .assistant-message ul { margin: 0.25em 0 0.25em 1.25em; padding: 0; }
+        .assistant-message li { margin: 0.2em 0; }
+        .assistant-message code { background: var(--vscode-textBlockQuote-background); padding: 0 3px; border-radius: 3px; }
+        .assistant-message pre code { display: block; padding: 8px; }
         
         .error {
             color: var(--vscode-errorForeground);
@@ -433,13 +490,29 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
             return messageDiv;
         }
         
-        function formatMessage(content) {
-            // Just escape HTML for now
-            return content
+        function escapeHtml(str) {
+            return str
+                .replace(/&/g, '&amp;')
                 .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;');
+                .replace(/>/g, '&gt;')
+                .replace(/\"/g, '&quot;')
+                .replace(/'/g, '&#39;');
         }
-        
+
+
+        function formatDiff(diff) {
+            const esc = escapeHtml;
+            const lines = String(diff || '').split('\\n');
+            return lines.map(line => {
+                let cls = '';
+                if (line.startsWith('@@')) cls = 'hunk';
+                else if (line.startsWith('+++') || line.startsWith('---') || line.startsWith('diff')) cls = 'meta';
+                else if (line.startsWith('+')) cls = 'added';
+                else if (line.startsWith('-')) cls = 'removed';
+                return '<span class="diff-line ' + cls + '">' + esc(line) + '</span>';
+            }).join('\\n');
+        }
+
         function addToolCall(toolName) {
             const toolDiv = document.createElement('div');
             toolDiv.className = 'tool-call';
@@ -452,10 +525,22 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
             const editDiv = document.createElement('div');
             editDiv.className = 'file-edit';
             const fileName = file.split('/').pop() || file;
-            editDiv.innerHTML = '<strong>📝 Edited: ' + fileName + '</strong>';
+            editDiv.innerHTML = '<div class="file-header"><strong>📝 Edited: ' + fileName + '</strong>' +
+                '<a class="file-link" data-file="' + encodeURIComponent(file) + '">Open</a></div>';
             if (diff) {
-                editDiv.innerHTML += '<pre><code>' + diff + '</code></pre>';
+                const formatted = formatDiff(diff);
+                editDiv.innerHTML += '<details class="diff-block"><summary>Show diff</summary>' +
+                    '<div class="diff"><pre>' + formatted + '</pre></div>' +
+                    '</details>';
             }
+            editDiv.addEventListener('click', (e) => {
+                const target = e.target;
+                if (target && target.classList && target.classList.contains('file-link')) {
+                    e.preventDefault();
+                    const f = decodeURIComponent(target.getAttribute('data-file'));
+                    vscode.postMessage({ type: 'openFile', file: f });
+                }
+            });
             messagesContainer.appendChild(editDiv);
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
         }
@@ -487,7 +572,6 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
                         currentAssistantText = '';
                         currentAssistantMessage = addMessage('assistant', '');
                     }
-                    // Accumulate text and update textContent
                     if (message.content) {
                         currentAssistantText += message.content;
                         currentAssistantMessage.textContent = currentAssistantText;
@@ -496,6 +580,10 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
                     break;
                     
                 case 'endAssistantMessage':
+                    // Ensure final text is displayed
+                    if (currentAssistantMessage && currentAssistantText) {
+                        currentAssistantMessage.textContent = currentAssistantText;
+                    }
                     currentAssistantMessage = null;
                     currentAssistantText = '';
                     setProcessing(false);
@@ -515,7 +603,17 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
                     break;
             }
         });
-        
+
+        // Open file request from webview
+        window.addEventListener('click', (e) => {
+            const target = e.target;
+            if (target && target.matches && target.matches('.file-link')) {
+                e.preventDefault();
+                const f = decodeURIComponent(target.getAttribute('data-file'));
+                vscode.postMessage({ type: 'openFile', file: f });
+            }
+        });
+
         // Notify extension that webview is ready
         vscode.postMessage({ type: 'ready' });
     </script>
