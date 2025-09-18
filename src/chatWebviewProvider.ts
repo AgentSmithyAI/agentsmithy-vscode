@@ -278,6 +278,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
             display: flex;
             gap: 8px;
             background-color: var(--vscode-sideBar-background);
+            align-items: center; /* vertically center the button relative to the textarea */
         }
         
         #messageInput {
@@ -295,27 +296,42 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
         }
         
         #messageInput:focus {
-            outline: 1px solid var(--vscode-focusBorder);
+            outline: none;
+            border-color: var(--vscode-input-border);
+            box-shadow: 0 0 0 1px var(--vscode-input-border);
         }
         
         #sendButton {
-            padding: 8px 16px;
-            background-color: var(--vscode-button-background);
-            color: var(--vscode-button-foreground);
-            border: none;
+            width: 36px;
+            height: 36px;
+            padding: 0;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: transparent;
+            color: var(--vscode-icon-foreground, var(--vscode-foreground));
+            border: 1px solid var(--vscode-input-border);
             border-radius: 4px;
             cursor: pointer;
-            font-family: inherit;
-            font-size: inherit;
         }
         
         #sendButton:hover {
-            background-color: var(--vscode-button-hoverBackground);
+            background-color: var(--vscode-toolbar-hoverBackground, transparent);
+        }
+        
+        #sendButton:focus {
+            outline: 1px solid var(--vscode-focusBorder);
         }
         
         #sendButton:disabled {
-            opacity: 0.5;
+            opacity: 0.4;
             cursor: not-allowed;
+        }
+        
+        #sendButton svg {
+            width: 16px;
+            height: 16px;
+            fill: currentColor;
         }
         
         .typing-indicator {
@@ -346,7 +362,11 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
                 placeholder="Type your message..."
                 rows="1"
             ></textarea>
-            <button id="sendButton">Send</button>
+            <button id="sendButton" title="Send (Enter)" aria-label="Send">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                </svg>
+            </button>
         </div>
     </div>
     
