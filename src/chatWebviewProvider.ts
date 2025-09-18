@@ -217,7 +217,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
         .user-message {
             background-color: var(--vscode-input-background);
             color: var(--vscode-editor-foreground);
-            align-self: flex-end;
+            align-self: flex-start;
             border: 1px solid var(--vscode-input-border);
         }
         
