@@ -1,21 +1,68 @@
-# Chat Tutorial
+# AgentSmithy VSCode Extension
 
-Visual Studio Code's Copilot Chat architecture enables extension authors to integrate with the GitHub Copilot Chat experience. A chat extension is a VS Code extension that uses the Chat extension API by contributing a Chat participant. Chat participants are domain experts that can answer user queries within a specific domain.
+This VSCode extension integrates AgentSmithy AI coding assistant into Visual Studio Code through a native WebView chat interface. Works with any VSCode version, including open source builds (Code-OSS, VSCodium).
 
-This GitHub Copilot Extension sample shows:
+## Features
 
-- How to contribute a chat participant to the GitHub Copilot Chat view.
+- **Native Chat Interface**: Built-in chat panel in VSCode sidebar
+- **AI-powered code assistance**: Get help with coding tasks directly in VSCode
+- **File context awareness**: AgentSmithy understands your current file and selection
+- **Real-time streaming**: Responses stream in real-time using Server-Sent Events (SSE)
+- **Tool usage visibility**: See when AgentSmithy uses tools to read/edit files
+- **Diff display**: View file changes as unified diffs in the chat
+- **Selection support**: Right-click to send selected code to AgentSmithy
 
-![A screenshot of the running extension, showing the @tutor /exercise command](./demo.png)
+## Prerequisites
 
-Documentation can be found here:
-- https://code.visualstudio.com/api/extension-guides/chat
-- https://code.visualstudio.com/api/extension-guides/chat-tutorial
+- AgentSmithy server running locally (default: http://localhost:11434)
+- Any version of Visual Studio Code (including Code-OSS, VSCodium)
 
-## Running the Sample
+## Installation
 
-- Run `npm install` in terminal to install dependencies
-- Run the `Run Extension` target in the Debug View. This will:
-	- Start a task `npm: watch` to compile the code
-	- Run the extension in a new VS Code window
-	- You will see the @tutor chat participant in the GitHub Copilot Chat view
+### Development Mode (Recommended for testing)
+1. Clone this repository
+2. Run `npm install` to install dependencies
+3. Press `F5` in VSCode to launch extension in debug mode
+4. Look for AgentSmithy icon in the activity bar (left sidebar)
+
+### Install from VSIX
+1. Run `npm install && npm run compile`
+2. Run `npx vsce package` to create .vsix file
+3. In VSCode: `Ctrl+Shift+P` → `Extensions: Install from VSIX...`
+4. Select the generated .vsix file
+
+## Usage
+
+### Open Chat
+- Click the AgentSmithy icon in the activity bar (left sidebar)
+- Or use Command Palette: `Ctrl+Shift+P` → `AgentSmithy: Open Chat`
+
+### Move to Secondary Sidebar (Recommended)
+1. Right-click on the AgentSmithy icon in the activity bar
+2. Select "Move to Secondary Side Bar"
+3. The chat will now appear on the right side of VSCode
+4. This keeps your code and chat visible simultaneously
+
+### Send Selected Code
+1. Select code in the editor
+2. Right-click → `Send Selection to AgentSmithy`
+3. Or use Command Palette: `Ctrl+Shift+P` → `AgentSmithy: Send Selection`
+
+### Chat Interface
+- Type your message in the input field
+- Press Enter to send (Shift+Enter for new line)
+- View responses with syntax highlighting and formatting
+- See tool usage and file edits in real-time
+
+## Configuration
+
+Access settings via `File → Preferences → Settings` → search for "AgentSmithy":
+
+- `agentsmithy.serverUrl`: AgentSmithy server URL (default: "http://localhost:8080")
+- `agentsmithy.showReasoning`: Show AI reasoning/thinking process in chat (default: false)
+
+## Troubleshooting
+
+1. **Chat not responding**: Ensure AgentSmithy server is running at configured URL
+2. **Connection errors**: Check server URL in settings
+3. **No AgentSmithy icon**: Reload VSCode window (`Ctrl+R` in VSCode)
