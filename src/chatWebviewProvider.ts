@@ -35,7 +35,10 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
         
         webviewView.webview.options = {
             enableScripts: true,
-            localResourceRoots: [this._extensionUri]
+            localResourceRoots: [
+                this._extensionUri,
+                vscode.Uri.joinPath(this._extensionUri, 'node_modules')
+            ]
         };
         
         webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
@@ -183,12 +186,16 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     private _getHtmlForWebview(webview: vscode.Webview) {
         const nonce = getNonce();
         
+        // Get path to marked library
+        const markedPath = vscode.Uri.joinPath(this._extensionUri, 'node_modules', 'marked', 'lib', 'marked.umd.js');
+        const markedUri = webview.asWebviewUri(markedPath);
+        
         return `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src ${webview.cspSource} 'nonce-${nonce}';">
     <title>AgentSmithy Chat</title>
     <style>
         body {
@@ -404,6 +411,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
             display: block;
         }
     </style>
+    <script src="${markedUri}"></script>
 </head>
 <body>
     <div class="chat-container">
@@ -483,7 +491,11 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
             const messageDiv = document.createElement('div');
             messageDiv.className = 'message ' + (role === 'user' ? 'user-message' : 'assistant-message');
             if (content) {
-                messageDiv.textContent = content;
+                if (role === 'assistant') {
+                    messageDiv.innerHTML = renderMarkdown(content);
+                } else {
+                    messageDiv.textContent = content;
+                }
             }
             messagesContainer.appendChild(messageDiv);
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
@@ -497,6 +509,17 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
                 .replace(/>/g, '&gt;')
                 .replace(/\"/g, '&quot;')
                 .replace(/'/g, '&#39;');
+        }
+
+        // Use marked library for markdown rendering
+        function renderMarkdown(text) {
+            if (window.marked) {
+                // Parse markdown and return HTML
+                return window.marked.parse(text);
+            }
+            
+            // Fallback if marked is not loaded
+            return escapeHtml(text).replace(/\\n/g, '<br>');
         }
 
 
@@ -580,9 +603,9 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
                     break;
                     
                 case 'endAssistantMessage':
-                    // Ensure final text is displayed
+                    // Ensure final text is displayed with markdown
                     if (currentAssistantMessage && currentAssistantText) {
-                        currentAssistantMessage.textContent = currentAssistantText;
+                        currentAssistantMessage.innerHTML = renderMarkdown(currentAssistantText);
                     }
                     currentAssistantMessage = null;
                     currentAssistantText = '';
@@ -614,6 +637,31 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
             }
         });
 
+        // Initialize marked if available
+        if (window.marked) {
+            window.marked.setOptions({
+                breaks: true, // Enable line breaks
+                gfm: true, // GitHub Flavored Markdown
+                pedantic: false,
+                smartLists: true,
+                smartypants: false,
+                // Custom renderer to ensure code blocks are properly escaped
+                renderer: {
+                    code(code, infostring, escaped) {
+                        const lang = (infostring || '').match(/\\S*/)[0];
+                        const escapedCode = escapeHtml(code);
+                        if (lang) {
+                            return '<pre><code class="language-' + escapeHtml(lang) + '">' + escapedCode + '</code></pre>';
+                        }
+                        return '<pre><code>' + escapedCode + '</code></pre>';
+                    },
+                    codespan(code) {
+                        return '<code>' + escapeHtml(code) + '</code>';
+                    }
+                }
+            });
+        }
+        
         // Notify extension that webview is ready
         vscode.postMessage({ type: 'ready' });
     </script>
