@@ -38,6 +38,7 @@ export interface SSEEvent {
 
 export class AgentSmithyClient {
     private baseUrl: string;
+    private abortController?: AbortController;
     
     constructor(baseUrl?: string) {
         this.baseUrl = baseUrl || this.getServerUrl();
@@ -68,7 +69,20 @@ export class AgentSmithyClient {
         return config.get<string>('serverUrl', 'http://localhost:11434');
     }
     
+    abort() {
+        if (this.abortController) {
+            this.abortController.abort();
+            this.abortController = undefined;
+        }
+    }
+    
     async *streamChat(request: ChatRequest): AsyncGenerator<SSEEvent> {
+        // Cancel any previous request
+        this.abort();
+        
+        // Create new abort controller for this request
+        this.abortController = new AbortController();
+        
         const response = await fetch(`${this.baseUrl}/api/chat`, {
             method: 'POST',
             headers: {
@@ -76,7 +90,8 @@ export class AgentSmithyClient {
                 'Accept': 'text/event-stream',
                 'Cache-Control': 'no-cache'
             },
-            body: JSON.stringify({ ...request, stream: true })
+            body: JSON.stringify({ ...request, stream: true }),
+            signal: this.abortController.signal
         });
         
         if (!response.ok) {
@@ -144,8 +159,18 @@ export class AgentSmithyClient {
 					// Ignore comments (lines starting with ':') and other fields for now
 				}
 			}
+		} catch (error) {
+			// Re-throw abort errors to be handled by caller
+			if (error instanceof Error && error.name === 'AbortError') {
+				throw error;
+			}
+			throw error;
 		} finally {
 			reader.releaseLock();
+			// Clear abort controller when done
+			if (this.abortController?.signal.aborted) {
+				this.abortController = undefined;
+			}
 		}
     }
     

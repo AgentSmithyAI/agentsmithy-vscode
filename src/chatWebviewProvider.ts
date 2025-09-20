@@ -59,6 +59,10 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
                     }
                     break;
                 }
+                case 'stopProcessing':
+                    // Stop the current request
+                    this._client.abort();
+                    break;
                 case 'ready':
                     // Webview is ready, send initial state if needed
                     break;
@@ -194,10 +198,18 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
                 });
             }
             } catch (error) {
-                this._view.webview.postMessage({
-                    type: 'showError',
-                    error: error instanceof Error ? error.message : 'Connection error'
-                });
+                // Don't show error for aborted requests
+                if (error instanceof Error && error.name === 'AbortError') {
+                    this._view.webview.postMessage({
+                        type: 'showInfo',
+                        message: 'Request cancelled'
+                    });
+                } else {
+                    this._view.webview.postMessage({
+                        type: 'showError',
+                        error: error instanceof Error ? error.message : 'Connection error'
+                    });
+                }
                 this._view.webview.postMessage({
                     type: 'endAssistantMessage'
                 });
@@ -236,7 +248,6 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
                 Type a message to start...
             </div>
         </div>
-        <div class="typing-indicator" id="typingIndicator">AgentSmithy is typing...</div>
         <div class="input-container">
             <textarea 
                 id="messageInput" 
@@ -256,7 +267,6 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
         const messagesContainer = document.getElementById('messages');
         const messageInput = document.getElementById('messageInput');
         const sendButton = document.getElementById('sendButton');
-        const typingIndicator = document.getElementById('typingIndicator');
         const welcomePlaceholder = document.getElementById('welcomePlaceholder');
         
         let currentAssistantMessage = null;
@@ -279,7 +289,16 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
             }
         });
         
-        sendButton.addEventListener('click', sendMessage);
+        sendButton.addEventListener('click', () => {
+            if (isProcessing) {
+                // Stop processing
+                setProcessing(false);
+                vscode.postMessage({ type: 'stopProcessing' });
+            } else {
+                // Send message
+                sendMessage();
+            }
+        });
         
         function sendMessage() {
             const text = messageInput.value.trim();
@@ -309,9 +328,20 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
         
         function setProcessing(processing) {
             isProcessing = processing;
-            sendButton.disabled = processing;
             messageInput.disabled = processing;
-            typingIndicator.classList.toggle('active', processing);
+            
+            // Change button appearance based on processing state
+            if (processing) {
+                sendButton.innerHTML = '<svg class="stop-icon" viewBox="0 0 32 32" aria-hidden="true"><rect x="10" y="10" width="12" height="12" fill="currentColor" rx="2"/><circle cx="16" cy="16" r="15" stroke="currentColor" stroke-width="2" fill="none" stroke-dasharray="47.1 47.1" class="spinner-ring" opacity="0.4"/></svg>';
+                sendButton.classList.add('processing');
+                sendButton.title = 'Stop';
+                sendButton.setAttribute('aria-label', 'Stop');
+            } else {
+                sendButton.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>';
+                sendButton.classList.remove('processing');
+                sendButton.title = 'Send (Enter)';
+                sendButton.setAttribute('aria-label', 'Send');
+            }
         }
         
         function addMessage(role, content) {
@@ -640,6 +670,19 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
             errorDiv.scrollIntoView({ behavior: 'smooth', block: 'end' });
         }
         
+        function showInfo(message) {
+            // Hide welcome placeholder
+            if (welcomePlaceholder) {
+                welcomePlaceholder.style.display = 'none';
+            }
+            
+            const infoDiv = document.createElement('div');
+            infoDiv.className = 'info';
+            infoDiv.textContent = 'ℹ️ ' + message;
+            messagesContainer.appendChild(infoDiv);
+            infoDiv.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        }
+        
         function createReasoningBlock() {
             // Hide welcome placeholder
             if (welcomePlaceholder) {
@@ -725,6 +768,11 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
                     
                 case 'showError':
                     showError(message.error);
+                    setProcessing(false);
+                    break;
+                    
+                case 'showInfo':
+                    showInfo(message.message);
                     setProcessing(false);
                     break;
                     
