@@ -330,7 +330,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
                 }
             }
             messagesContainer.appendChild(messageDiv);
-            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            messageDiv.scrollIntoView({ behavior: 'smooth', block: 'end' });
             return messageDiv;
         }
         
@@ -603,7 +603,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
             }
             
             messagesContainer.appendChild(toolDiv);
-            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            toolDiv.scrollIntoView({ behavior: 'smooth', block: 'end' });
         }
         
         function addFileEdit(file, diff) {
@@ -624,7 +624,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
                     '</details>';
             }
             messagesContainer.appendChild(editDiv);
-            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            editDiv.scrollIntoView({ behavior: 'smooth', block: 'end' });
         }
         
         function showError(error) {
@@ -637,7 +637,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
             errorDiv.className = 'error';
             errorDiv.textContent = '❌ Error: ' + error;
             messagesContainer.appendChild(errorDiv);
-            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            errorDiv.scrollIntoView({ behavior: 'smooth', block: 'end' });
         }
         
         function createReasoningBlock() {
@@ -671,7 +671,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
             reasoningDiv.appendChild(header);
             reasoningDiv.appendChild(content);
             messagesContainer.appendChild(reasoningDiv);
-            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            reasoningDiv.scrollIntoView({ behavior: 'smooth', block: 'end' });
             
             return { block: reasoningDiv, content: content, header: header };
         }
@@ -701,7 +701,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
                         // Render progressively but safely. For performance we keep simple text until end,
                         // but still escape backticks to avoid breaking HTML when using innerHTML later.
                         currentAssistantMessage.textContent = currentAssistantText;
-                        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                        currentAssistantMessage.scrollIntoView({ behavior: 'smooth', block: 'end' });
                     }
                     break;
                     
@@ -742,7 +742,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
                         if (currentReasoningBlock.content.style.display === 'none') {
                             currentReasoningBlock.content.style.display = 'block';
                         }
-                        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                        currentReasoningBlock.block.scrollIntoView({ behavior: 'smooth', block: 'end' });
                     }
                     break;
                     

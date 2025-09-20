@@ -16,18 +16,18 @@ body {
 .messages {
     flex: 1;
     overflow-y: auto;
-    padding: 16px;
+    padding: 8px;
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 6px;
     background-color: var(--vscode-sideBar-background);
 }
 
 .message {
-    padding: 12px;
+    padding: 8px;
     border-radius: 4px;
     word-wrap: break-word;
-    margin-bottom: 8px;
+    margin-bottom: 4px;
 }
 
 .user-message {
@@ -58,8 +58,8 @@ body {
 }
 
 .tool-call {
-    margin: 8px 0;
-    padding: 8px 12px;
+    margin: 4px 0;
+    padding: 6px 8px;
     background-color: var(--vscode-editor-background);
     border: 1px solid var(--vscode-editorWidget-border);
     border-left: 3px solid var(--vscode-activityBarBadge-background);
@@ -80,8 +80,8 @@ body {
 }
 
 .file-edit {
-    margin: 8px 0;
-    padding: 8px;
+    margin: 4px 0;
+    padding: 6px 8px;
     background-color: var(--vscode-editor-background);
     border: 1px solid var(--vscode-editorWidget-border);
     border-left: 3px solid var(--vscode-gitDecoration-modifiedResourceForeground);
@@ -139,13 +139,13 @@ body {
     color: var(--vscode-errorForeground);
     background-color: var(--vscode-editor-background);
     border: 1px solid var(--vscode-editorError-foreground);
-    padding: 8px;
+    padding: 6px 8px;
     border-radius: 4px;
-    margin: 8px 0;
+    margin: 4px 0;
 }
 
 .input-container {
-    padding: 16px;
+    padding: 8px;
     border-top: 1px solid var(--vscode-widget-border);
     display: flex;
     gap: 8px;
@@ -155,7 +155,7 @@ body {
 
 #messageInput {
     flex: 1;
-    padding: 8px 12px;
+    padding: 6px 8px;
     background-color: var(--vscode-input-background);
     color: var(--vscode-input-foreground);
     border: 1px solid var(--vscode-input-border);
@@ -163,7 +163,7 @@ body {
     font-family: inherit;
     font-size: inherit;
     resize: none;
-    min-height: 36px;
+    min-height: 32px;
     max-height: 120px;
 }
 
@@ -174,8 +174,8 @@ body {
 }
 
 #sendButton {
-    width: 36px;
-    height: 36px;
+    width: 32px;
+    height: 32px;
     padding: 0;
     display: inline-flex;
     align-items: center;
@@ -230,8 +230,7 @@ body {
 }
 
 .reasoning-block {
-    margin: 8px 0;
-    margin-bottom: 12px;
+    margin: 4px 0;
     background-color: var(--vscode-editor-background);
     border: 1px solid var(--vscode-editorWidget-border);
     border-left: 3px solid var(--vscode-debugIcon-pauseForeground);
@@ -240,7 +239,7 @@ body {
 }
 
 .reasoning-header {
-    padding: 8px 12px;
+    padding: 6px 8px;
     background-color: var(--vscode-editor-background);
     color: var(--vscode-descriptionForeground);
     font-weight: 500;
@@ -260,13 +259,13 @@ body {
 }
 
 .reasoning-content {
-    padding: 12px;
+    padding: 8px;
     color: var(--vscode-descriptionForeground);
     font-style: italic;
     white-space: pre-wrap;
     font-size: 0.95em;
     line-height: 1.5;
-    min-height: 30px;
+    min-height: 20px;
     word-wrap: break-word;
     display: block;
 }
