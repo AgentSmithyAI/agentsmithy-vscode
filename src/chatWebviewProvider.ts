@@ -104,13 +104,12 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
         // User message is already shown by the webview itself
         
         try {
-            const config = vscode.workspace.getConfiguration('agentsmithy');
-            const showReasoning = config.get<boolean>('showReasoning', false);
-            
             let chatBuffer = '';
+            let hasReceivedEvents = false;
             
             // Stream response
             for await (const event of this._client.streamChat(request)) {
+                hasReceivedEvents = true;
                 switch (event.type) {
                     case 'chat_start':
                         chatBuffer = '';
@@ -129,14 +128,25 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
                         this._view.webview.postMessage({ type: 'endAssistantMessage' });
                         break;
                         
+                    case 'reasoning_start':
+                        this._view.webview.postMessage({
+                            type: 'startReasoning'
+                        });
+                        break;
+                        
                     case 'reasoning':
-                        if (showReasoning && event.content) {
+                        if (event.content) {
                             this._view.webview.postMessage({
-                                type: 'appendToAssistant',
-                                content: `\n*${event.content}*\n`,
-                                isReasoning: true
+                                type: 'appendToReasoning',
+                                content: event.content
                             });
                         }
+                        break;
+                        
+                    case 'reasoning_end':
+                        this._view.webview.postMessage({
+                            type: 'endReasoning'
+                        });
                         break;
                         
                     case 'tool_call':
@@ -172,15 +182,31 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
                         break;
                 }
             }
-        } catch (error) {
-            this._view.webview.postMessage({
-                type: 'showError',
-                error: error instanceof Error ? error.message : 'Connection error'
-            });
-            this._view.webview.postMessage({
-                type: 'endAssistantMessage'
-            });
-        }
+            
+            // If no events were received at all, ensure UI is unlocked
+            if (!hasReceivedEvents) {
+                this._view.webview.postMessage({
+                    type: 'showError',
+                    error: 'No response from server'
+                });
+                this._view.webview.postMessage({
+                    type: 'endAssistantMessage'
+                });
+            }
+            } catch (error) {
+                this._view.webview.postMessage({
+                    type: 'showError',
+                    error: error instanceof Error ? error.message : 'Connection error'
+                });
+                this._view.webview.postMessage({
+                    type: 'endAssistantMessage'
+                });
+            } finally {
+                // Ensure processing state is always cleared
+                this._view.webview.postMessage({
+                    type: 'endAssistantMessage'
+                });
+            }
     }
     
     private _getHtmlForWebview(webview: vscode.Webview) {
@@ -189,6 +215,9 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
         // Get path to marked library
         const markedPath = vscode.Uri.joinPath(this._extensionUri, 'node_modules', 'marked', 'lib', 'marked.umd.js');
         const markedUri = webview.asWebviewUri(markedPath);
+        
+        // Get workspace root
+        const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '';
         
         return `<!DOCTYPE html>
 <html lang="en">
@@ -203,8 +232,8 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
 <body>
     <div class="chat-container">
         <div class="messages" id="messages">
-            <div class="message assistant-message">
-                Welcome to AgentSmithy! I'm here to help you with coding tasks. How can I assist you today?
+            <div class="welcome-placeholder" id="welcomePlaceholder">
+                Type a message to start...
             </div>
         </div>
         <div class="typing-indicator" id="typingIndicator">AgentSmithy is typing...</div>
@@ -228,9 +257,12 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
         const messageInput = document.getElementById('messageInput');
         const sendButton = document.getElementById('sendButton');
         const typingIndicator = document.getElementById('typingIndicator');
+        const welcomePlaceholder = document.getElementById('welcomePlaceholder');
         
         let currentAssistantMessage = null;
         let currentAssistantText = '';
+        let currentReasoningBlock = null;
+        let currentReasoningText = '';
         let isProcessing = false;
         
         // Auto-resize textarea
@@ -265,6 +297,14 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
             });
             
             setProcessing(true);
+            
+            // Safety timeout to ensure UI doesn't stay locked forever
+            setTimeout(() => {
+                if (isProcessing) {
+                    console.warn('Response timeout - unlocking UI');
+                    setProcessing(false);
+                }
+            }, 30000); // 30 seconds timeout
         }
         
         function setProcessing(processing) {
@@ -275,6 +315,11 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
         }
         
         function addMessage(role, content) {
+            // Hide welcome placeholder when first message is added
+            if (welcomePlaceholder) {
+                welcomePlaceholder.style.display = 'none';
+            }
+            
             const messageDiv = document.createElement('div');
             messageDiv.className = 'message ' + (role === 'user' ? 'user-message' : 'assistant-message');
             if (content) {
@@ -323,15 +368,250 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
             }).join('\\n');
         }
 
-        function addToolCall(toolName) {
+        function stripProjectPrefix(path) {
+            // Get workspace root from vscode context passed to webview
+            const workspaceRoot = '${workspaceRoot}';
+            if (!path || !workspaceRoot) {
+                return path;
+            }
+            
+            // Normalize paths for comparison
+            const normalizedPath = path.replace(/\\\\/g, '/');
+            const normalizedRoot = workspaceRoot.replace(/\\\\/g, '/');
+            
+            // Check if path starts with workspace root
+            if (normalizedPath.startsWith(normalizedRoot)) {
+                // Remove workspace root and any leading slash
+                let relative = normalizedPath.substring(normalizedRoot.length);
+                if (relative.startsWith('/')) {
+                    relative = relative.substring(1);
+                }
+                return relative || '.';
+            }
+            
+            return path;
+        }
+
+        function formatToolCallWithPath(toolName, args) {
+            const name = toolName ? toolName.toLowerCase() : '';
+            const a = args || {};
+            
+            // Helper to extract file path from various argument names
+            const extractPath = () => {
+                return a.path || a.file || a.target_file || a.file_path || 
+                       a.target_notebook || a.paths?.[0] || null;
+            };
+            
+            const path = extractPath();
+            const displayPath = path ? stripProjectPrefix(path) : null;
+            
+            // Return structured info for different tool types
+            switch(name) {
+                case 'read_file':
+                    return {
+                        prefix: 'Reading: ',
+                        path: path,
+                        displayPath: displayPath || 'unknown',
+                        text: 'Reading: ' + (displayPath || 'unknown')
+                    };
+                    
+                case 'write_file':
+                case 'write_to_file':
+                case 'write':
+                    return {
+                        prefix: 'Writing: ',
+                        path: path,
+                        displayPath: displayPath || 'unknown',
+                        text: 'Writing: ' + (displayPath || 'unknown')
+                    };
+                    
+                case 'delete_file':
+                    return {
+                        prefix: 'Deleting: ',
+                        path: path,
+                        displayPath: displayPath || 'unknown',
+                        text: 'Deleting: ' + (displayPath || 'unknown')
+                    };
+                    
+                case 'create_file':
+                    return {
+                        prefix: 'Creating: ',
+                        path: path,
+                        displayPath: displayPath || 'unknown',
+                        text: 'Creating: ' + (displayPath || 'unknown')
+                    };
+                    
+                case 'replace_in_file':
+                case 'edit':
+                case 'str_replace':
+                case 'search_replace':
+                    return {
+                        prefix: 'Editing: ',
+                        path: path,
+                        displayPath: displayPath || 'unknown',
+                        text: 'Editing: ' + (displayPath || 'unknown')
+                    };
+                    
+                case 'multiedit':
+                    return {
+                        prefix: 'Multi-edit: ',
+                        path: path,
+                        displayPath: displayPath || 'unknown',
+                        text: 'Multi-edit: ' + (displayPath || 'unknown')
+                    };
+                    
+                case 'edit_notebook':
+                    return {
+                        prefix: 'Editing notebook: ',
+                        path: path,
+                        displayPath: displayPath || 'unknown',
+                        text: 'Editing notebook: ' + (displayPath || 'unknown')
+                    };
+                    
+                case 'read_lints':
+                    if (a.paths && a.paths.length > 0) {
+                        const firstPath = a.paths[0];
+                        return {
+                            prefix: 'Reading linter errors for ',
+                            path: firstPath,
+                            displayPath: stripProjectPrefix(firstPath),
+                            suffix: a.paths.length > 1 ? ' and ' + (a.paths.length - 1) + ' more' : '',
+                            text: 'Reading linter errors for ' + a.paths.map(p => stripProjectPrefix(p)).join(', ')
+                        };
+                    }
+                    return { text: 'Reading linter errors' };
+                    
+                default:
+                    // For non-file operations, return the original formatted text
+                    const formatted = formatToolCall(toolName, args);
+                    return { text: formatted };
+            }
+        }
+
+        function formatToolCall(toolName, args) {
+            const name = toolName ? toolName.toLowerCase() : '';
+            const a = args || {};
+            
+            // Helper function to format file paths
+            const formatPath = (path) => stripProjectPrefix(path);
+            
+            // Tool-specific formatting handlers
+            switch(name) {
+                case 'read_file':
+                    return 'Reading: ' + formatPath(a.path || a.file || a.target_file || 'unknown');
+                    
+                case 'write_file':
+                case 'write_to_file':
+                case 'write':
+                    return 'Writing: ' + formatPath(a.path || a.file_path || a.target_file || 'unknown');
+                    
+                case 'delete_file':
+                    return 'Deleting: ' + formatPath(a.path || a.target_file || 'unknown');
+                    
+                case 'create_file':
+                    return 'Creating: ' + formatPath(a.path || a.file_path || 'unknown');
+                    
+                case 'list_files':
+                case 'list_dir':
+                    // Don't strip prefix for directories
+                    return 'List: ' + (a.path || a.directory || a.target_directory || 'unknown');
+                    
+                case 'run_command':
+                case 'run_terminal_cmd':
+                    return 'Running: ' + (a.command || 'unknown');
+                    
+                case 'replace_in_file':
+                case 'edit':
+                case 'str_replace':
+                case 'search_replace':
+                    return 'Editing: ' + formatPath(a.path || a.file_path || 'unknown');
+                    
+                case 'search':
+                case 'grep_search':
+                case 'grep':
+                case 'codebase_search':
+                    return 'Search: ' + (a.query || a.pattern || a.regex || 'unknown');
+                    
+                case 'search_files':
+                case 'glob_file_search':
+                    {
+                        const query = a.regex || a.pattern || a.query || a.glob_pattern || 'unknown';
+                        const path = a.path || a.directory || a.target_directory;
+                        const filePattern = a.file_pattern;
+                        let result = 'Search: ' + query;
+                        if (filePattern) {
+                            result += ' (glob: ' + filePattern + ')';
+                        }
+                        if (path) {
+                            result += ' in ' + path;
+                        }
+                        return result;
+                    }
+                    
+                case 'multiedit':
+                    return 'Multi-edit: ' + formatPath(a.file_path || 'unknown');
+                    
+                case 'edit_notebook':
+                    return 'Editing notebook: ' + formatPath(a.target_notebook || 'unknown');
+                    
+                case 'todo_write':
+                    return 'Updating todo list';
+                    
+                case 'web_search':
+                    return 'Web search: ' + (a.search_term || 'unknown');
+                    
+                case 'update_memory':
+                    return 'Updating memory: ' + (a.action || 'unknown');
+                    
+                case 'read_lints':
+                    return 'Reading linter errors' + (a.paths && a.paths.length > 0 ? ' for ' + a.paths.map(p => formatPath(p)).join(', ') : '');
+                    
+                default:
+                    // Fallback formatting
+                    if (a && typeof a === 'object') {
+                        const keys = Object.keys(a);
+                        if (keys.length > 0) {
+                            const firstKey = keys[0];
+                            return toolName + ': ' + a[firstKey];
+                        }
+                    }
+                    return toolName;
+            }
+        }
+
+        function addToolCall(toolName, args) {
+            // Hide welcome placeholder
+            if (welcomePlaceholder) {
+                welcomePlaceholder.style.display = 'none';
+            }
+            
             const toolDiv = document.createElement('div');
             toolDiv.className = 'tool-call';
-            toolDiv.textContent = '🔧 Using tool: ' + toolName;
+            
+            // Format the tool call and extract file path if present
+            const formattedInfo = formatToolCallWithPath(toolName, args);
+            
+            if (formattedInfo.path && formattedInfo.path !== 'unknown') {
+                // Create clickable file link
+                toolDiv.innerHTML = '• ' + formattedInfo.prefix + 
+                    '<a class="file-link" data-file="' + encodeURIComponent(formattedInfo.path) + '">' + 
+                    escapeHtml(formattedInfo.displayPath) + '</a>' + 
+                    (formattedInfo.suffix || '');
+            } else {
+                // No file path, just show text
+                toolDiv.textContent = '• ' + formattedInfo.text;
+            }
+            
             messagesContainer.appendChild(toolDiv);
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
         }
         
         function addFileEdit(file, diff) {
+            // Hide welcome placeholder
+            if (welcomePlaceholder) {
+                welcomePlaceholder.style.display = 'none';
+            }
+            
             const editDiv = document.createElement('div');
             editDiv.className = 'file-edit';
             const fileName = file.split('/').pop() || file;
@@ -343,24 +623,57 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
                     '<div class="diff"><pre>' + formatted + '</pre></div>' +
                     '</details>';
             }
-            editDiv.addEventListener('click', (e) => {
-                const target = e.target;
-                if (target && target.classList && target.classList.contains('file-link')) {
-                    e.preventDefault();
-                    const f = decodeURIComponent(target.getAttribute('data-file'));
-                    vscode.postMessage({ type: 'openFile', file: f });
-                }
-            });
             messagesContainer.appendChild(editDiv);
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
         }
         
         function showError(error) {
+            // Hide welcome placeholder
+            if (welcomePlaceholder) {
+                welcomePlaceholder.style.display = 'none';
+            }
+            
             const errorDiv = document.createElement('div');
             errorDiv.className = 'error';
             errorDiv.textContent = '❌ Error: ' + error;
             messagesContainer.appendChild(errorDiv);
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+        
+        function createReasoningBlock() {
+            // Hide welcome placeholder
+            if (welcomePlaceholder) {
+                welcomePlaceholder.style.display = 'none';
+            }
+            
+            const reasoningDiv = document.createElement('div');
+            reasoningDiv.className = 'reasoning-block';
+            
+            const header = document.createElement('div');
+            header.className = 'reasoning-header';
+            header.innerHTML = '<span class="reasoning-toggle">▼</span> Thinking...';
+            header.style.cursor = 'pointer';
+            
+            const content = document.createElement('div');
+            content.className = 'reasoning-content';
+            content.style.display = 'block'; // Start expanded during streaming
+            content.textContent = ' '; // Initialize with space to prevent collapse
+            
+            header.addEventListener('click', () => {
+                const isExpanded = content.style.display !== 'none';
+                content.style.display = isExpanded ? 'none' : 'block';
+                const toggle = header.querySelector('.reasoning-toggle');
+                if (toggle) {
+                    toggle.textContent = isExpanded ? '▶' : '▼';
+                }
+            });
+            
+            reasoningDiv.appendChild(header);
+            reasoningDiv.appendChild(content);
+            messagesContainer.appendChild(reasoningDiv);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            
+            return { block: reasoningDiv, content: content, header: header };
         }
         
         // Handle messages from extension
@@ -373,6 +686,9 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
                     break;
                     
                 case 'startAssistantMessage':
+                    // Clear any ongoing reasoning state when starting a new assistant message
+                    currentReasoningBlock = null;
+                    currentReasoningText = '';
                     currentAssistantText = '';
                     currentAssistantMessage = addMessage('assistant', '');
                     break;
@@ -402,7 +718,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
                     break;
                     
                 case 'showToolCall':
-                    addToolCall(message.tool);
+                    addToolCall(message.tool, message.args);
                     break;
                     
                 case 'showFileEdit':
@@ -412,6 +728,42 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
                 case 'showError':
                     showError(message.error);
                     setProcessing(false);
+                    break;
+                    
+                case 'startReasoning':
+                    currentReasoningText = '';
+                    currentReasoningBlock = createReasoningBlock();
+                    break;
+                    
+                case 'appendToReasoning':
+                    if (currentReasoningBlock && currentReasoningBlock.content && message.content) {
+                        currentReasoningText += message.content;
+                        // Use textContent to avoid HTML injection
+                        currentReasoningBlock.content.textContent = currentReasoningText;
+                        // Ensure the content is visible
+                        if (currentReasoningBlock.content.style.display === 'none') {
+                            currentReasoningBlock.content.style.display = 'block';
+                        }
+                        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                    }
+                    break;
+                    
+                case 'endReasoning':
+                    if (currentReasoningBlock && currentReasoningBlock.block) {
+                        // Auto-collapse after completion
+                        const blockToCollapse = currentReasoningBlock;
+                        setTimeout(() => {
+                            if (blockToCollapse.content && blockToCollapse.header) {
+                                blockToCollapse.content.style.display = 'none';
+                                const toggle = blockToCollapse.header.querySelector('.reasoning-toggle');
+                                if (toggle) {
+                                    toggle.textContent = '▶';
+                                }
+                            }
+                        }, 100); // Small delay to ensure content is fully rendered
+                        currentReasoningBlock = null;
+                        currentReasoningText = '';
+                    }
                     break;
             }
         });
@@ -455,7 +807,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
         vscode.postMessage({ type: 'ready' });
     </script>
 </body>
-</html>`;
+</html>`.replace(/\${workspaceRoot(?:\.replace\(.*?\))?}/g, workspaceRoot);
     }
 }
 

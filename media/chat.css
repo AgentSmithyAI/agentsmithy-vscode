@@ -26,7 +26,6 @@ body {
 .message {
     padding: 12px;
     border-radius: 4px;
-    max-width: 85%;
     word-wrap: break-word;
     margin-bottom: 8px;
 }
@@ -34,7 +33,6 @@ body {
 .user-message {
     background-color: var(--vscode-input-background);
     color: var(--vscode-editor-foreground);
-    align-self: flex-start; /* user messages on the left */
     border: 1px solid var(--vscode-input-border);
     white-space: pre-wrap;
 }
@@ -42,7 +40,6 @@ body {
 .assistant-message {
     background-color: var(--vscode-editor-background);
     color: var(--vscode-editor-foreground);
-    align-self: flex-start;
     border: 1px solid var(--vscode-editorWidget-border);
     white-space: pre-wrap;
 }
@@ -62,14 +59,24 @@ body {
 
 .tool-call {
     margin: 8px 0;
-    padding: 8px;
+    padding: 8px 12px;
     background-color: var(--vscode-editor-background);
     border: 1px solid var(--vscode-editorWidget-border);
     border-left: 3px solid var(--vscode-activityBarBadge-background);
-    font-style: italic;
     font-size: 0.9em;
     color: var(--vscode-descriptionForeground);
     border-radius: 4px;
+    line-height: 1.4;
+}
+
+.tool-call .file-link {
+    color: var(--vscode-textLink-foreground);
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.tool-call .file-link:hover {
+    text-decoration: underline;
 }
 
 .file-edit {
@@ -201,7 +208,6 @@ body {
 
 .typing-indicator {
     display: none;
-    align-self: flex-start;
     padding: 8px 16px;
     font-style: italic;
     color: var(--vscode-descriptionForeground);
@@ -209,5 +215,58 @@ body {
 }
 
 .typing-indicator.active {
+    display: block;
+}
+
+.welcome-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--vscode-input-placeholderForeground);
+    font-style: italic;
+    user-select: none;
+    pointer-events: none;
+}
+
+.reasoning-block {
+    margin: 8px 0;
+    margin-bottom: 12px;
+    background-color: var(--vscode-editor-background);
+    border: 1px solid var(--vscode-editorWidget-border);
+    border-left: 3px solid var(--vscode-debugIcon-pauseForeground);
+    border-radius: 4px;
+    box-sizing: border-box;
+}
+
+.reasoning-header {
+    padding: 8px 12px;
+    background-color: var(--vscode-editor-background);
+    color: var(--vscode-descriptionForeground);
+    font-weight: 500;
+    user-select: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.reasoning-header:hover {
+    background-color: var(--vscode-list-hoverBackground);
+}
+
+.reasoning-toggle {
+    font-family: monospace;
+    font-size: 12px;
+}
+
+.reasoning-content {
+    padding: 12px;
+    color: var(--vscode-descriptionForeground);
+    font-style: italic;
+    white-space: pre-wrap;
+    font-size: 0.95em;
+    line-height: 1.5;
+    min-height: 30px;
+    word-wrap: break-word;
     display: block;
 }
