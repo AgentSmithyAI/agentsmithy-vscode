@@ -686,9 +686,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
                     break;
                     
                 case 'startAssistantMessage':
-                    // Clear any ongoing reasoning state when starting a new assistant message
-                    currentReasoningBlock = null;
-                    currentReasoningText = '';
+                    // Don't clear reasoning block here - it should be handled by endReasoning
                     currentAssistantText = '';
                     currentAssistantMessage = addMessage('assistant', '');
                     break;
@@ -749,21 +747,16 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
                     break;
                     
                 case 'endReasoning':
-                    if (currentReasoningBlock && currentReasoningBlock.block) {
-                        // Auto-collapse after completion
-                        const blockToCollapse = currentReasoningBlock;
-                        setTimeout(() => {
-                            if (blockToCollapse.content && blockToCollapse.header) {
-                                blockToCollapse.content.style.display = 'none';
-                                const toggle = blockToCollapse.header.querySelector('.reasoning-toggle');
-                                if (toggle) {
-                                    toggle.textContent = '▶';
-                                }
-                            }
-                        }, 100); // Small delay to ensure content is fully rendered
-                        currentReasoningBlock = null;
-                        currentReasoningText = '';
+                    if (currentReasoningBlock && currentReasoningBlock.content && currentReasoningBlock.header) {
+                        // Auto-collapse immediately
+                        currentReasoningBlock.content.style.display = 'none';
+                        const toggle = currentReasoningBlock.header.querySelector('.reasoning-toggle');
+                        if (toggle) {
+                            toggle.textContent = '▶';
+                        }
                     }
+                    currentReasoningBlock = null;
+                    currentReasoningText = '';
                     break;
             }
         });
