@@ -177,9 +177,6 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
                         break;
                         
                     case 'done':
-                        this._view.webview.postMessage({
-                            type: 'endAssistantMessage'
-                        });
                         if (event.dialog_id) {
                             this._currentDialogId = event.dialog_id;
                         }
@@ -216,7 +213,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
             } finally {
                 // Ensure processing state is always cleared
                 this._view.webview.postMessage({
-                    type: 'endAssistantMessage'
+                    type: 'endStream'
                 });
             }
     }
@@ -292,7 +289,6 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
         sendButton.addEventListener('click', () => {
             if (isProcessing) {
                 // Stop processing
-                setProcessing(false);
                 vscode.postMessage({ type: 'stopProcessing' });
             } else {
                 // Send message
@@ -320,13 +316,17 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
             // Safety timeout to ensure UI doesn't stay locked forever
             setTimeout(() => {
                 if (isProcessing) {
-                    console.warn('Response timeout - unlocking UI');
                     setProcessing(false);
                 }
             }, 30000); // 30 seconds timeout
         }
         
         function setProcessing(processing) {
+            // Prevent redundant updates
+            if (isProcessing === processing) {
+                return;
+            }
+            
             isProcessing = processing;
             messageInput.disabled = processing;
             
@@ -356,7 +356,9 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
                 if (role === 'assistant') {
                     messageDiv.innerHTML = renderMarkdown(content);
                 } else {
-                    messageDiv.textContent = content;
+                    // For user messages, escape HTML and linkify URLs
+                    const escapedContent = escapeHtml(content);
+                    messageDiv.innerHTML = linkifyUrls(escapedContent);
                 }
             }
             messagesContainer.appendChild(messageDiv);
@@ -371,6 +373,13 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
                 .replace(/>/g, '&gt;')
                 .replace(/\"/g, '&quot;')
                 .replace(/'/g, '&#39;');
+        }
+        
+        function linkifyUrls(text) {
+            // Regular expression to match URLs
+            const urlRegex = /(https?:\\/\\/[^\\s<>"{}|\\\\^\\[\\]\`]+)/g;
+            // Convert newlines to <br> and then linkify URLs
+            return text.replace(/\\n/g, '<br>').replace(urlRegex, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
         }
 
         // Use marked library for markdown rendering
@@ -590,6 +599,10 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
                 case 'web_search':
                     return 'Web search: ' + (a.search_term || 'unknown');
                     
+                case 'web_fetch':
+                case 'fetch_url':
+                    return 'Fetching: ' + (a.url || a.uri || 'unknown');
+                    
                 case 'update_memory':
                     return 'Updating memory: ' + (a.action || 'unknown');
                     
@@ -627,9 +640,15 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
                     '<a class="file-link" data-file="' + encodeURIComponent(formattedInfo.path) + '">' + 
                     escapeHtml(formattedInfo.displayPath) + '</a>' + 
                     (formattedInfo.suffix || '');
+            } else if (formattedInfo.url && formattedInfo.url !== 'unknown') {
+                // Create clickable URL
+                toolDiv.innerHTML = '• ' + formattedInfo.prefix + 
+                    '<a href="' + escapeHtml(formattedInfo.url) + '" target="_blank" rel="noopener noreferrer">' + 
+                    escapeHtml(formattedInfo.url) + '</a>';
             } else {
-                // No file path, just show text
-                toolDiv.textContent = '• ' + formattedInfo.text;
+                // No file path or URL, just show text - but linkify any URLs in the text
+                const escapedText = escapeHtml(formattedInfo.text);
+                toolDiv.innerHTML = '• ' + linkifyUrls(escapedText);
             }
             
             messagesContainer.appendChild(toolDiv);
@@ -755,7 +774,6 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
                     }
                     currentAssistantMessage = null;
                     currentAssistantText = '';
-                    setProcessing(false);
                     break;
                     
                 case 'showToolCall':
@@ -768,11 +786,13 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
                     
                 case 'showError':
                     showError(message.error);
-                    setProcessing(false);
                     break;
                     
                 case 'showInfo':
                     showInfo(message.message);
+                    break;
+                    
+                case 'endStream':
                     setProcessing(false);
                     break;
                     

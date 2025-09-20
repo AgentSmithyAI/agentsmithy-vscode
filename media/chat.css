@@ -24,24 +24,23 @@ body {
 }
 
 .message {
-    padding: 8px;
     border-radius: 4px;
     word-wrap: break-word;
     margin-bottom: 4px;
+}
+
+.message:not(.assistant-message) {
+    padding: 8px;
 }
 
 .user-message {
     background-color: var(--vscode-input-background);
     color: var(--vscode-editor-foreground);
     border: 1px solid var(--vscode-input-border);
-    white-space: pre-wrap;
 }
 
 .assistant-message {
-    background-color: var(--vscode-editor-background);
     color: var(--vscode-editor-foreground);
-    border: 1px solid var(--vscode-editorWidget-border);
-    white-space: pre-wrap;
 }
 
 .assistant-message pre {
@@ -100,6 +99,19 @@ body {
     text-decoration: none;
 }
 .file-edit .file-link:hover {
+    text-decoration: underline;
+}
+
+/* Style all links consistently */
+.message a,
+.tool-call a,
+.assistant-message a {
+    color: var(--vscode-textLink-foreground);
+    text-decoration: none;
+}
+.message a:hover,
+.tool-call a:hover,
+.assistant-message a:hover {
     text-decoration: underline;
 }
 .file-edit details.diff-block {
@@ -161,6 +173,9 @@ body {
     gap: 8px;
     background-color: var(--vscode-sideBar-background);
     align-items: center; /* vertically center the button relative to the textarea */
+    position: relative;
+    z-index: 10;
+    contain: layout style paint;
 }
 
 #messageInput {
@@ -234,6 +249,7 @@ body {
 #sendButton .spinner-ring {
     animation: spin 1s linear infinite;
     transform-origin: center;
+    will-change: transform;
 }
 
 @keyframes spin {

@@ -128,7 +128,8 @@ export class AgentSmithyClient {
 								const event = JSON.parse(dataPayload) as SSEEvent;
 								yield event;
 								if (event.type === 'done') {
-									return;
+									// Don't return here - let the stream end naturally
+									// return;
 								}
                             } catch (e) {
                                 // Skip invalid JSON
@@ -148,7 +149,8 @@ export class AgentSmithyClient {
 								yield event;
 								emitted = true;
 								if (event.type === 'done') {
-									return;
+									// Don't return here - let the stream end naturally
+									// return;
 								}
 							} catch {}
 						}
