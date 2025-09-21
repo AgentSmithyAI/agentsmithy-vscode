@@ -606,8 +606,11 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
                 case 'todo_write':
                     return 'Updating todo list';
                     
-                case 'web_search':
-                    return 'Web search: ' + (a.search_term || 'unknown');
+                case 'web_search': {
+                    // Align with Emacs search handler keys: prefer query/pattern if present
+                    const q = a.query || a.search_term || a.q || a.keywords || a.term || a.text;
+                    return 'Web search: ' + (q || 'unknown');
+                }
                     
                 case 'web_fetch':
                 case 'fetch_url':
