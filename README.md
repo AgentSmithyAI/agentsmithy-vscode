@@ -26,10 +26,16 @@ This VSCode extension integrates AgentSmithy AI coding assistant into Visual Stu
 4. Look for AgentSmithy icon in the activity bar (left sidebar)
 
 ### Install from VSIX
-1. Run `npm install && npm run compile`
-2. Run `npx vsce package` to create .vsix file
-3. In VSCode: `Ctrl+Shift+P` → `Extensions: Install from VSIX...`
-4. Select the generated .vsix file
+Build once, then install:
+
+```bash
+npm ci
+npm run compile
+npx @vscode/vsce package
+code --install-extension ./agentsmithy-vscode-0.0.1.vsix --force
+```
+
+Or via UI: `Ctrl+Shift+P` → `Extensions: Install from VSIX...` → select the generated `.vsix`.
 
 ## Usage
 
@@ -38,10 +44,11 @@ This VSCode extension integrates AgentSmithy AI coding assistant into Visual Stu
 - Or use Command Palette: `Ctrl+Shift+P` → `AgentSmithy: Open Chat`
 
 ### Move to Secondary Sidebar (Recommended)
-1. Right-click on the AgentSmithy icon in the activity bar
-2. Select "Move to Secondary Side Bar"
-3. The chat will now appear on the right side of VSCode
-4. This keeps your code and chat visible simultaneously
+Two options:
+- Right‑click the AgentSmithy icon in the Activity Bar → "Move to Secondary Side Bar"
+- Or `Ctrl+Shift+P` → "Toggle Secondary Side Bar", then drag the "AgentSmithy Chat" view to the right pane
+
+After installing/updating, reload the window: `Ctrl+Shift+P` → "Developer: Reload Window".
 
 ### Send Selected Code
 1. Select code in the editor
@@ -58,11 +65,11 @@ This VSCode extension integrates AgentSmithy AI coding assistant into Visual Stu
 
 Access settings via `File → Preferences → Settings` → search for "AgentSmithy":
 
-- `agentsmithy.serverUrl`: AgentSmithy server URL (default: "http://localhost:8080")
+- `agentsmithy.serverUrl`: AgentSmithy server URL (default: "http://localhost:11434")
 - `agentsmithy.showReasoning`: Show AI reasoning/thinking process in chat (default: false)
 
 ## Troubleshooting
 
 1. **Chat not responding**: Ensure AgentSmithy server is running at configured URL
 2. **Connection errors**: Check server URL in settings
-3. **No AgentSmithy icon**: Reload VSCode window (`Ctrl+R` in VSCode)
+3. **No AgentSmithy icon**: Reload VSCode window (`Developer: Reload Window`)
