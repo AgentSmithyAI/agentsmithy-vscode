@@ -146,6 +146,8 @@ body {
 .assistant-message li { margin: 0.2em 0; }
 .assistant-message code { background: var(--vscode-textBlockQuote-background); padding: 0 3px; border-radius: 3px; }
 .assistant-message pre code { display: block; padding: 8px; }
+/* Preserve newlines while streaming */
+.assistant-message.streaming { white-space: pre-wrap; }
 
 .error {
     color: var(--vscode-errorForeground);

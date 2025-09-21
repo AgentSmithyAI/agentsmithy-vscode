@@ -236,7 +236,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src ${webview.cspSource} 'nonce-${nonce}';">
     <title>AgentSmithy Chat</title>
     <link rel="stylesheet" href="${webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'media', 'chat.css'))}">
-    <script src="${markedUri}"></script>
+    <script nonce="${nonce}" src="${markedUri}"></script>
 </head>
 <body>
     <div class="chat-container">
@@ -385,8 +385,8 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
         // Use marked library for markdown rendering
         function renderMarkdown(text) {
             if (window.marked) {
-                // Parse markdown and return HTML
-                return window.marked.parse(text);
+                // Ensure single newlines are preserved as breaks
+                return window.marked.parse(text, { breaks: true, gfm: true });
             }
             
             // Fallback if marked is not loaded
@@ -751,12 +751,18 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
                     // Don't clear reasoning block here - it should be handled by endReasoning
                     currentAssistantText = '';
                     currentAssistantMessage = addMessage('assistant', '');
+                    if (currentAssistantMessage && currentAssistantMessage.classList) {
+                        currentAssistantMessage.classList.add('streaming');
+                    }
                     break;
                     
                 case 'appendToAssistant':
                     if (!currentAssistantMessage) {
                         currentAssistantText = '';
                         currentAssistantMessage = addMessage('assistant', '');
+                        if (currentAssistantMessage && currentAssistantMessage.classList) {
+                            currentAssistantMessage.classList.add('streaming');
+                        }
                     }
                     if (message.content) {
                         currentAssistantText += message.content;
@@ -770,6 +776,9 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
                 case 'endAssistantMessage':
                     // Ensure final text is displayed with markdown
                     if (currentAssistantMessage && currentAssistantText) {
+                        if (currentAssistantMessage.classList) {
+                            currentAssistantMessage.classList.remove('streaming');
+                        }
                         currentAssistantMessage.innerHTML = renderMarkdown(currentAssistantText);
                     }
                     currentAssistantMessage = null;
@@ -802,10 +811,15 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
                     break;
                     
                 case 'appendToReasoning':
+                    // Lazily create the reasoning block if it wasn't started explicitly
+                    if (!currentReasoningBlock) {
+                        currentReasoningText = '';
+                        currentReasoningBlock = createReasoningBlock();
+                    }
                     if (currentReasoningBlock && currentReasoningBlock.content && message.content) {
                         currentReasoningText += message.content;
-                        // Use textContent to avoid HTML injection
-                        currentReasoningBlock.content.textContent = currentReasoningText;
+                        // Render reasoning with Markdown formatting
+                        currentReasoningBlock.content.innerHTML = renderMarkdown(currentReasoningText);
                         // Ensure the content is visible
                         if (currentReasoningBlock.content.style.display === 'none') {
                             currentReasoningBlock.content.style.display = 'block';
@@ -841,26 +855,28 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
 
         // Initialize marked if available
         if (window.marked) {
+            // Use a proper Renderer instance to avoid TypeError: this.renderer.paragraph is not a function
+            const renderer = new window.marked.Renderer();
+            renderer.code = function(code, infostring, escaped) {
+                const langMatch = (infostring || '').match(/\S*/);
+                const lang = langMatch ? langMatch[0] : '';
+                const escapedCode = escapeHtml(code);
+                if (lang) {
+                    return '<pre><code class="language-' + escapeHtml(lang) + '">' + escapedCode + '</code></pre>';
+                }
+                return '<pre><code>' + escapedCode + '</code></pre>';
+            };
+            renderer.codespan = function(code) {
+                return '<code>' + escapeHtml(code) + '</code>';
+            };
+
             window.marked.setOptions({
                 breaks: true, // Enable line breaks
                 gfm: true, // GitHub Flavored Markdown
                 pedantic: false,
                 smartLists: true,
                 smartypants: false,
-                // Custom renderer to ensure code blocks are properly escaped
-                renderer: {
-                    code(code, infostring, escaped) {
-                        const lang = (infostring || '').match(/\\S*/)[0];
-                        const escapedCode = escapeHtml(code);
-                        if (lang) {
-                            return '<pre><code class="language-' + escapeHtml(lang) + '">' + escapedCode + '</code></pre>';
-                        }
-                        return '<pre><code>' + escapedCode + '</code></pre>';
-                    },
-                    codespan(code) {
-                        return '<code>' + escapeHtml(code) + '</code>';
-                    }
-                }
+                renderer
             });
         }
         
