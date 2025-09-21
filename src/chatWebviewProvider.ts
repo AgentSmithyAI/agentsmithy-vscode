@@ -414,7 +414,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
                 else if (line.startsWith('+')) cls = 'added';
                 else if (line.startsWith('-')) cls = 'removed';
                 return '<span class="diff-line ' + cls + '">' + esc(line) + '</span>';
-            }).join('\\n');
+            }).join('');
         }
 
         function stripProjectPrefix(path) {

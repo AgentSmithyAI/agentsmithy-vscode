@@ -128,9 +128,10 @@ body {
 .diff pre {
     margin: 0;
     padding: 8px;
-    white-space: pre;
+    white-space: pre; /* preserve spacing inside diff */
+    line-height: 1.2; /* tighter lines */
 }
-.diff-line { display: block; }
+.diff-line { display: block; margin: 0; }
 .diff-line.added { color: var(--vscode-gitDecoration-addedResourceForeground); }
 .diff-line.removed { color: var(--vscode-gitDecoration-deletedResourceForeground); }
 .diff-line.hunk { color: var(--vscode-descriptionForeground); }
