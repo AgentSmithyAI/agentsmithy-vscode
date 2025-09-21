@@ -75,6 +75,47 @@ export class AgentSmithyClient {
             this.abortController = undefined;
         }
     }
+
+	private normalizeEvent(raw: any): SSEEvent | null {
+		if (!raw || typeof raw !== 'object') {
+			return null;
+		}
+		const type = raw.type as string | undefined;
+		// Normalize patch/diff/file_edit to a unified file_edit event
+		if (type === 'patch' || type === 'diff' || type === 'file_edit') {
+			const file = raw.file || raw.path || raw.file_path;
+			const diff = raw.diff || raw.patch;
+			const checkpoint = raw.checkpoint;
+			return { type: 'file_edit', file, diff, checkpoint };
+		}
+		// Pass through known types with minimal mapping
+		switch (type) {
+			case 'chat_start':
+				return { type: 'chat_start' } as SSEEvent;
+			case 'chat':
+				return { type: 'chat', content: raw.content } as SSEEvent;
+			case 'chat_end':
+				return { type: 'chat_end' } as SSEEvent;
+			case 'reasoning_start':
+				return { type: 'reasoning_start' } as SSEEvent;
+			case 'reasoning':
+				return { type: 'reasoning', content: raw.content } as SSEEvent;
+			case 'reasoning_end':
+				return { type: 'reasoning_end' } as SSEEvent;
+			case 'tool_call':
+				return { type: 'tool_call', name: raw.name, args: raw.args } as SSEEvent;
+			case 'error':
+				return { type: 'error', error: raw.error || raw.message } as SSEEvent;
+			case 'done':
+				return { type: 'done', dialog_id: raw.dialog_id } as SSEEvent;
+			default:
+				// Old protocol: content without type => treat as chat chunk
+				if (typeof raw.content === 'string' && !type) {
+					return { type: 'chat', content: raw.content } as SSEEvent;
+				}
+				return null;
+		}
+	}
     
     async *streamChat(request: ChatRequest): AsyncGenerator<SSEEvent> {
         // Cancel any previous request
@@ -124,14 +165,17 @@ export class AgentSmithyClient {
 							.map(l => l.slice(5).trimStart())
 							.join('\n');
 						if (dataPayload) {
-							try {
-								const event = JSON.parse(dataPayload) as SSEEvent;
+						try {
+							const raw = JSON.parse(dataPayload);
+							const event = this.normalizeEvent(raw);
+							if (event) {
 								yield event;
 								if (event.type === 'done') {
 									// Don't return here - let the stream end naturally
 									// return;
 								}
-                            } catch (e) {
+							}
+						} catch (e) {
                                 // Skip invalid JSON
                             }
 						}
@@ -145,12 +189,15 @@ export class AgentSmithyClient {
 						let emitted = false;
 						if (candidate.startsWith('{') && candidate.endsWith('}')) {
 							try {
-								const event = JSON.parse(candidate) as SSEEvent;
-								yield event;
-								emitted = true;
-								if (event.type === 'done') {
-									// Don't return here - let the stream end naturally
-									// return;
+								const raw = JSON.parse(candidate);
+								const event = this.normalizeEvent(raw);
+								if (event) {
+									yield event;
+									emitted = true;
+									if (event.type === 'done') {
+										// Don't return here - let the stream end naturally
+										// return;
+									}
 								}
 							} catch {}
 						}

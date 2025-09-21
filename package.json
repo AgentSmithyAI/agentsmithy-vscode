@@ -1,5 +1,6 @@
 {
 	"name": "agentsmithy-vscode",
+	"publisher": "agentsmithy",
 	"displayName": "AgentSmithy VSCode",
 	"description": "VSCode extension for AgentSmithy coding assistant",
 	"version": "0.0.1",

@@ -110,6 +110,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
         try {
             let chatBuffer = '';
             let hasReceivedEvents = false;
+            const openedFiles = new Set<string>();
             
             // Stream response
             for await (const event of this._client.streamChat(request)) {
@@ -167,6 +168,15 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
                             file: event.file,
                             diff: event.diff
                         });
+                        // Auto-open edited file immediately (focus editor)
+                        if (event.file && !openedFiles.has(event.file)) {
+                            openedFiles.add(event.file);
+                            try {
+                                const uri = vscode.Uri.file(event.file);
+                                const doc = await vscode.workspace.openTextDocument(uri);
+                                await vscode.window.showTextDocument(doc, { preview: false });
+                            } catch {}
+                        }
                         break;
                         
                     case 'error':
@@ -226,7 +236,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
         const markedUri = webview.asWebviewUri(markedPath);
         
         // Get workspace root
-        const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '';
+        const workspaceRoot = (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders[0] && vscode.workspace.workspaceFolders[0].uri.fsPath) || '';
         
         return `<!DOCTYPE html>
 <html lang="en">
@@ -438,7 +448,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
             // Helper to extract file path from various argument names
             const extractPath = () => {
                 return a.path || a.file || a.target_file || a.file_path || 
-                       a.target_notebook || a.paths?.[0] || null;
+                       a.target_notebook || (a.paths && a.paths[0]) || null;
             };
             
             const path = extractPath();
@@ -663,9 +673,22 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
             
             const editDiv = document.createElement('div');
             editDiv.className = 'file-edit';
-            const fileName = file.split('/').pop() || file;
-            editDiv.innerHTML = '<div class="file-header"><strong>📝 Edited: ' + fileName + '</strong>' +
-                '<a class="file-link" data-file="' + encodeURIComponent(file) + '">Open</a></div>';
+            // Header without "Edited:" label; show clickable relative path
+            const header = document.createElement('div');
+            header.className = 'file-header';
+            const pathLink = document.createElement('a');
+            pathLink.className = 'file-link';
+            pathLink.setAttribute('data-file', encodeURIComponent(file));
+            pathLink.textContent = stripProjectPrefix(file) || file;
+            header.appendChild(pathLink);
+            // Add explicit Open action too
+            const openLink = document.createElement('a');
+            openLink.className = 'file-link';
+            openLink.setAttribute('data-file', encodeURIComponent(file));
+            openLink.textContent = 'Open';
+            openLink.style.marginLeft = '8px';
+            header.appendChild(openLink);
+            editDiv.appendChild(header);
             if (diff) {
                 const formatted = formatDiff(diff);
                 editDiv.innerHTML += '<details class="diff-block"><summary>Show diff</summary>' +
