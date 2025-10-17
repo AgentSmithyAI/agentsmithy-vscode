@@ -14,7 +14,7 @@ This VSCode extension integrates AgentSmithy AI coding assistant into Visual Stu
 
 ## Prerequisites
 
-- AgentSmithy server running locally (default: http://localhost:11434)
+- AgentSmithy server running locally (default: http://localhost:8765)
 - Any version of Visual Studio Code (including Code-OSS, VSCodium)
 
 ## Installation
@@ -65,7 +65,7 @@ After installing/updating, reload the window: `Ctrl+Shift+P` → "Developer: Rel
 
 Access settings via `File → Preferences → Settings` → search for "AgentSmithy":
 
-- `agentsmithy.serverUrl`: AgentSmithy server URL (default: "http://localhost:11434")
+- `agentsmithy.serverUrl`: AgentSmithy server URL (default: "http://localhost:8765")
 - `agentsmithy.showReasoning`: Show AI reasoning/thinking process in chat (default: false)
 
 ## Troubleshooting

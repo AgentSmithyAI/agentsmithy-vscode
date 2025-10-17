@@ -66,7 +66,7 @@ export class AgentSmithyClient {
         
         // Fallback to configuration or default
         const config = vscode.workspace.getConfiguration('agentsmithy');
-        return config.get<string>('serverUrl', 'http://localhost:11434');
+        return config.get<string>('serverUrl', 'http://localhost:8765');
     }
     
     abort() {
