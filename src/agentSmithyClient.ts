@@ -140,7 +140,7 @@ export class AgentSmithyClient {
           updated_at: typeof x.updated_at === 'string' ? x.updated_at : '',
         }));
       const current_dialog_id =
-        data && typeof data === 'object' && 'current_dialog_id' in data
+        'current_dialog_id' in (data as Record<string, unknown>)
           ? (data as { current_dialog_id?: unknown }).current_dialog_id
           : undefined;
       return {
@@ -155,14 +155,15 @@ export class AgentSmithyClient {
   getServerUrl = (): string => {
     // Try to read from .agentsmithy/status.json in workspace
     const workspaceFolders = vscode.workspace.workspaceFolders;
-    if (workspaceFolders && workspaceFolders.length > 0) {
+    if (Array.isArray(workspaceFolders) && workspaceFolders.length > 0) {
       const workspaceRoot = workspaceFolders[0].uri.fsPath;
       const statusPath = path.join(workspaceRoot, '.agentsmithy', 'status.json');
 
       try {
         if (fs.existsSync(statusPath)) {
           const statusContent = fs.readFileSync(statusPath, 'utf8');
-          const parsed: unknown = JSON.parse(statusContent);
+          // Using unknown to avoid unsafe assignment; parsed is only used via type guards below
+          const parsed: unknown = JSON.parse(statusContent) as unknown;
           if (parsed && typeof parsed === 'object' && 'port' in parsed) {
             const port = (parsed as { port?: unknown }).port;
             if (typeof port === 'number' || (typeof port === 'string' && port.trim().length > 0)) {
@@ -269,12 +270,14 @@ export class AgentSmithyClient {
 
     try {
       while (true) {
-        const {done, value} = await reader.read();
+        const readResult = await reader.read();
+        const done: boolean = Boolean((readResult as { done?: boolean }).done);
+        const value: Uint8Array | undefined = (readResult as { value?: Uint8Array }).value;
         if (done) {
           break;
         }
 
-        buffer += decoder.decode(value, {stream: true});
+        buffer += decoder.decode(value ?? new Uint8Array(), { stream: true });
         const lines = buffer.split(/\r?\n/);
         buffer = lines.pop() || '';
 
@@ -287,22 +290,19 @@ export class AgentSmithyClient {
               .join('\n');
             if (dataPayload) {
               try {
-                const raw = JSON.parse(dataPayload);
+                const raw: unknown = JSON.parse(dataPayload);
                 const event = this.normalizeEvent(raw);
                 if (event) {
                   yield event;
-                  if (event.type === 'done') {
-                    // Don't return here - let the stream end naturally
-                    // return;
-                  }
                 }
-              } catch (_err) {
+              } catch {
                 // Skip invalid JSON
               }
             }
             eventLines = [];
             continue;
           }
+
           // Accumulate data lines; handle both 'data:' and 'data: '
           if (line.startsWith('data:')) {
             // Try to parse per-line JSON immediately (many servers send one JSON per line)
@@ -310,17 +310,13 @@ export class AgentSmithyClient {
             let emitted = false;
             if (candidate.startsWith('{') && candidate.endsWith('}')) {
               try {
-                const raw = JSON.parse(candidate);
+                const raw: unknown = JSON.parse(candidate);
                 const event = this.normalizeEvent(raw);
                 if (event) {
                   yield event;
                   emitted = true;
-                  if (event.type === 'done') {
-                    // Don't return here - let the stream end naturally
-                    // return;
-                  }
                 }
-              } catch (_err) {
+              } catch {
                 /* noop */
               }
             }
@@ -340,7 +336,8 @@ export class AgentSmithyClient {
     } finally {
       reader.releaseLock();
       // Clear abort controller when done
-      if (this.abortController?.signal.aborted) {
+      const ac = this.abortController;
+      if (ac && ac.signal.aborted === true) {
         this.abortController = undefined;
       }
     }

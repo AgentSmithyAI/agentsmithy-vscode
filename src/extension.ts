@@ -5,8 +5,9 @@ export const activate = (context: vscode.ExtensionContext) => {
   // Register the webview provider
   const provider = new ChatWebviewProvider(context.extensionUri);
 
+  const viewType = ChatWebviewProvider.viewType;
   context.subscriptions.push(
-    vscode.window.registerWebviewViewProvider(ChatWebviewProvider.viewType, provider, {
+    vscode.window.registerWebviewViewProvider(viewType, provider, {
       webviewOptions: {
         retainContextWhenHidden: true,
       },
@@ -65,19 +66,19 @@ export const activate = (context: vscode.ExtensionContext) => {
   const hasShownWelcome = context.globalState.get('agentsmithy.welcomeShown', false);
 
   if (!hasShownWelcome) {
-    vscode.window
+    void vscode.window
       .showInformationMessage(
         'AgentSmithy is ready! Open the chat from the sidebar or use Command Palette → "AgentSmithy: Open Chat"',
         'Open Chat',
       )
       .then((selection) => {
         if (selection === 'Open Chat') {
-          vscode.commands.executeCommand('agentsmithy.openChat');
+          void vscode.commands.executeCommand('agentsmithy.openChat');
         }
       });
 
-    context.globalState.update('agentsmithy.welcomeShown', true);
+    void context.globalState.update('agentsmithy.welcomeShown', true);
   }
 };
 
-// VSCode does not require a deactivate export; remove to satisfy no-empty-function rule.
+// VSCode does not require a deactivate export; intentionally omitted.

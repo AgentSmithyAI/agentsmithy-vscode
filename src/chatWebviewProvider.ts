@@ -171,7 +171,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
               let dialogId = this._currentDialogId;
               if (!dialogId) {
                 const current = await this._client.getCurrentDialog();
-                if (current && current.id) {
+                if (current.id) {
                   dialogId = current.id;
                 }
               }
