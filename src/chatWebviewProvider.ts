@@ -82,8 +82,9 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
       if (Array.isArray(resp.events) && resp.events.length > 0) {
         this._view.webview.postMessage({type: 'historyPrependEvents', events: resp.events});
       }
-    } catch (e: any) {
-      this._view.webview.postMessage({type: 'showError', error: e?.message || 'Failed to load history'});
+    } catch (e: unknown) {
+      const msg = e && typeof e === 'object' && 'message' in (e as any) ? (e as any).message : 'Failed to load history';
+      this._view.webview.postMessage({type: 'showError', error: msg});
     } finally {
       this._historyLoading = false;
       this._view.webview.postMessage({type: 'historySetLoadMoreEnabled', enabled: true});
@@ -878,7 +879,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
             try {
                 renderHistoryEvent(evt);
             } catch (e) {
-                console && console.error && console.error('[history] render error', e, evt);
+                // noop: suppress render errors from history to avoid console noise in production
             }
         }
         
