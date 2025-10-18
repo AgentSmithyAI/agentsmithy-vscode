@@ -83,17 +83,13 @@ export class AgentSmithyClient {
   }
 
   // Narrow unknown to a plain object
-  private isRecord(v: unknown): v is Record<string, unknown> {
-    return !!v && typeof v === 'object' && !Array.isArray(v);
-  }
+  isRecord = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 
-  private asString(v: unknown): string | undefined {
-    return typeof v === 'string' ? v : undefined;
-  }
+  asString = (v: unknown): string | undefined => typeof v === 'string' ? v : undefined;
 
   private normalizeFileEdit(obj: Record<string, unknown>): SSEEvent {
-    const fileVal = obj.file ?? (obj as Record<string, unknown>).path ?? (obj as Record<string, unknown>).file_path;
-    const diffVal = obj.diff ?? (obj as Record<string, unknown>).patch;
+    const fileVal = obj.file ?? (obj).path ?? (obj).file_path;
+    const diffVal = obj.diff ?? (obj).patch;
     const checkpointVal = obj.checkpoint;
     return {
       type: 'file_edit',
@@ -195,7 +191,7 @@ export class AgentSmithyClient {
     if (!this.isRecord(raw)) {
       return null;
     }
-    const obj = raw as Record<string, unknown>;
+    const obj = raw;
     const type = this.asString(obj.type);
 
     // Normalize patch/diff/file_edit to a unified file_edit event
@@ -223,7 +219,7 @@ export class AgentSmithyClient {
         return { type: 'tool_call', name: this.asString(obj.name), args: obj.args };
       }
       case 'error': {
-        const err = this.asString(obj.error) ?? this.asString((obj as Record<string, unknown>).message);
+        const err = this.asString(obj.error) ?? this.asString((obj).message);
         return { type: 'error', error: err };
       }
       case 'done': {
@@ -231,7 +227,7 @@ export class AgentSmithyClient {
         return { type: 'done', dialog_id };
       }
       default: {
-        const content = this.asString((obj as Record<string, unknown>).content);
+        const content = this.asString((obj).content);
         if (content && !type) {
           return { type: 'chat', content };
         }

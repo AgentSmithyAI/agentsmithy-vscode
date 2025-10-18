@@ -251,6 +251,8 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
 
     // User message is already shown by the webview itself
 
+    // No history refresh needed post-stream: SSE events are authoritative
+    // and already include finalized reasoning/tool/file blocks.
     try {
       let _chatBuffer = '';
       let hasReceivedEvents = false;
@@ -336,8 +338,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
 
           case 'done':
             if (event.dialog_id) {
-              // Update current dialog id, but do not reload history here.
-              // History is only for older messages; streaming covers new ones.
+              // Update current dialog id; no history refresh required
               this._currentDialogId = event.dialog_id;
             }
             break;
@@ -375,6 +376,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
       this._postMessage({
         type: 'endStream',
       });
+      // No-op: do not reload history after SSE completion
     }
   }
 
