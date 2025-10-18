@@ -82,6 +82,27 @@ export class AgentSmithyClient {
     this.baseUrl = baseUrl || this.getServerUrl();
   }
 
+  // Narrow unknown to a plain object
+  private isRecord(v: unknown): v is Record<string, unknown> {
+    return !!v && typeof v === 'object' && !Array.isArray(v);
+  }
+
+  private asString(v: unknown): string | undefined {
+    return typeof v === 'string' ? v : undefined;
+  }
+
+  private normalizeFileEdit(obj: Record<string, unknown>): SSEEvent {
+    const fileVal = obj.file ?? (obj as Record<string, unknown>).path ?? (obj as Record<string, unknown>).file_path;
+    const diffVal = obj.diff ?? (obj as Record<string, unknown>).patch;
+    const checkpointVal = obj.checkpoint;
+    return {
+      type: 'file_edit',
+      file: this.asString(fileVal),
+      diff: this.asString(diffVal),
+      checkpoint: this.asString(checkpointVal),
+    };
+  }
+
   async getCurrentDialog(): Promise<CurrentDialogResponse> {
     const url = `${this.baseUrl}/api/dialogs/current`;
     try {
@@ -145,9 +166,12 @@ export class AgentSmithyClient {
       try {
         if (fs.existsSync(statusPath)) {
           const statusContent = fs.readFileSync(statusPath, 'utf8');
-          const status = JSON.parse(statusContent);
-          if (status.port) {
-            return `http://localhost:${status.port}`;
+          const parsed: unknown = JSON.parse(statusContent);
+          if (parsed && typeof parsed === 'object' && 'port' in parsed) {
+            const port = (parsed as { port?: unknown }).port;
+            if (typeof port === 'number' || (typeof port === 'string' && port.trim().length > 0)) {
+              return `http://localhost:${String(port)}`;
+            }
           }
         }
       } catch {
@@ -168,56 +192,47 @@ export class AgentSmithyClient {
   }
 
   normalizeEvent = (raw: unknown): SSEEvent | null => {
-    if (!raw || typeof raw !== 'object') {
+    if (!this.isRecord(raw)) {
       return null;
     }
     const obj = raw as Record<string, unknown>;
-    const type = typeof obj.type === 'string' ? obj.type : undefined;
+    const type = this.asString(obj.type);
+
     // Normalize patch/diff/file_edit to a unified file_edit event
     if (type === 'patch' || type === 'diff' || type === 'file_edit') {
-      const fileVal = (obj.file ?? (obj).path ?? (obj).file_path);
-      const diffVal = obj.diff ?? (obj).patch;
-      const checkpointVal = obj.checkpoint;
-      return {
-        type: 'file_edit',
-        file: typeof fileVal === 'string' ? fileVal : undefined,
-        diff: typeof diffVal === 'string' ? diffVal : undefined,
-        checkpoint: typeof checkpointVal === 'string' ? checkpointVal : undefined,
-      };
+      return this.normalizeFileEdit(obj);
     }
+
     // Pass through known types with minimal mapping
     switch (type) {
       case 'chat_start':
         return { type: 'chat_start' };
       case 'chat': {
-        const content = obj.content;
-        return { type: 'chat', content: typeof content === 'string' ? content : undefined };
+        return { type: 'chat', content: this.asString(obj.content) };
       }
       case 'chat_end':
         return { type: 'chat_end' };
       case 'reasoning_start':
         return { type: 'reasoning_start' };
       case 'reasoning': {
-        const content = obj.content;
-        return { type: 'reasoning', content: typeof content === 'string' ? content : undefined };
+        return { type: 'reasoning', content: this.asString(obj.content) };
       }
       case 'reasoning_end':
         return { type: 'reasoning_end' };
       case 'tool_call': {
-        const name = obj.name;
-        return { type: 'tool_call', name: typeof name === 'string' ? name : undefined, args: obj.args };
+        return { type: 'tool_call', name: this.asString(obj.name), args: obj.args };
       }
       case 'error': {
-        const err = typeof obj.error === 'string' ? obj.error : typeof (obj).message === 'string' ? (obj).message : undefined;
+        const err = this.asString(obj.error) ?? this.asString((obj as Record<string, unknown>).message);
         return { type: 'error', error: err };
       }
       case 'done': {
-        const dialog_id = typeof obj.dialog_id === 'string' ? obj.dialog_id : undefined;
+        const dialog_id = this.asString(obj.dialog_id);
         return { type: 'done', dialog_id };
       }
       default: {
-        const content = (obj).content;
-        if (typeof content === 'string' && !type) {
+        const content = this.asString((obj as Record<string, unknown>).content);
+        if (content && !type) {
           return { type: 'chat', content };
         }
         return null;
