@@ -1,6 +1,14 @@
 import * as vscode from 'vscode';
 import {AgentSmithyClient} from './agentSmithyClient';
 
+// Messages sent from the webview to the extension
+type WebviewInMessage =
+  | { type: 'sendMessage'; text?: string }
+  | { type: 'openFile'; file?: string }
+  | { type: 'stopProcessing' }
+  | { type: 'ready' }
+  | { type: 'loadMoreHistory' };
+
 export class ChatWebviewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'agentsmithy.chatView';
 
@@ -45,8 +53,9 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
         // Clear even if no events
         this._view.webview.postMessage({type: 'historyReplaceAll', events: []});
       }
-    } catch (e: any) {
-      this._view.webview.postMessage({type: 'showError', error: e?.message || 'Failed to load history'});
+    } catch (e: unknown) {
+      const msg = e && typeof e === 'object' && 'message' in (e as any) ? (e as any).message : 'Failed to load history';
+      this._view.webview.postMessage({type: 'showError', error: msg});
     } finally {
       this._historyLoading = false;
       this._view.webview.postMessage({type: 'historySetLoadMoreEnabled', enabled: true});
@@ -110,7 +119,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
 
     // Handle messages from the webview
-    webviewView.webview.onDidReceiveMessage(async (message: {type: string; text?: string; file?: string}) => {
+    webviewView.webview.onDidReceiveMessage(async (message: WebviewInMessage) => {
       switch (message.type) {
         case 'sendMessage':
           await this._handleSendMessage(message.text ?? '');
@@ -123,8 +132,9 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
             const uri = vscode.Uri.file(message.file);
             const doc = await vscode.workspace.openTextDocument(uri);
             await vscode.window.showTextDocument(doc, {preview: false});
-          } catch {
-            vscode.window.showErrorMessage(`Failed to open file: ${String(message.file)}`);
+          } catch (err: unknown) {
+            const msg = err && typeof err === 'object' && 'message' in (err as any) ? (err as any).message : `Failed to open file: ${String(message.file)}`;
+            vscode.window.showErrorMessage(String(msg));
           }
           break;
         }
@@ -155,22 +165,24 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
                     dialogId = sorted[0].id;
                   }
                 } catch {
-                /* noop */
-              }
+                  /* noop */
+                }
               }
               if (dialogId) {
                 this._currentDialogId = dialogId;
                 // Load only the latest history page and replace current content
                 await this._loadLatestHistoryPage(dialogId, {replace: true});
               }
-            } catch {}
+            } catch {
+              /* noop */
+            }
           })();
           break;
         case 'loadMoreHistory':
           if (this._currentDialogId && this._historyHasMore && !this._historyLoading) {
             this._loadPreviousHistoryPage(this._currentDialogId).catch((err: unknown) => {
-              const message = err && typeof err === 'object' && 'message' in (err as any) ? (err as any).message : 'Failed to load history';
-              this._view?.webview.postMessage({type: 'showError', error: message});
+              const msg = err && typeof err === 'object' && 'message' in (err as any) ? (err as any).message : 'Failed to load history';
+              this._view?.webview.postMessage({type: 'showError', error: msg});
             });
           }
           break;

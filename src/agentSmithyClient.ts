@@ -175,8 +175,8 @@ export class AgentSmithyClient {
     const type = typeof obj.type === 'string' ? obj.type : undefined;
     // Normalize patch/diff/file_edit to a unified file_edit event
     if (type === 'patch' || type === 'diff' || type === 'file_edit') {
-      const fileVal = (obj.file ?? (obj as Record<string, unknown>).path ?? (obj as Record<string, unknown>).file_path);
-      const diffVal = obj.diff ?? (obj as Record<string, unknown>).patch;
+      const fileVal = (obj.file ?? (obj).path ?? (obj).file_path);
+      const diffVal = obj.diff ?? (obj).patch;
       const checkpointVal = obj.checkpoint;
       return {
         type: 'file_edit',
@@ -208,7 +208,7 @@ export class AgentSmithyClient {
         return { type: 'tool_call', name: typeof name === 'string' ? name : undefined, args: obj.args };
       }
       case 'error': {
-        const err = typeof obj.error === 'string' ? obj.error : typeof (obj as Record<string, unknown>).message === 'string' ? (obj as Record<string, unknown>).message as string : undefined;
+        const err = typeof obj.error === 'string' ? obj.error : typeof (obj).message === 'string' ? (obj).message : undefined;
         return { type: 'error', error: err };
       }
       case 'done': {
@@ -216,7 +216,7 @@ export class AgentSmithyClient {
         return { type: 'done', dialog_id };
       }
       default: {
-        const content = (obj as Record<string, unknown>).content;
+        const content = (obj).content;
         if (typeof content === 'string' && !type) {
           return { type: 'chat', content };
         }
@@ -358,7 +358,7 @@ export class AgentSmithyClient {
     const obj = data as Record<string, unknown>;
     const eventsRaw = Array.isArray(obj.events) ? (obj.events as unknown[]) : [];
     const events: HistoryEvent[] = eventsRaw.map((e) => {
-      if (!e || typeof e !== 'object') return { type: 'chat' };
+      if (!e || typeof e !== 'object') {return { type: 'chat' };}
       const ev = e as Record<string, unknown>;
       const type = typeof ev.type === 'string' ? ev.type : 'chat';
       const idx = typeof ev.idx === 'number' ? ev.idx : undefined;
@@ -374,8 +374,8 @@ export class AgentSmithyClient {
     const dialog_id = typeof obj.dialog_id === 'string' ? obj.dialog_id : dialogId;
     const total_events = typeof obj.total_events === 'number' ? obj.total_events : events.length;
     const has_more = Boolean(obj.has_more);
-    const first_idx = obj.first_idx === null || typeof obj.first_idx === 'number' ? (obj.first_idx as number | null) : null;
-    const last_idx = obj.last_idx === null || typeof obj.last_idx === 'number' ? (obj.last_idx as number | null) : null;
+    const first_idx = obj.first_idx === null || typeof obj.first_idx === 'number' ? (obj.first_idx) : null;
+    const last_idx = obj.last_idx === null || typeof obj.last_idx === 'number' ? (obj.last_idx) : null;
 
     return { dialog_id, events, total_events, has_more, first_idx, last_idx };
   }
