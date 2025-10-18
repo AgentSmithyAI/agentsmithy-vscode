@@ -1,0 +1,4 @@
+# Ignore artifacts relevant to this VSCode extension only:
+out
+.vscode-test
+coverage
