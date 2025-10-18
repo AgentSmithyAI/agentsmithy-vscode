@@ -1,4 +1,8 @@
-# Ignore artifacts relevant to this VSCode extension only:
+# Build output
 out
+
+# VSCode test workspace
 .vscode-test
-coverage
+
+# Generated artifacts
+*.vsix

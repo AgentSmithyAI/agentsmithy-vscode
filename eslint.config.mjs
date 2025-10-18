@@ -15,7 +15,7 @@ const tsconfigRootDir = new URL('.', import.meta.url).pathname;
 
 export default [
   // Ignore build/test artifacts (replace .eslintignore)
-  { ignores: ['out', '.vscode-test'] },
+  {ignores: ['out', '.vscode-test']},
 
   // Lint this config file under Node, allow URL global
   {
@@ -23,7 +23,7 @@ export default [
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: 'module',
-      globals: { URL: 'readonly' },
+      globals: {URL: 'readonly'},
     },
   },
 
@@ -82,16 +82,10 @@ export default [
       '@typescript-eslint/no-empty-function': 'error',
       '@typescript-eslint/no-unused-expressions': 'error',
       '@typescript-eslint/restrict-plus-operands': 'error',
-      '@typescript-eslint/no-unused-vars': [
-        'error',
-        { argsIgnorePattern: '^_', varsIgnorePattern: '^_', args: 'all' },
-      ],
+      '@typescript-eslint/no-unused-vars': ['error', {argsIgnorePattern: '^_', varsIgnorePattern: '^_', args: 'all'}],
       '@typescript-eslint/no-shadow': 'error',
       '@typescript-eslint/no-unnecessary-type-assertion': 'error',
-      '@typescript-eslint/restrict-template-expressions': [
-        'error',
-        { allowNumber: true },
-      ],
+      '@typescript-eslint/restrict-template-expressions': ['error', {allowNumber: true}],
       '@typescript-eslint/no-non-null-assertion': 'error',
       '@typescript-eslint/prefer-optional-chain': 'error',
       '@typescript-eslint/no-unnecessary-condition': 'error',
@@ -103,7 +97,7 @@ export default [
       'unicorn/no-null': 'off',
 
       // Import rules baseline
-      'import/no-cycle': ['error', { maxDepth: Infinity }],
+      'import/no-cycle': ['error', {maxDepth: Infinity}],
 
       // General
       'no-dupe-else-if': 'error',

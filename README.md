@@ -1,5 +1,13 @@
 # AgentSmithy VSCode Extension
 
+## Formatting & Linting
+
+- ESLint autofix: npm run lint:fix
+- Prettier write: npm run format
+- Prettier check (CI): npm run format:check
+
+Prettier ignores build/test output via .prettierignore.
+
 This VSCode extension integrates AgentSmithy AI coding assistant into Visual Studio Code through a native WebView chat interface. Works with any VSCode version, including open source builds (Code-OSS, VSCodium).
 
 ## Features
@@ -20,12 +28,14 @@ This VSCode extension integrates AgentSmithy AI coding assistant into Visual Stu
 ## Installation
 
 ### Development Mode (Recommended for testing)
+
 1. Clone this repository
 2. Run `npm install` to install dependencies
 3. Press `F5` in VSCode to launch extension in debug mode
 4. Look for AgentSmithy icon in the activity bar (left sidebar)
 
 ### Install from VSIX
+
 Build once, then install:
 
 ```bash
@@ -40,22 +50,27 @@ Or via UI: `Ctrl+Shift+P` → `Extensions: Install from VSIX...` → select the 
 ## Usage
 
 ### Open Chat
+
 - Click the AgentSmithy icon in the activity bar (left sidebar)
 - Or use Command Palette: `Ctrl+Shift+P` → `AgentSmithy: Open Chat`
 
 ### Move to Secondary Sidebar (Recommended)
+
 Two options:
+
 - Right‑click the AgentSmithy icon in the Activity Bar → "Move to Secondary Side Bar"
 - Or `Ctrl+Shift+P` → "Toggle Secondary Side Bar", then drag the "AgentSmithy Chat" view to the right pane
 
 After installing/updating, reload the window: `Ctrl+Shift+P` → "Developer: Reload Window".
 
 ### Send Selected Code
+
 1. Select code in the editor
 2. Right-click → `Send Selection to AgentSmithy`
 3. Or use Command Palette: `Ctrl+Shift+P` → `AgentSmithy: Send Selection`
 
 ### Chat Interface
+
 - Type your message in the input field
 - Press Enter to send (Shift+Enter for new line)
 - View responses with syntax highlighting and formatting
