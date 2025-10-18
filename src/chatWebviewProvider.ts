@@ -28,19 +28,14 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
         const lastEventWithIdx = Array.isArray(resp.events)
           ? resp.events.filter((e) => typeof e.idx === 'number').slice(-1)[0]
           : undefined;
-        console.log('[history] latest page', {
-          dialogId,
-          events: resp.events?.length || 0,
-          first_idx: resp.first_idx,
-          last_idx: (resp as any).last_idx,
-          last_event_idx: lastEventWithIdx?.idx,
-          has_more: resp.has_more,
-        });
-      } catch {}
+        // debug: latest page summary
+      } catch {
+        /* noop */
+      }
       this._historyCursor = resp.first_idx ?? undefined;
       this._historyHasMore = !!resp.has_more;
       this._view.webview.postMessage({type: 'historySetLoadMoreVisible', visible: !!resp.has_more});
-      if (resp.events && resp.events.length) {
+      if (Array.isArray(resp.events) && resp.events.length > 0) {
         if (options?.replace) {
           this._view.webview.postMessage({type: 'historyReplaceAll', events: resp.events});
         } else {
@@ -75,7 +70,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
       this._historyCursor = resp.first_idx ?? undefined;
       this._historyHasMore = !!resp.has_more;
       this._view.webview.postMessage({type: 'historySetLoadMoreVisible', visible: !!resp.has_more});
-      if (resp.events && resp.events.length) {
+      if (Array.isArray(resp.events) && resp.events.length > 0) {
         this._view.webview.postMessage({type: 'historyPrependEvents', events: resp.events});
       }
     } catch (e: any) {
@@ -102,7 +97,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
 
   public resolveWebviewView(
     webviewView: vscode.WebviewView,
-    context: vscode.WebviewViewResolveContext,
+    _context: vscode.WebviewViewResolveContext,
     _token: vscode.CancellationToken,
   ) {
     this._view = webviewView;
@@ -115,18 +110,21 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
 
     // Handle messages from the webview
-    webviewView.webview.onDidReceiveMessage(async (message) => {
+    webviewView.webview.onDidReceiveMessage(async (message: {type: string; text?: string; file?: string}) => {
       switch (message.type) {
         case 'sendMessage':
-          await this._handleSendMessage(message.text);
+          await this._handleSendMessage(message.text ?? '');
           break;
         case 'openFile': {
           try {
+            if (typeof message.file !== 'string' || message.file.length === 0) {
+              throw new Error('Invalid file path');
+            }
             const uri = vscode.Uri.file(message.file);
             const doc = await vscode.workspace.openTextDocument(uri);
             await vscode.window.showTextDocument(doc, {preview: false});
-          } catch (err) {
-            vscode.window.showErrorMessage(`Failed to open file: ${message.file}`);
+          } catch {
+            vscode.window.showErrorMessage(`Failed to open file: ${String(message.file)}`);
           }
           break;
         }
@@ -156,7 +154,9 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
                     );
                     dialogId = sorted[0].id;
                   }
-                } catch {}
+                } catch {
+                /* noop */
+              }
               }
               if (dialogId) {
                 this._currentDialogId = dialogId;
@@ -168,8 +168,9 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
           break;
         case 'loadMoreHistory':
           if (this._currentDialogId && this._historyHasMore && !this._historyLoading) {
-            this._loadPreviousHistoryPage(this._currentDialogId).catch((err) => {
-              this._view?.webview.postMessage({type: 'showError', error: err?.message || 'Failed to load history'});
+            this._loadPreviousHistoryPage(this._currentDialogId).catch((err: unknown) => {
+              const message = err && typeof err === 'object' && 'message' in (err as any) ? (err as any).message : 'Failed to load history';
+              this._view?.webview.postMessage({type: 'showError', error: message});
             });
           }
           break;
@@ -217,7 +218,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     // User message is already shown by the webview itself
 
     try {
-      let chatBuffer = '';
+      let _chatBuffer = '';
       let hasReceivedEvents = false;
       const openedFiles = new Set<string>();
 
@@ -226,12 +227,12 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
         hasReceivedEvents = true;
         switch (event.type) {
           case 'chat_start':
-            chatBuffer = '';
+            _chatBuffer = '';
             this._view.webview.postMessage({type: 'startAssistantMessage'});
             break;
           case 'chat':
             if (event.content !== undefined) {
-              chatBuffer += event.content;
+              _chatBuffer += event.content;
               this._view.webview.postMessage({
                 type: 'appendToAssistant',
                 content: event.content,
@@ -356,8 +357,8 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src ${webview.cspSource} 'nonce-${nonce}';">
     <title>AgentSmithy Chat</title>
-    <link rel="stylesheet" href="${webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'media', 'chat.css'))}">
-    <script nonce="${nonce}" src="${markedUri}"></script>
+    <link rel="stylesheet" href="${webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'media', 'chat.css')).toString()}">
+    <script nonce="${nonce}" src="${markedUri.toString()}"></script>
 </head>
 <body>
     <div class="chat-container">

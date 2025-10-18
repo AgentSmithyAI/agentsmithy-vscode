@@ -62,7 +62,6 @@ export const activate = (context: vscode.ExtensionContext) => {
   );
 
   // Show a welcome message
-  const config = vscode.workspace.getConfiguration('agentsmithy');
   const hasShownWelcome = context.globalState.get('agentsmithy.welcomeShown', false);
 
   if (!hasShownWelcome) {
@@ -81,4 +80,4 @@ export const activate = (context: vscode.ExtensionContext) => {
   }
 };
 
-export const deactivate = () => {};
+// VSCode does not require a deactivate export; remove to satisfy no-empty-function rule.

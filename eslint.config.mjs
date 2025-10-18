@@ -60,6 +60,9 @@ export default [
       },
     },
     rules: {
+      // Disable base rules that conflict with @typescript-eslint equivalents
+      'no-unused-vars': 'off',
+
       // Formatting/stylistic
       curly: 'warn',
       '@stylistic/semi': ['warn', 'always'],

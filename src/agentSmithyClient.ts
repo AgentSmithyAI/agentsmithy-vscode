@@ -118,7 +118,7 @@ export class AgentSmithyClient {
             return `http://localhost:${status.port}`;
           }
         }
-      } catch (error) {
+      } catch {
         // Silently fallback to config
       }
     }
@@ -236,7 +236,7 @@ export class AgentSmithyClient {
                     // return;
                   }
                 }
-              } catch (e) {
+              } catch (_err) {
                 // Skip invalid JSON
               }
             }
@@ -260,7 +260,9 @@ export class AgentSmithyClient {
                     // return;
                   }
                 }
-              } catch {}
+              } catch (_err) {
+                /* noop */
+              }
             }
             if (!emitted) {
               eventLines.push(line);
@@ -295,8 +297,10 @@ export class AgentSmithyClient {
     const url = `${this.baseUrl}/api/dialogs/${encodeURIComponent(dialogId)}/history${params.toString() ? `?${params.toString()}` : ''}`;
     // Debug log: which URL we are hitting
     try {
-      console.log('[history] GET', url);
-    } catch {}
+      // debug: history GET url
+    } catch (_err) {
+      /* noop */
+    }
     const resp = await fetch(url, {headers: {Accept: 'application/json'}});
     if (!resp.ok) {
       throw new Error(`HTTP error! status: ${resp.status}`);
@@ -304,18 +308,15 @@ export class AgentSmithyClient {
     const data = await resp.json();
     // Debug log summary of response
     try {
+      // debug: summarize history response shape
       const events = (data as any)?.events || [];
       const lastEventWithIdx = Array.isArray(events)
         ? events.filter((e: any) => typeof e.idx === 'number').slice(-1)[0]
         : undefined;
-      console.log('[history] response', {
-        events: Array.isArray(events) ? events.length : 0,
-        first_idx: (data as any)?.first_idx,
-        last_idx: (data as any)?.last_idx,
-        last_event_idx: lastEventWithIdx?.idx,
-        has_more: (data as any)?.has_more,
-      });
-    } catch {}
+      void lastEventWithIdx; // keep typed usage without console
+    } catch (_err) {
+      /* noop */
+    }
     return data as HistoryResponse;
   }
 
