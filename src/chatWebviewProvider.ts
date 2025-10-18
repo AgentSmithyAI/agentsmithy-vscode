@@ -21,6 +21,18 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
         this._view.webview.postMessage({ type: 'historySetLoadMoreEnabled', enabled: false });
         try {
             const resp = await this._client.loadHistory(dialogId);
+            // Debug: log what we received
+            try {
+                const lastEventWithIdx = Array.isArray(resp.events) ? resp.events.filter(e => typeof e.idx === 'number').slice(-1)[0] : undefined;
+                console.log('[history] latest page', {
+                    dialogId,
+                    events: resp.events?.length || 0,
+                    first_idx: resp.first_idx,
+                    last_idx: (resp as any).last_idx,
+                    last_event_idx: lastEventWithIdx?.idx,
+                    has_more: resp.has_more
+                });
+            } catch {}
             this._historyCursor = resp.first_idx ?? undefined;
             this._historyHasMore = !!resp.has_more;
             this._view.webview.postMessage({ type: 'historySetLoadMoreVisible', visible: !!resp.has_more });
@@ -41,6 +53,8 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
             this._view.webview.postMessage({ type: 'historySetLoadMoreEnabled', enabled: true });
         }
     }
+
+// (removed) _loadEntireHistory: we only load the latest page per product requirement
 
     private async _loadPreviousHistoryPage(dialogId: string) {
         if (!this._view || this._historyLoading) return;
@@ -139,7 +153,8 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
                             }
                             if (dialogId) {
                                 this._currentDialogId = dialogId;
-                                await this._loadLatestHistoryPage(dialogId);
+                                // Load only the latest history page and replace current content
+                                await this._loadLatestHistoryPage(dialogId, { replace: true });
                             }
                         } catch {}
                     })();
@@ -371,6 +386,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
         let currentReasoningText = '';
         let isProcessing = false;
         let isPrepending = false;
+        let suppressAutoScroll = false; // avoid per-item scroll during batch renders
         
         function insertNode(node) {
             const anchor = (loadMoreBtn && loadMoreBtn.parentNode === messagesContainer)
@@ -380,7 +396,9 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
                 messagesContainer.insertBefore(node, anchor);
             } else {
                 messagesContainer.appendChild(node);
-                node.scrollIntoView({ behavior: 'smooth', block: 'end' });
+                if (!suppressAutoScroll) {
+                    node.scrollIntoView({ behavior: 'smooth', block: 'end' });
+                }
             }
         }
         
@@ -484,11 +502,12 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
         }
         
         function escapeHtml(str) {
-            return str
+            const s = (str === undefined || str === null) ? '' : String(str);
+            return s
                 .replace(/&/g, '&amp;')
                 .replace(/</g, '&lt;')
                 .replace(/>/g, '&gt;')
-                .replace(/\"/g, '&quot;')
+                .replace(/\\"/g, '&quot;')
                 .replace(/'/g, '&#39;');
         }
         
@@ -501,15 +520,15 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
 
         // Use marked library for markdown rendering
         function renderMarkdown(text) {
+            const t = (text === undefined || text === null) ? '' : String(text);
             if (window.marked) {
                 // Ensure single newlines are preserved as breaks
-                return window.marked.parse(text, { breaks: true, gfm: true });
+                return window.marked.parse(t, { breaks: true, gfm: true });
             }
             
             // Fallback if marked is not loaded
-            return escapeHtml(text).replace(/\\n/g, '<br>');
+            return escapeHtml(t).replace(/\\n/g, '<br>');
         }
-
 
         function formatDiff(diff) {
             const esc = escapeHtml;
@@ -807,28 +826,37 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
             insertNode(editDiv);
         }
  
-        function renderHistoryEvent(evt) {            switch (evt.type) {
+        function renderHistoryEvent(evt) {
+            switch (evt.type) {
                 case 'user':
-                    addMessage('user', evt.content || '');
+                    addMessage('user', evt && typeof evt.content !== 'undefined' ? evt.content : '');
                     break;
                 case 'chat':
-                    addMessage('assistant', evt.content || '');
+                    addMessage('assistant', evt && typeof evt.content !== 'undefined' ? evt.content : '');
                     break;
                 case 'reasoning':
                     // Insert a collapsed reasoning block with rendered markdown
                     const rb = createReasoningBlock();
-                    rb.content.innerHTML = renderMarkdown(evt.content || '');
+                    rb.content.innerHTML = renderMarkdown(evt && typeof evt.content !== 'undefined' ? evt.content : '');
                     // Immediately collapse
                     rb.content.style.display = 'none';
                     const toggle = rb.header.querySelector('.reasoning-toggle');
                     if (toggle) toggle.textContent = '▶';
                     break;
                 case 'tool_call':
-                    addToolCall(evt.name, evt.args);
+                    addToolCall(evt ? evt.name : undefined, evt ? evt.args : undefined);
                     break;
                 case 'file_edit':
-                    addFileEdit(evt.file, evt.diff);
+                    addFileEdit(evt ? evt.file : undefined, evt ? evt.diff : undefined);
                     break;
+            }
+        }
+
+        function safeRenderHistoryEvent(evt) {
+            try {
+                renderHistoryEvent(evt);
+            } catch (e) {
+                console && console.error && console.error('[history] render error', e, evt);
             }
         }
         
@@ -936,6 +964,8 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
                             currentAssistantMessage.classList.remove('streaming');
                         }
                         currentAssistantMessage.innerHTML = renderMarkdown(currentAssistantText);
+                        // Ensure we see the tail of the message
+                        currentAssistantMessage.scrollIntoView({ behavior: 'smooth', block: 'end' });
                     }
                     currentAssistantMessage = null;
                     currentAssistantText = '';
@@ -1011,18 +1041,27 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
 
                 case 'historyPrependEvents':
                     if (Array.isArray(message.events)) {
+                        // When injecting history, ensure we are not in a streaming state
+                        currentAssistantMessage = null;
+                        currentAssistantText = '';
+                        currentReasoningBlock = null;
+                        currentReasoningText = '';
+
                         // Remember scroll position before insertion
                         const prevTop = messagesContainer.scrollTop;
                         const prevHeight = messagesContainer.scrollHeight;
 
                         // Enable prepend mode so insertNode places nodes at top
                         isPrepending = true;
+                        suppressAutoScroll = true;
                         try {
+                            // Render exactly in server-provided order to preserve interleaving of blocks
                             for (const evt of message.events) {
-                                renderHistoryEvent(evt);
+                                safeRenderHistoryEvent(evt);
                             }
                         } finally {
                             isPrepending = false;
+                            suppressAutoScroll = false;
                         }
 
                         // Restore scroll so content doesn't jump
@@ -1031,8 +1070,19 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
                     }
                     break;
 
+                case 'scrollToBottom':
+                    // Ensure we are at the bottom (used after initial history load)
+                    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                    break;
+
                 case 'historyReplaceAll':
                     // Replace all message contents with provided events
+                    // Reset any streaming buffers so nothing overwrites history-rendered DOM
+                    currentAssistantMessage = null;
+                    currentAssistantText = '';
+                    currentReasoningBlock = null;
+                    currentReasoningText = '';
+
                     // Clear container except the loadMore button
                     const toRemove = [];
                     for (const child of Array.from(messagesContainer.children)) {
@@ -1044,10 +1094,18 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
 
                     // Render fresh
                     if (Array.isArray(message.events)) {
+                        // Render in server-provided order to preserve interleaving
                         isPrepending = false; // render in natural order
-                        for (const evt of message.events) {
-                            renderHistoryEvent(evt);
+                        suppressAutoScroll = true; // don't scroll per item
+                        try {
+                            for (const evt of message.events) {
+                                safeRenderHistoryEvent(evt);
+                            }
+                        } finally {
+                            suppressAutoScroll = false;
                         }
+                        // Ensure we end up at the bottom after initial render
+                        messagesContainer.scrollTop = messagesContainer.scrollHeight;
                     }
                     break;
             }

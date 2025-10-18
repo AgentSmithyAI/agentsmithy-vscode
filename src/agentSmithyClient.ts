@@ -275,11 +275,25 @@ export class AgentSmithyClient {
         if (typeof limit === 'number' && limit > 0) params.set('limit', String(limit));
         if (typeof before === 'number') params.set('before', String(before));
         const url = `${this.baseUrl}/api/dialogs/${encodeURIComponent(dialogId)}/history` + (params.toString() ? `?${params.toString()}` : '');
+        // Debug log: which URL we are hitting
+        try { console.log('[history] GET', url); } catch {}
         const resp = await fetch(url, { headers: { 'Accept': 'application/json' } });
         if (!resp.ok) {
             throw new Error(`HTTP error! status: ${resp.status}`);
         }
         const data = await resp.json();
+        // Debug log summary of response
+        try {
+            const events = (data as any)?.events || [];
+            const lastEventWithIdx = Array.isArray(events) ? events.filter((e: any) => typeof e.idx === 'number').slice(-1)[0] : undefined;
+            console.log('[history] response', {
+                events: Array.isArray(events) ? events.length : 0,
+                first_idx: (data as any)?.first_idx,
+                last_idx: (data as any)?.last_idx,
+                last_event_idx: lastEventWithIdx?.idx,
+                has_more: (data as any)?.has_more
+            });
+        } catch {}
         return data as HistoryResponse;
     }
     
