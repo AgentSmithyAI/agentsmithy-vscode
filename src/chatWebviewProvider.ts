@@ -7,9 +7,61 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     private _view?: vscode.WebviewView;
     private _client: AgentSmithyClient;
     private _currentDialogId?: string;
+    private _historyCursor?: number; // history paging cursor (first_idx of last page)
+    private _historyHasMore: boolean = false;
+    private _historyLoading: boolean = false; // guard to prevent parallel loads
     
     constructor(private readonly _extensionUri: vscode.Uri) {
         this._client = new AgentSmithyClient();
+    }
+    
+    private async _loadLatestHistoryPage(dialogId: string, options?: { replace?: boolean }) {
+        if (!this._view || this._historyLoading) return;
+        this._historyLoading = true;
+        this._view.webview.postMessage({ type: 'historySetLoadMoreEnabled', enabled: false });
+        try {
+            const resp = await this._client.loadHistory(dialogId);
+            this._historyCursor = resp.first_idx ?? undefined;
+            this._historyHasMore = !!resp.has_more;
+            this._view.webview.postMessage({ type: 'historySetLoadMoreVisible', visible: !!resp.has_more });
+            if (resp.events && resp.events.length) {
+                if (options?.replace) {
+                    this._view.webview.postMessage({ type: 'historyReplaceAll', events: resp.events });
+                } else {
+                    this._view.webview.postMessage({ type: 'historyPrependEvents', events: resp.events });
+                }
+            } else if (options?.replace) {
+                // Clear even if no events
+                this._view.webview.postMessage({ type: 'historyReplaceAll', events: [] });
+            }
+        } catch (e:any) {
+            this._view.webview.postMessage({ type: 'showError', error: e?.message || 'Failed to load history' });
+        } finally {
+            this._historyLoading = false;
+            this._view.webview.postMessage({ type: 'historySetLoadMoreEnabled', enabled: true });
+        }
+    }
+
+    private async _loadPreviousHistoryPage(dialogId: string) {
+        if (!this._view || this._historyLoading) return;
+        const before = this._historyCursor;
+        if (before === undefined) return;
+        this._historyLoading = true;
+        this._view.webview.postMessage({ type: 'historySetLoadMoreEnabled', enabled: false });
+        try {
+            const resp = await this._client.loadHistory(dialogId, undefined, before);
+            this._historyCursor = resp.first_idx ?? undefined;
+            this._historyHasMore = !!resp.has_more;
+            this._view.webview.postMessage({ type: 'historySetLoadMoreVisible', visible: !!resp.has_more });
+            if (resp.events && resp.events.length) {
+                this._view.webview.postMessage({ type: 'historyPrependEvents', events: resp.events });
+            }
+        } catch (e:any) {
+            this._view.webview.postMessage({ type: 'showError', error: e?.message || 'Failed to load history' });
+        } finally {
+            this._historyLoading = false;
+            this._view.webview.postMessage({ type: 'historySetLoadMoreEnabled', enabled: true });
+        }
     }
     
     public sendMessage(content: string) {
@@ -25,7 +77,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
             this._handleSendMessage(content);
         }
     }
-    
+
     public resolveWebviewView(
         webviewView: vscode.WebviewView,
         context: vscode.WebviewViewResolveContext,
@@ -64,7 +116,40 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
                     this._client.abort();
                     break;
                 case 'ready':
-                    // Webview is ready, send initial state if needed
+                    // Webview is ready: resolve dialog id and load initial history if available
+                    (async () => {
+                        try {
+                            let dialogId = this._currentDialogId;
+                            if (!dialogId) {
+                                const current = await this._client.getCurrentDialog();
+                                if (current && current.id) {
+                                    dialogId = current.id;
+                                }
+                            }
+                            if (!dialogId) {
+                                try {
+                                    const list = await this._client.listDialogs();
+                                    if (list.current_dialog_id) {
+                                        dialogId = list.current_dialog_id;
+                                    } else if (Array.isArray(list.items) && list.items.length > 0) {
+                                        const sorted = [...list.items].sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
+                                        dialogId = sorted[0].id;
+                                    }
+                                } catch {}
+                            }
+                            if (dialogId) {
+                                this._currentDialogId = dialogId;
+                                await this._loadLatestHistoryPage(dialogId);
+                            }
+                        } catch {}
+                    })();
+                    break;
+                case 'loadMoreHistory':
+                    if (this._currentDialogId && this._historyHasMore && !this._historyLoading) {
+                        this._loadPreviousHistoryPage(this._currentDialogId).catch(err => {
+                            this._view?.webview.postMessage({ type: 'showError', error: err?.message || 'Failed to load history' });
+                        });
+                    }
                     break;
             }
         });
@@ -188,6 +273,8 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
                         
                     case 'done':
                         if (event.dialog_id) {
+                            // Update current dialog id, but do not reload history here.
+                            // History is only for older messages; streaming covers new ones.
                             this._currentDialogId = event.dialog_id;
                         }
                         break;
@@ -251,6 +338,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
 <body>
     <div class="chat-container">
         <div class="messages" id="messages">
+            <button id="loadMoreBtn" class="load-more" style="display:none;">Load previous</button>
             <div class="welcome-placeholder" id="welcomePlaceholder">
                 Type a message to start...
             </div>
@@ -275,12 +363,26 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
         const messageInput = document.getElementById('messageInput');
         const sendButton = document.getElementById('sendButton');
         const welcomePlaceholder = document.getElementById('welcomePlaceholder');
+        const loadMoreBtn = document.getElementById('loadMoreBtn');
         
         let currentAssistantMessage = null;
         let currentAssistantText = '';
         let currentReasoningBlock = null;
         let currentReasoningText = '';
         let isProcessing = false;
+        let isPrepending = false;
+        
+        function insertNode(node) {
+            const anchor = (loadMoreBtn && loadMoreBtn.parentNode === messagesContainer)
+                ? loadMoreBtn.nextSibling
+                : messagesContainer.firstChild;
+            if (isPrepending) {
+                messagesContainer.insertBefore(node, anchor);
+            } else {
+                messagesContainer.appendChild(node);
+                node.scrollIntoView({ behavior: 'smooth', block: 'end' });
+            }
+        }
         
         // Auto-resize textarea
         messageInput.addEventListener('input', () => {
@@ -305,6 +407,12 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
                 sendMessage();
             }
         });
+        
+        if (loadMoreBtn) {
+            loadMoreBtn.addEventListener('click', () => {
+                vscode.postMessage({ type: 'loadMoreHistory' });
+            });
+        }
         
         function sendMessage() {
             const text = messageInput.value.trim();
@@ -371,8 +479,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
                     messageDiv.innerHTML = linkifyUrls(escapedContent);
                 }
             }
-            messagesContainer.appendChild(messageDiv);
-            messageDiv.scrollIntoView({ behavior: 'smooth', block: 'end' });
+            insertNode(messageDiv);
             return messageDiv;
         }
         
@@ -664,8 +771,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
                 toolDiv.innerHTML = '• ' + linkifyUrls(escapedText);
             }
             
-            messagesContainer.appendChild(toolDiv);
-            toolDiv.scrollIntoView({ behavior: 'smooth', block: 'end' });
+            insertNode(toolDiv);
         }
         
         function addFileEdit(file, diff) {
@@ -698,8 +804,32 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
                     '<div class="diff"><pre>' + formatted + '</pre></div>' +
                     '</details>';
             }
-            messagesContainer.appendChild(editDiv);
-            editDiv.scrollIntoView({ behavior: 'smooth', block: 'end' });
+            insertNode(editDiv);
+        }
+ 
+        function renderHistoryEvent(evt) {            switch (evt.type) {
+                case 'user':
+                    addMessage('user', evt.content || '');
+                    break;
+                case 'chat':
+                    addMessage('assistant', evt.content || '');
+                    break;
+                case 'reasoning':
+                    // Insert a collapsed reasoning block with rendered markdown
+                    const rb = createReasoningBlock();
+                    rb.content.innerHTML = renderMarkdown(evt.content || '');
+                    // Immediately collapse
+                    rb.content.style.display = 'none';
+                    const toggle = rb.header.querySelector('.reasoning-toggle');
+                    if (toggle) toggle.textContent = '▶';
+                    break;
+                case 'tool_call':
+                    addToolCall(evt.name, evt.args);
+                    break;
+                case 'file_edit':
+                    addFileEdit(evt.file, evt.diff);
+                    break;
+            }
         }
         
         function showError(error) {
@@ -758,7 +888,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
             
             reasoningDiv.appendChild(header);
             reasoningDiv.appendChild(content);
-            messagesContainer.appendChild(reasoningDiv);
+            insertNode(reasoningDiv);
             reasoningDiv.scrollIntoView({ behavior: 'smooth', block: 'end' });
             
             return { block: reasoningDiv, content: content, header: header };
@@ -865,6 +995,60 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
                     }
                     currentReasoningBlock = null;
                     currentReasoningText = '';
+                    break;
+
+                case 'historySetLoadMoreVisible':
+                    if (loadMoreBtn) {
+                        loadMoreBtn.style.display = message.visible ? 'block' : 'none';
+                    }
+                    break;
+
+                case 'historySetLoadMoreEnabled':
+                    if (loadMoreBtn) {
+                        loadMoreBtn.disabled = message.enabled === false ? true : false;
+                    }
+                    break;
+
+                case 'historyPrependEvents':
+                    if (Array.isArray(message.events)) {
+                        // Remember scroll position before insertion
+                        const prevTop = messagesContainer.scrollTop;
+                        const prevHeight = messagesContainer.scrollHeight;
+
+                        // Enable prepend mode so insertNode places nodes at top
+                        isPrepending = true;
+                        try {
+                            for (const evt of message.events) {
+                                renderHistoryEvent(evt);
+                            }
+                        } finally {
+                            isPrepending = false;
+                        }
+
+                        // Restore scroll so content doesn't jump
+                        const newHeight = messagesContainer.scrollHeight;
+                        messagesContainer.scrollTop = prevTop + (newHeight - prevHeight);
+                    }
+                    break;
+
+                case 'historyReplaceAll':
+                    // Replace all message contents with provided events
+                    // Clear container except the loadMore button
+                    const toRemove = [];
+                    for (const child of Array.from(messagesContainer.children)) {
+                        if (child !== loadMoreBtn) {
+                            toRemove.push(child);
+                        }
+                    }
+                    toRemove.forEach(n => n.remove());
+
+                    // Render fresh
+                    if (Array.isArray(message.events)) {
+                        isPrepending = false; // render in natural order
+                        for (const evt of message.events) {
+                            renderHistoryEvent(evt);
+                        }
+                    }
                     break;
             }
         });

@@ -36,12 +36,59 @@ export interface SSEEvent {
     checkpoint?: string;
 }
 
+export interface HistoryEvent {
+    type: 'user' | 'chat' | 'reasoning' | 'tool_call' | 'file_edit';
+    content?: string;
+    name?: string;
+    args?: any;
+    file?: string;
+    diff?: string;
+    checkpoint?: string;
+    idx?: number;
+    model_name?: string;
+}
+
+export interface HistoryResponse {
+    dialog_id: string;
+    events: HistoryEvent[];
+    total_events: number;
+    has_more: boolean;
+    first_idx: number | null; // may be null when no user/chat messages are present
+    last_idx: number | null;
+}
+
 export class AgentSmithyClient {
     private baseUrl: string;
     private abortController?: AbortController;
     
     constructor(baseUrl?: string) {
         this.baseUrl = baseUrl || this.getServerUrl();
+    }
+
+    async getCurrentDialog(): Promise<{ id: string | null }> {
+        const url = `${this.baseUrl}/api/dialogs/current`;
+        try {
+            const resp = await fetch(url, { headers: { 'Accept': 'application/json' } });
+            if (!resp.ok) throw new Error(String(resp.status));
+            const data: any = await resp.json();
+            // Normalize to { id: string | null }
+            if (data && typeof data === 'object' && 'id' in data) {
+                return { id: (data as any).id as string | null };
+            }
+            return { id: null };
+        } catch {
+            return { id: null };
+        }
+    }
+
+    async listDialogs(): Promise<{ items: Array<{ id: string; updated_at: string }>; current_dialog_id?: string }> {
+        const url = `${this.baseUrl}/api/dialogs`;
+        const resp = await fetch(url, { headers: { 'Accept': 'application/json' } });
+        if (!resp.ok) {
+            throw new Error(`HTTP error! status: ${resp.status}`);
+        }
+        const data = await resp.json();
+        return data as { items: Array<{ id: string; updated_at: string }>; current_dialog_id?: string };
     }
     
     private getServerUrl(): string {
@@ -115,7 +162,7 @@ export class AgentSmithyClient {
 				}
 				return null;
 		}
-	}
+}
     
     async *streamChat(request: ChatRequest): AsyncGenerator<SSEEvent> {
         // Cancel any previous request
@@ -144,83 +191,96 @@ export class AgentSmithyClient {
             throw new Error('No response body');
         }
         
-		const decoder = new TextDecoder();
-		let buffer = '';
-		let eventLines: string[] = [];
-		
-		try {
-			while (true) {
-				const { done, value } = await reader.read();
-				if (done) break;
-				
-				buffer += decoder.decode(value, { stream: true });
-				const lines = buffer.split(/\r?\n/);
-				buffer = lines.pop() || '';
-				
-				for (const line of lines) {
-					// Blank line indicates end of one SSE message
-					if (line === '') {
-						const dataPayload = eventLines
-							.filter(l => l.startsWith('data:'))
-							.map(l => l.slice(5).trimStart())
-							.join('\n');
-						if (dataPayload) {
-						try {
-							const raw = JSON.parse(dataPayload);
-							const event = this.normalizeEvent(raw);
-							if (event) {
-								yield event;
-								if (event.type === 'done') {
-									// Don't return here - let the stream end naturally
-									// return;
-								}
-							}
-						} catch (e) {
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let eventLines: string[] = [];
+        
+        try {
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split(/\r?\n/);
+                buffer = lines.pop() || '';
+                
+                for (const line of lines) {
+                    // Blank line indicates end of one SSE message
+                    if (line === '') {
+                        const dataPayload = eventLines
+                            .filter(l => l.startsWith('data:'))
+                            .map(l => l.slice(5).trimStart())
+                            .join('\n');
+                        if (dataPayload) {
+                        try {
+                            const raw = JSON.parse(dataPayload);
+                            const event = this.normalizeEvent(raw);
+                            if (event) {
+                                yield event;
+                                if (event.type === 'done') {
+                                    // Don't return here - let the stream end naturally
+                                    // return;
+                                }
+                            }
+                        } catch (e) {
                                 // Skip invalid JSON
                             }
-						}
-						eventLines = [];
-						continue;
-					}
-					// Accumulate data lines; handle both 'data:' and 'data: '
-					if (line.startsWith('data:')) {
-						// Try to parse per-line JSON immediately (many servers send one JSON per line)
-						const candidate = line.slice(5).trimStart();
-						let emitted = false;
-						if (candidate.startsWith('{') && candidate.endsWith('}')) {
-							try {
-								const raw = JSON.parse(candidate);
-								const event = this.normalizeEvent(raw);
-								if (event) {
-									yield event;
-									emitted = true;
-									if (event.type === 'done') {
-										// Don't return here - let the stream end naturally
-										// return;
-									}
-								}
-							} catch {}
-						}
-						if (!emitted) {
-							eventLines.push(line);
-						}
-					}
-					// Ignore comments (lines starting with ':') and other fields for now
-				}
-			}
-		} catch (error) {
-			// Re-throw abort errors to be handled by caller
-			if (error instanceof Error && error.name === 'AbortError') {
-				throw error;
-			}
-			throw error;
-		} finally {
-			reader.releaseLock();
-			// Clear abort controller when done
-			if (this.abortController?.signal.aborted) {
-				this.abortController = undefined;
-			}
-		}
+                        }
+                        eventLines = [];
+                        continue;
+                    }
+                    // Accumulate data lines; handle both 'data:' and 'data: '
+                    if (line.startsWith('data:')) {
+                        // Try to parse per-line JSON immediately (many servers send one JSON per line)
+                        const candidate = line.slice(5).trimStart();
+                        let emitted = false;
+                        if (candidate.startsWith('{') && candidate.endsWith('}')) {
+                            try {
+                                const raw = JSON.parse(candidate);
+                                const event = this.normalizeEvent(raw);
+                                if (event) {
+                                    yield event;
+                                    emitted = true;
+                                    if (event.type === 'done') {
+                                        // Don't return here - let the stream end naturally
+                                        // return;
+                                    }
+                                }
+                            } catch {}
+                        }
+                        if (!emitted) {
+                            eventLines.push(line);
+                        }
+                    }
+                    // Ignore comments (lines starting with ':') and other fields for now
+                }
+            }
+        } catch (error) {
+            // Re-throw abort errors to be handled by caller
+            if (error instanceof Error && error.name === 'AbortError') {
+                throw error;
+            }
+            throw error;
+        } finally {
+            reader.releaseLock();
+            // Clear abort controller when done
+            if (this.abortController?.signal.aborted) {
+                this.abortController = undefined;
+            }
+        }
+    }
+
+    async loadHistory(dialogId: string, limit?: number | null, before?: number | null): Promise<HistoryResponse> {
+        const params = new URLSearchParams();
+        if (typeof limit === 'number' && limit > 0) params.set('limit', String(limit));
+        if (typeof before === 'number') params.set('before', String(before));
+        const url = `${this.baseUrl}/api/dialogs/${encodeURIComponent(dialogId)}/history` + (params.toString() ? `?${params.toString()}` : '');
+        const resp = await fetch(url, { headers: { 'Accept': 'application/json' } });
+        if (!resp.ok) {
+            throw new Error(`HTTP error! status: ${resp.status}`);
+        }
+        const data = await resp.json();
+        return data as HistoryResponse;
     }
     
     getCurrentFileContext(): ChatContext | undefined {
@@ -242,4 +302,3 @@ export class AgentSmithyClient {
         };
     }
 }
-

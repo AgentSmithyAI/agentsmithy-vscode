@@ -23,6 +23,22 @@ body {
     background-color: var(--vscode-sideBar-background);
 }
 
+.load-more {
+    display: block;
+    width: 100%;
+    margin: 6px 0 10px 0;
+    padding: 6px 8px;
+    border: 1px solid var(--vscode-button-secondaryBorder, var(--vscode-editorWidget-border));
+    background: var(--vscode-button-secondaryBackground, transparent);
+    color: var(--vscode-button-foreground, inherit);
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.load-more:hover {
+    background: var(--vscode-button-hoverBackground, var(--vscode-list-hoverBackground));
+}
+
 .message {
     border-radius: 4px;
     word-wrap: break-word;
