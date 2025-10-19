@@ -9,6 +9,8 @@ declare const marked: {
 };
 
 export class MessageRenderer {
+  private scrollManager?: {isAtBottom: () => boolean};
+
   constructor(
     private messagesContainer: HTMLElement,
     private loadMoreBtn: HTMLElement | null,
@@ -18,6 +20,10 @@ export class MessageRenderer {
 
   private isPrepending = false;
   private suppressAutoScroll = false;
+
+  setScrollManager(scrollManager: {isAtBottom: () => boolean}): void {
+    this.scrollManager = scrollManager;
+  }
 
   setPrepending(value: boolean): void {
     this.isPrepending = value;
@@ -67,7 +73,8 @@ export class MessageRenderer {
       this.messagesContainer.insertBefore(node, anchor);
     } else {
       this.messagesContainer.appendChild(node);
-      if (!this.suppressAutoScroll) {
+      // Only auto-scroll if user is already at the bottom
+      if (!this.suppressAutoScroll && this.scrollManager?.isAtBottom()) {
         node.scrollIntoView({behavior: 'smooth', block: 'end'});
       }
     }
@@ -201,7 +208,10 @@ export class MessageRenderer {
     reasoningDiv.appendChild(header);
     reasoningDiv.appendChild(content);
     this.insertNode(reasoningDiv);
-    reasoningDiv.scrollIntoView({behavior: 'smooth', block: 'end'});
+    // Only auto-scroll if user is already at the bottom
+    if (this.scrollManager?.isAtBottom()) {
+      reasoningDiv.scrollIntoView({behavior: 'smooth', block: 'end'});
+    }
 
     return {block: reasoningDiv, content: content, header: header};
   }
@@ -213,7 +223,10 @@ export class MessageRenderer {
     errorDiv.className = 'error';
     errorDiv.textContent = '❌ Error: ' + error;
     this.messagesContainer.appendChild(errorDiv);
-    errorDiv.scrollIntoView({behavior: 'smooth', block: 'end'});
+    // Only auto-scroll if user is already at the bottom
+    if (this.scrollManager?.isAtBottom()) {
+      errorDiv.scrollIntoView({behavior: 'smooth', block: 'end'});
+    }
   }
 
   showInfo(message: string): void {
@@ -223,7 +236,10 @@ export class MessageRenderer {
     infoDiv.className = 'info';
     infoDiv.textContent = 'ℹ️ ' + message;
     this.messagesContainer.appendChild(infoDiv);
-    infoDiv.scrollIntoView({behavior: 'smooth', block: 'end'});
+    // Only auto-scroll if user is already at the bottom
+    if (this.scrollManager?.isAtBottom()) {
+      infoDiv.scrollIntoView({behavior: 'smooth', block: 'end'});
+    }
   }
 
   renderHistoryEvent(evt: HistoryEvent): void {

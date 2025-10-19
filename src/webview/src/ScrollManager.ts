@@ -55,6 +55,13 @@ export class ScrollManager {
     return scrollHeight - scrollTop - clientHeight < this.BOTTOM_THRESHOLD;
   }
 
+  /**
+   * Check if user is at the bottom of the chat (for auto-scroll purposes)
+   */
+  isAtBottom(): boolean {
+    return this.isNearBottom();
+  }
+
   private pruneOldMessages(): void {
     // Cache current first visible idx so provider can keep cursor forward-only
     this.cachedFirstVisibleIdx = this.getFirstVisibleIdx();

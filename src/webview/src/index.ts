@@ -54,6 +54,8 @@ class ChatWebview {
     this.streamingState = new StreamingStateManager();
     this.uiController = new UIController(this.messageInput, this.sendButton);
     this.scrollManager = new ScrollManager(this.messagesContainer, this.vscode, this.renderer);
+    // Connect renderer to scroll manager for smart auto-scroll
+    this.renderer.setScrollManager(this.scrollManager);
     this.messageHandler = new MessageHandler(
       this.renderer,
       this.streamingState,
