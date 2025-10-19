@@ -9,7 +9,7 @@ permissions:
 
 env:
   NODE_VERSION: '20'
-  SEMANTIC_VERSION: '19.0.2'
+  SEMANTIC_VERSION: '24'
 
 jobs:
   build-test:
@@ -80,10 +80,9 @@ jobs:
         with:
           semantic_version: ${{ env.SEMANTIC_VERSION }}
           extra_plugins: |
-            @semantic-release/changelog@6.0.0
-            @semantic-release/git@10.0.0
-            @semantic-release/exec@6.0.1
-            @semantic-release/npm@12.0.1
+            @semantic-release/changelog
+            @semantic-release/git
+            @semantic-release/exec
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
