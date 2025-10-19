@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import type {SSEEvent} from '../api/StreamService';
-import {ERROR_MESSAGES} from '../constants';
+import {ERROR_MESSAGES, SSE_EVENT_TYPES as E} from '../constants';
 
 export type PostMessage = (msg: unknown) => void;
 
@@ -15,34 +15,34 @@ export class StreamEventHandlers {
 
   async handleEvent(event: SSEEvent): Promise<void> {
     switch (event.type) {
-      case 'chat_start':
+      case E.CHAT_START:
         this.handleChatStart();
         break;
-      case 'chat':
+      case E.CHAT:
         this.handleChat(event);
         break;
-      case 'chat_end':
+      case E.CHAT_END:
         this.handleChatEnd();
         break;
-      case 'reasoning_start':
+      case E.REASONING_START:
         this.handleReasoningStart();
         break;
-      case 'reasoning':
+      case E.REASONING:
         this.handleReasoning(event);
         break;
-      case 'reasoning_end':
+      case E.REASONING_END:
         this.handleReasoningEnd();
         break;
-      case 'tool_call':
+      case E.TOOL_CALL:
         this.handleToolCall(event);
         break;
-      case 'file_edit':
+      case E.FILE_EDIT:
         await this.handleFileEdit(event);
         break;
-      case 'error':
+      case E.ERROR:
         this.handleError(event);
         break;
-      case 'done':
+      case E.DONE:
         // Handled by caller
         break;
     }

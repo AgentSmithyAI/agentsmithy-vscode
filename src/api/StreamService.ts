@@ -1,4 +1,5 @@
 import {SSEStreamReader} from './SSEStreamReader';
+import {SSE_EVENT_TYPES as E, ERROR_NAMES} from '../constants';
 
 export interface AgentSmithyMessage {
   role: 'user' | 'assistant';
@@ -23,16 +24,16 @@ export interface ChatRequest {
 
 export interface SSEEvent {
   type:
-    | 'chat_start'
-    | 'chat'
-    | 'chat_end'
-    | 'reasoning_start'
-    | 'reasoning'
-    | 'reasoning_end'
-    | 'tool_call'
-    | 'file_edit'
-    | 'error'
-    | 'done';
+    | typeof E.CHAT_START
+    | typeof E.CHAT
+    | typeof E.CHAT_END
+    | typeof E.REASONING_START
+    | typeof E.REASONING
+    | typeof E.REASONING_END
+    | typeof E.TOOL_CALL
+    | typeof E.FILE_EDIT
+    | typeof E.ERROR
+    | typeof E.DONE;
   content?: string;
   dialog_id?: string;
   error?: string;
@@ -82,13 +83,13 @@ export class StreamService {
       for await (const chunk of this.readStream(reader, decoder)) {
         for (const event of sseReader.processChunk(chunk)) {
           yield event;
-          if (event.type === 'done') {
+          if (event.type === E.DONE) {
             return;
           }
         }
       }
     } catch (error) {
-      if (error instanceof Error && error.name === 'AbortError') {
+      if (error instanceof Error && error.name === ERROR_NAMES.ABORT) {
         throw error;
       }
       throw error;

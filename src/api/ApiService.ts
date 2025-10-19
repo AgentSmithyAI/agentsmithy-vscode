@@ -9,8 +9,10 @@ interface ListDialogsResponse {
   current_dialog_id?: string;
 }
 
+import {SSE_EVENT_TYPES as E} from '../constants';
+
 export interface HistoryEvent {
-  type: 'user' | 'chat' | 'reasoning' | 'tool_call' | 'file_edit';
+  type: 'user' | typeof E.CHAT | typeof E.REASONING | typeof E.TOOL_CALL | typeof E.FILE_EDIT;
   content?: string;
   name?: string;
   args?: unknown;
@@ -118,10 +120,10 @@ export class ApiService {
     const eventsRaw = Array.isArray(obj.events) ? (obj.events as unknown[]) : [];
     const events: HistoryEvent[] = eventsRaw.map((e) => {
       if (e === null || typeof e !== 'object') {
-        return {type: 'chat'};
+        return {type: E.CHAT as HistoryEvent['type']};
       }
       const ev = e as Record<string, unknown>;
-      const type = typeof ev.type === 'string' ? ev.type : 'chat';
+      const type = typeof ev.type === 'string' ? (ev.type as HistoryEvent['type']) : (E.CHAT as HistoryEvent['type']);
       const idx = typeof ev.idx === 'number' ? ev.idx : undefined;
       const content = typeof ev.content === 'string' ? ev.content : undefined;
       const name = typeof ev.name === 'string' ? ev.name : undefined;
@@ -130,7 +132,7 @@ export class ApiService {
       const checkpoint = typeof ev.checkpoint === 'string' ? ev.checkpoint : undefined;
       const model_name = typeof ev.model_name === 'string' ? ev.model_name : undefined;
       return {
-        type: type as HistoryEvent['type'],
+        type,
         idx,
         content,
         name,

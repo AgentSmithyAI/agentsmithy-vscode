@@ -6,6 +6,7 @@ import {HistoryService} from './services/HistoryService';
 import {getErrorMessage} from './utils/typeGuards';
 import type {HistoryEvent} from './api/ApiService';
 import {StreamService, type ChatContext} from './api/StreamService';
+import {SSE_EVENT_TYPES as E} from './constants';
 
 // Messages sent from the webview to the extension
 type WebviewInMessage =
@@ -216,7 +217,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
         hasReceivedEvents = true;
         await eventHandlers.handleEvent(event);
 
-        if (event.type === 'done' && event.dialog_id) {
+        if (event.type === E.DONE && event.dialog_id) {
           this._historyService.currentDialogId = event.dialog_id;
         }
       }
