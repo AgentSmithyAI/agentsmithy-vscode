@@ -1,30 +1,196 @@
-name: CI
+name: CI/CD
 
-on:
-  push:
-    branches: ['**']
+on: push
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+env:
+  NODE_VERSION: '20'
+  SEMANTIC_VERSION: '19.0.2'
+
 jobs:
-  check:
+  build-test:
+    name: Build & Test
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: '20'
+          node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Check code formatting (Prettier)
+      - name: Format check
         run: npm run format:check
 
-      - name: Run ESLint
+      - name: Lint
         run: npm run lint
 
-      - name: TypeScript compilation check
+      - name: Build
         run: npm run compile
+
+      - name: Test
+        run: npm test
+
+      - name: Upload coverage artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage
+          if-no-files-found: ignore
+
+  semver:
+    name: Semantic Release
+    outputs:
+      new_sha: ${{ steps.sha.outputs.SHA }}
+      new_release_published: ${{ steps.semantic.outputs.new_release_published }}
+      new_release_version: ${{ steps.semantic.outputs.new_release_version }}
+    runs-on: ubuntu-latest
+    needs: [build-test]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Semantic Release
+        id: semantic
+        if: startsWith(github.ref, 'refs/heads/master')
+        uses: cycjimmy/semantic-release-action@v4
+        with:
+          semantic_version: ${{ env.SEMANTIC_VERSION }}
+          extra_plugins: |
+            @semantic-release/changelog@6.0.0
+            @semantic-release/git@10.0.0
+            @semantic-release/exec@6.0.1
+            @semantic-release/npm@12.0.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Get SHA
+        id: sha
+        run: |
+          sha_new=$(git rev-parse HEAD)
+          echo $sha_new
+          echo "SHA=$sha_new" >> $GITHUB_OUTPUT
+
+      - run: echo ${{ steps.sha.outputs.SHA }}
+      - run: echo "New release published=${{ steps.semantic.outputs.new_release_published }}"
+      - run: echo "New release version=${{ steps.semantic.outputs.new_release_version }}"
+
+  build_vsix:
+    name: Build VSIX
+    runs-on: ubuntu-latest
+    needs: [semver, build-test]
+    if: needs.semver.outputs.new_release_published == 'true' || startsWith(github.ref, 'refs/tags/')
+    steps:
+      - name: Checkout at release SHA or tag
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          ref: ${{ startsWith(github.ref, 'refs/tags/') && github.ref || needs.semver.outputs.new_sha }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Compile
+        run: npm run compile
+
+      - name: Derive release tag and version
+        id: ver
+        shell: bash
+        run: |
+          if [ "${{ needs.semver.outputs.new_release_published }}" = "true" ]; then
+            VER="${{ needs.semver.outputs.new_release_version }}"
+            TAG="v$VER"
+          elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+            VER="${TAG#v}"
+            if [ -z "$VER" ]; then
+              echo "Invalid tag format: $TAG (must start with 'v')" >&2
+              exit 1
+            fi
+          else
+            echo "No version available: not a new semantic release or tag push" >&2
+            TAG=""
+            VER=""
+          fi
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "version=$VER" >> $GITHUB_OUTPUT
+
+      - name: Package extension
+        if: steps.ver.outputs.version != ''
+        run: npm run vsce:package
+
+      - name: Upload artifacts
+        if: steps.ver.outputs.version != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: agentsmithy-vscode-${{ steps.ver.outputs.version }}
+          retention-days: 1
+          path: '*.vsix'
+
+  release_upload:
+    name: Publish Release
+    runs-on: ubuntu-latest
+    needs: [build_vsix, semver]
+    if: needs.build_vsix.result == 'success' && (needs.semver.outputs.new_release_published == 'true' || startsWith(github.ref, 'refs/tags/'))
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: agentsmithy-vscode-*
+          merge-multiple: true
+
+      - name: Derive tag and version
+        id: tag
+        shell: bash
+        run: |
+          if [ "${{ needs.semver.outputs.new_release_published }}" = "true" ]; then
+            VER="${{ needs.semver.outputs.new_release_version }}"
+            TAG="v$VER"
+          elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+            VER="${TAG#v}"
+            if [ -z "$VER" ]; then
+              echo "Invalid tag format: $TAG (must start with 'v')" >&2
+              exit 1
+            fi
+          else
+            echo "No version available" >&2
+            exit 1
+          fi
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "version=$VER" >> $GITHUB_OUTPUT
+
+      - name: Create/update release with assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          files: '*.vsix'

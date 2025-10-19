@@ -1,83 +1,51 @@
 import * as vscode from 'vscode';
+import {ApiService} from './api/ApiService';
 import {ChatWebviewProvider} from './chatWebviewProvider';
+import {registerCommands} from './commands';
+import {COMMANDS, ERROR_MESSAGES, STATE_KEYS, VIEWS, WELCOME_MESSAGE} from './constants';
+import {ConfigService} from './services/ConfigService';
+import {HistoryService} from './services/HistoryService';
+import {StreamService} from './api/StreamService';
+import {normalizeSSEEvent} from './shared/sseNormalizer';
 
 export const activate = (context: vscode.ExtensionContext) => {
-  // Register the webview provider
-  const provider = new ChatWebviewProvider(context.extensionUri);
+  // Create services
+  const configService = new ConfigService();
+  const serverUrl = configService.getServerUrl();
 
-  const viewType = ChatWebviewProvider.viewType;
+  const apiService = new ApiService(serverUrl);
+  const streamService = new StreamService(serverUrl, normalizeSSEEvent);
+  const historyService = new HistoryService(apiService);
+
+  // Note: When server URL changes, we recreate service instances,
+  // but existing providers will continue using old instances.
+  // This is acceptable as config changes are rare.
+
+  // Register the webview provider
+  const provider = new ChatWebviewProvider(context.extensionUri, streamService, historyService, configService);
+
   context.subscriptions.push(
-    vscode.window.registerWebviewViewProvider(viewType, provider, {
+    vscode.window.registerWebviewViewProvider(VIEWS.CHAT, provider, {
       webviewOptions: {
         retainContextWhenHidden: true,
       },
     }),
   );
 
-  // Register command to open chat
-  context.subscriptions.push(
-    vscode.commands.registerCommand('agentsmithy.openChat', async () => {
-      // Focus on the AgentSmithy view container
-      await vscode.commands.executeCommand('workbench.view.extension.agentsmithy');
-      // Focus on the chat view
-      await vscode.commands.executeCommand('agentsmithy.chatView.focus');
-    }),
-  );
-
-  // Register command to move to secondary sidebar
-  context.subscriptions.push(
-    vscode.commands.registerCommand('agentsmithy.moveToSecondarySidebar', async () => {
-      vscode.window.showInformationMessage(
-        'To move AgentSmithy to secondary sidebar: Right-click on AgentSmithy icon in activity bar → "Move to Secondary Side Bar"',
-      );
-    }),
-  );
-
-  // Register command to send current selection
-  context.subscriptions.push(
-    vscode.commands.registerCommand('agentsmithy.sendSelection', async () => {
-      const editor = vscode.window.activeTextEditor;
-      if (!editor) {
-        vscode.window.showWarningMessage('No active editor');
-        return;
-      }
-
-      const selection = editor.selection;
-      if (selection.isEmpty) {
-        vscode.window.showWarningMessage('No text selected');
-        return;
-      }
-
-      const selectedText = editor.document.getText(selection);
-      const fileName = editor.document.fileName.split('/').pop() || editor.document.fileName;
-
-      // Open the chat view
-      await vscode.commands.executeCommand('agentsmithy.openChat');
-
-      // Give the webview time to initialize
-      setTimeout(() => {
-        const message = `Please help me with this code from ${fileName}:\n\n\`\`\`${editor.document.languageId}\n${selectedText}\n\`\`\``;
-        provider.sendMessage(message);
-      }, 500);
-    }),
-  );
+  // Register commands using Command Pattern
+  registerCommands(context, provider);
 
   // Show a welcome message
-  const hasShownWelcome = Boolean(context.globalState.get('agentsmithy.welcomeShown', false));
+  const hasShownWelcome = Boolean(context.globalState.get(STATE_KEYS.WELCOME_SHOWN, false));
 
   if (hasShownWelcome === false) {
-    void vscode.window
-      .showInformationMessage(
-        'AgentSmithy is ready! Open the chat from the sidebar or use Command Palette → "AgentSmithy: Open Chat"',
-        'Open Chat',
-      )
-      .then((selection) => {
-        if (selection === 'Open Chat') {
-          void vscode.commands.executeCommand('agentsmithy.openChat');
-        }
-      });
+    void vscode.window.showInformationMessage(WELCOME_MESSAGE, ERROR_MESSAGES.OPEN_CHAT).then((selection) => {
+      if (selection === ERROR_MESSAGES.OPEN_CHAT) {
+        void vscode.commands.executeCommand(COMMANDS.OPEN_CHAT);
+      }
+    });
 
-    void context.globalState.update('agentsmithy.welcomeShown', true);
+    void context.globalState.update(STATE_KEYS.WELCOME_SHOWN, true);
   }
 };
 

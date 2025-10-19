@@ -1,10 +1,16 @@
 # AgentSmithy VSCode Extension
 
-## Formatting & Linting
+[![CI](https://github.com/agentsmithy/agentsmithy-vscode/actions/workflows/ci.yml/badge.svg)](https://github.com/agentsmithy/agentsmithy-vscode/actions/workflows/ci.yml)
+
+## Formatting, Linting & Tests
 
 - ESLint autofix: npm run lint:fix
 - Prettier write: npm run format
 - Prettier check (CI): npm run format:check
+- Unit tests (Vitest):
+  - Run once: npm test
+  - Watch mode: npm run test:watch
+  - Coverage: npm run test:coverage
 
 Prettier ignores build/test output via .prettierignore.
 
