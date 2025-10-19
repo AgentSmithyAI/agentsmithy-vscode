@@ -57,6 +57,20 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     this._view?.webview.postMessage(msg);
   }
 
+  /**
+   * Read the first visible idx (topmost user/chat) from the webview DOM via eval
+   * and feed it back to HistoryService so pruning cannot regress the cursor.
+   */
+  private async _syncVisibleFirstIdx(): Promise<void> {
+    if (!this._view) {return;}
+    try {
+      const idx: unknown = await this._view.webview.postMessage({type: 'getVisibleFirstIdx'});
+      // webview.postMessage doesn't return a value; we will receive it via onDidReceiveMessage
+    } catch {
+      // noop
+    }
+  }
+
   private async _loadLatestHistoryPage(dialogId: string, replace = false): Promise<void> {
     if (!this._view) {
       return;
@@ -139,25 +153,30 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
 
     // Handle messages from the webview
-    webviewView.webview.onDidReceiveMessage(async (message: WebviewInMessage) => {
-      switch (message.type) {
-        case 'sendMessage':
-          await this._handleSendMessage(message.text ?? '');
-          break;
-        case 'openFile':
-          await this._handleOpenFile(message.file);
-          break;
-        case 'stopProcessing':
-          this._stream.abort();
-          break;
-        case 'ready':
-          await this._handleWebviewReady();
-          break;
-        case 'loadMoreHistory':
-          await this._handleLoadMoreHistory();
-          break;
-      }
-    });
+    webviewView.webview.onDidReceiveMessage(
+      async (message: WebviewInMessage | {type: 'visibleFirstIdx'; idx?: number}) => {
+        switch (message.type) {
+          case 'sendMessage':
+            await this._handleSendMessage((message as WebviewInMessage & {type: 'sendMessage'}).text ?? '');
+            break;
+          case 'openFile':
+            await this._handleOpenFile((message as WebviewInMessage & {type: 'openFile'}).file);
+            break;
+          case 'stopProcessing':
+            this._stream.abort();
+            break;
+          case 'ready':
+            await this._handleWebviewReady();
+            break;
+          case 'loadMoreHistory':
+            await this._handleLoadMoreHistory();
+            break;
+          case 'visibleFirstIdx':
+            this._historyService.setVisibleFirstIdx((message as {type: 'visibleFirstIdx'; idx?: number}).idx);
+            break;
+        }
+      },
+    );
   }
 
   private _handleOpenFile = async (file?: string): Promise<void> => {

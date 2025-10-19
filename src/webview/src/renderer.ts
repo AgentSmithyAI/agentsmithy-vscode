@@ -27,6 +27,37 @@ export class MessageRenderer {
     this.suppressAutoScroll = value;
   }
 
+  // Remove oldest DOM nodes so that only the last `maxIdxCount` index-bearing
+  // messages (user/chat with data-idx) remain. Removes associated non-indexed
+  // blocks preceding the next indexed message as well.
+  pruneByIdx(maxIdxCount: number): void {
+    if (!maxIdxCount || maxIdxCount <= 0) return;
+    // Count index-bearing elements
+    let idxCount = 0;
+    for (const child of Array.from(this.messagesContainer.children)) {
+      if (child === this.loadMoreBtn) continue;
+      if (child instanceof HTMLElement && child.dataset && child.dataset.idx) {
+        idxCount++;
+      }
+    }
+    if (idxCount <= maxIdxCount) return;
+
+    // Remove from the top until idxCount <= maxIdxCount
+    const toRemove: Element[] = [];
+    let needToRemove = idxCount - maxIdxCount;
+    for (const child of Array.from(this.messagesContainer.children)) {
+      if (child === this.loadMoreBtn) continue;
+      toRemove.push(child);
+      if (child instanceof HTMLElement && child.dataset && child.dataset.idx) {
+        needToRemove--;
+        if (needToRemove <= 0) break;
+      }
+    }
+    for (const el of toRemove) {
+      el.remove();
+    }
+  }
+
   private insertNode(node: HTMLElement): void {
     const anchor =
       this.loadMoreBtn && this.loadMoreBtn.parentNode === this.messagesContainer
@@ -197,12 +228,20 @@ export class MessageRenderer {
 
   renderHistoryEvent(evt: HistoryEvent): void {
     switch (evt.type) {
-      case 'user':
-        this.addMessage('user', evt && typeof evt.content !== 'undefined' ? evt.content : '');
+      case 'user': {
+        const el = this.addMessage('user', evt && typeof evt.content !== 'undefined' ? evt.content : '');
+        if (el && evt && typeof evt.idx === 'number') {
+          (el as HTMLElement).dataset.idx = String(evt.idx);
+        }
         break;
-      case 'chat':
-        this.addMessage('assistant', evt && typeof evt.content !== 'undefined' ? evt.content : '');
+      }
+      case 'chat': {
+        const el = this.addMessage('assistant', evt && typeof evt.content !== 'undefined' ? evt.content : '');
+        if (el && evt && typeof evt.idx === 'number') {
+          (el as HTMLElement).dataset.idx = String(evt.idx);
+        }
         break;
+      }
       case 'reasoning': {
         const rb = this.createReasoningBlock();
         rb.content.innerHTML = this.renderMarkdown(evt && typeof evt.content !== 'undefined' ? evt.content : '');

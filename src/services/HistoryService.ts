@@ -17,6 +17,26 @@ export class HistoryService {
 
   constructor(private readonly apiService: ApiService) {}
 
+  /**
+   * Explicitly set the cursor to the first visible idx currently rendered in the webview.
+   * Useful when the webview prunes old DOM nodes and the next page should be fetched
+   * from a more recent boundary instead of an older one.
+   */
+  setVisibleFirstIdx(idx: number | undefined | null): void {
+    const normalized = typeof idx === 'number' ? idx : undefined;
+    // Only move the cursor forward (to a more recent boundary). Never regress.
+    const next =
+      normalized === undefined
+        ? this._historyCursor
+        : this._historyCursor === undefined
+          ? normalized
+          : Math.max(this._historyCursor, normalized);
+    if (this._historyCursor !== next) {
+      this._historyCursor = next;
+      this._onDidChangeState.fire();
+    }
+  }
+
   get currentDialogId(): string | undefined {
     return this._currentDialogId;
   }

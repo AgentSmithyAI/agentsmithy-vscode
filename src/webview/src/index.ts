@@ -27,11 +27,22 @@ class ChatWebview {
   private loadMoreBtn: HTMLElement | null;
   private welcomePlaceholder: HTMLElement | null;
 
+  // Cached topmost visible idx (if any)
+  private cachedFirstVisibleIdx: number | undefined;
+
   private currentAssistantMessage: HTMLElement | null = null;
   private currentAssistantText = '';
   private currentReasoningBlock: ReasoningBlock | null = null;
   private currentReasoningText = '';
   private isProcessing = false;
+
+  // Infinite scroll + pruning state
+  private isLoadingHistory = false;
+  private canLoadMoreHistory = true;
+  private readonly PRUNE_MAX_IDX = 20;
+  // Scroll guard state to avoid repeated top-trigger loads caused by DOM reflows
+  private lastScrollTop = 0;
+  private topTriggerArmed = true;
 
   constructor(workspaceRoot: string) {
     this.vscode = acquireVsCodeApi();
@@ -80,12 +91,40 @@ class ChatWebview {
       }
     });
 
-    // Load more button
+    // Hide legacy Load more button and disable interaction
     if (this.loadMoreBtn) {
-      this.loadMoreBtn.addEventListener('click', () => {
-        this.vscode.postMessage({type: 'loadMoreHistory'});
-      });
+      this.loadMoreBtn.style.display = 'none';
     }
+
+    // Infinite scroll up: load previous when scrolled near top
+    this.messagesContainer.addEventListener('scroll', () => {
+      const st = this.messagesContainer.scrollTop;
+      const goingUp = st < this.lastScrollTop;
+
+      // Arm the top trigger only after the user scrolls away sufficiently
+      if (st > 300) {
+        this.topTriggerArmed = true;
+      }
+
+      // Trigger when within 100px from top, only if user is scrolling up and the trigger is armed
+      if (goingUp && st <= 100 && this.topTriggerArmed) {
+        this.topTriggerArmed = false; // disarm until user scrolls away again
+        this.maybeLoadMoreHistory();
+      }
+
+      // Prune when user is near bottom to keep recent view light
+      const nearBottom =
+        this.messagesContainer.scrollHeight - this.messagesContainer.scrollTop - this.messagesContainer.clientHeight <
+        200;
+      if (nearBottom) {
+        // Before pruning, cache current first visible idx so provider can keep cursor forward-only
+        this.cachedFirstVisibleIdx = this.getFirstVisibleIdx();
+        this.vscode.postMessage({type: 'visibleFirstIdx', idx: this.cachedFirstVisibleIdx});
+        this.renderer.pruneByIdx(this.PRUNE_MAX_IDX);
+      }
+
+      this.lastScrollTop = st;
+    });
 
     // File link clicks
     window.addEventListener('click', (e) => {
@@ -101,6 +140,16 @@ class ChatWebview {
     // Message handler
     window.addEventListener('message', (event) => {
       this.handleMessage(event.data as WebviewOutMessage);
+    });
+
+    // Respond to provider's query for the first visible idx
+    window.addEventListener('message', (event) => {
+      const data = event.data as {type?: string} | undefined;
+      if (data && data.type === 'getVisibleFirstIdx') {
+        const idx = this.getFirstVisibleIdx();
+        // Send back to extension
+        this.vscode.postMessage({type: 'visibleFirstIdx', idx});
+      }
     });
   }
 
@@ -121,6 +170,17 @@ class ChatWebview {
     });
 
     this.setProcessing(true);
+  }
+
+  private getFirstVisibleIdx(): number | undefined {
+    // Find first user/assistant message with data-idx
+    for (const child of Array.from(this.messagesContainer.children)) {
+      if (child instanceof HTMLElement && child.dataset && child.dataset.idx) {
+        const v = Number(child.dataset.idx);
+        if (!Number.isNaN(v)) return v;
+      }
+    }
+    return undefined;
   }
 
   private setProcessing(processing: boolean): void {
@@ -150,6 +210,8 @@ class ChatWebview {
     switch (message.type) {
       case 'addMessage':
         this.renderer.addMessage(message.message.role, message.message.content);
+        // User message means new tail content → prune older
+        this.renderer.pruneByIdx(this.PRUNE_MAX_IDX);
         break;
 
       case 'startAssistantMessage':
@@ -183,6 +245,8 @@ class ChatWebview {
         }
         this.currentAssistantMessage = null;
         this.currentAssistantText = '';
+        // Finalized assistant message → prune older
+        this.renderer.pruneByIdx(this.PRUNE_MAX_IDX);
         break;
 
       case 'showToolCall':
@@ -238,14 +302,23 @@ class ChatWebview {
         break;
 
       case 'historySetLoadMoreVisible':
+        // We use infinite scroll, keep button hidden regardless
         if (this.loadMoreBtn) {
-          this.loadMoreBtn.style.display = message.visible ? 'block' : 'none';
+          this.loadMoreBtn.style.display = 'none';
         }
         break;
 
       case 'historySetLoadMoreEnabled':
-        if (this.loadMoreBtn) {
-          (this.loadMoreBtn as HTMLButtonElement).disabled = message.enabled === false;
+        this.canLoadMoreHistory = message.enabled !== false;
+        if (!this.canLoadMoreHistory) {
+          this.isLoadingHistory = false; // stop pending guards
+        }
+        // Re-arm top trigger when external state toggles loading capability back on
+        if (this.canLoadMoreHistory) {
+          // Only re-arm if the user scrolled away; otherwise wait until they do
+          if (this.messagesContainer.scrollTop > 300) {
+            this.topTriggerArmed = true;
+          }
         }
         break;
 
@@ -262,10 +335,11 @@ class ChatWebview {
           this.renderer.setPrepending(true);
           this.renderer.setSuppressAutoScroll(true);
           try {
+            // Prepend must iterate in reverse so DOM order remains ascending by idx at the top
             for (let i = message.events.length - 1; i >= 0; i--) {
               const evt = message.events[i];
               try {
-                this.renderer.renderHistoryEvent(evt);
+                this.renderer.renderHistoryEvent(evt as any);
               } catch {
                 // Suppress render errors
               }
@@ -277,11 +351,19 @@ class ChatWebview {
 
           const newHeight = this.messagesContainer.scrollHeight;
           this.messagesContainer.scrollTop = prevTop + (newHeight - prevHeight);
+
+          // Finished a prepend load
+          this.isLoadingHistory = false;
+          // Do not immediately trigger another load due to being near the top after reflow
+          // Require the user to scroll away (>300) before re-arming
+          this.topTriggerArmed = false;
         }
         break;
 
       case 'scrollToBottom':
         this.renderer.scrollToBottom();
+        // Prune when we explicitly move to bottom
+        this.renderer.pruneByIdx(this.PRUNE_MAX_IDX);
         break;
 
       case 'historyReplaceAll': {
@@ -343,6 +425,11 @@ class ChatWebview {
       smartypants: false,
       renderer,
     });
+  }
+  private maybeLoadMoreHistory(): void {
+    if (this.isLoadingHistory || !this.canLoadMoreHistory) return;
+    this.isLoadingHistory = true;
+    this.vscode.postMessage({type: 'loadMoreHistory'});
   }
 }
 
