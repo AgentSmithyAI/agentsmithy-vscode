@@ -83,7 +83,7 @@ export class AgentSmithyClient {
   }
 
   // Narrow unknown to a plain object
-  isRecord = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
+  isRecord = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v);
 
   asString = (v: unknown): string | undefined => typeof v === 'string' ? v : undefined;
 
@@ -107,7 +107,7 @@ export class AgentSmithyClient {
         throw new Error(String(resp.status));
       }
       const data: unknown = await resp.json();
-      if (data && typeof data === 'object' && 'id' in data) {
+      if (data !== null && typeof data === 'object' && 'id' in data) {
         const id = (data as { id: unknown }).id;
         return { id: typeof id === 'string' || id === null ? id : null };
       }
@@ -126,15 +126,14 @@ export class AgentSmithyClient {
     const data: unknown = await resp.json();
     // Basic shape validation
     if (
-      data &&
+      data !== null &&
       typeof data === 'object' &&
       'items' in data &&
       Array.isArray((data as { items: unknown }).items)
     ) {
       const items = (data as { items: unknown }).items as unknown[];
       const normalizedItems: Array<{ id: string; updated_at: string }> = items
-        .map((x) => (x && typeof x === 'object' ? x : undefined))
-        .filter((x): x is { id: unknown; updated_at: unknown } => !!x)
+        .filter((x): x is Record<string, unknown> => x !== null && typeof x === 'object')
         .map((x) => ({
           id: typeof x.id === 'string' ? x.id : '',
           updated_at: typeof x.updated_at === 'string' ? x.updated_at : '',
@@ -156,17 +155,20 @@ export class AgentSmithyClient {
     // Try to read from .agentsmithy/status.json in workspace
     const workspaceFolders = vscode.workspace.workspaceFolders;
     if (Array.isArray(workspaceFolders) && workspaceFolders.length > 0) {
-      const workspaceRoot = workspaceFolders[0].uri.fsPath;
+      const workspaceRoot: string = String(workspaceFolders[0]?.uri.fsPath ?? '');
       const statusPath = path.join(workspaceRoot, '.agentsmithy', 'status.json');
 
       try {
         if (fs.existsSync(statusPath)) {
           const statusContent = fs.readFileSync(statusPath, 'utf8');
-          // Using unknown to avoid unsafe assignment; parsed is only used via type guards below
-          const parsed: unknown = JSON.parse(statusContent) as unknown;
-          if (parsed && typeof parsed === 'object' && 'port' in parsed) {
-            const port = (parsed as { port?: unknown }).port;
-            if (typeof port === 'number' || (typeof port === 'string' && port.trim().length > 0)) {
+          // Safe JSON parse wrapper to avoid assigning `any`
+          const safeJsonParse = <T>(s: string): T | undefined => {
+            try { return JSON.parse(s) as T; } catch { return undefined; }
+          };
+          const parsed = safeJsonParse<{ port?: unknown }>(statusContent);
+          if (parsed && typeof parsed.port !== 'undefined') {
+            const port = parsed.port;
+            if (typeof port === 'number' || (typeof port === 'string' && String(port).trim().length > 0)) {
               return `http://localhost:${String(port)}`;
             }
           }
@@ -269,7 +271,7 @@ export class AgentSmithyClient {
     let eventLines: string[] = [];
 
     try {
-      while (true) {
+      for (;;) {
         const readResult = await reader.read();
         const done: boolean = Boolean((readResult as { done?: boolean }).done);
         const value: Uint8Array | undefined = (readResult as { value?: Uint8Array }).value;
@@ -294,6 +296,9 @@ export class AgentSmithyClient {
                 const event = this.normalizeEvent(raw);
                 if (event) {
                   yield event;
+                  if (event.type === 'done') {
+                    return;
+                  }
                 }
               } catch {
                 // Skip invalid JSON
@@ -314,6 +319,9 @@ export class AgentSmithyClient {
                 const event = this.normalizeEvent(raw);
                 if (event) {
                   yield event;
+                  if (event.type === 'done') {
+                    return;
+                  }
                   emitted = true;
                 }
               } catch {
@@ -336,10 +344,7 @@ export class AgentSmithyClient {
     } finally {
       reader.releaseLock();
       // Clear abort controller when done
-      const ac = this.abortController;
-      if (ac && ac.signal.aborted === true) {
-        this.abortController = undefined;
-      }
+      this.abortController = undefined;
     }
   }
 
@@ -360,13 +365,13 @@ export class AgentSmithyClient {
     const data: unknown = await resp.json();
 
     // Shape-validate history response and coerce to our HistoryResponse
-    if (!data || typeof data !== 'object') {
+    if (data === null || typeof data !== 'object') {
       throw new Error('Malformed history response');
     }
     const obj = data as Record<string, unknown>;
     const eventsRaw = Array.isArray(obj.events) ? (obj.events as unknown[]) : [];
     const events: HistoryEvent[] = eventsRaw.map((e) => {
-      if (!e || typeof e !== 'object') {return { type: 'chat' };}
+      if (e === null || typeof e !== 'object') {return { type: 'chat' };}
       const ev = e as Record<string, unknown>;
       const type = typeof ev.type === 'string' ? ev.type : 'chat';
       const idx = typeof ev.idx === 'number' ? ev.idx : undefined;

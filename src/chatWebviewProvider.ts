@@ -75,7 +75,8 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
         this._postMessage({type: 'historyReplaceAll', events: []});
       }
     } catch (e: unknown) {
-      const msg = e && typeof e === 'object' && 'message' in (e as Record<string, unknown>) ? String((e as Record<string, unknown>).message) : ChatWebviewProvider.LOAD_HISTORY_ERR;
+      const hasMsg = e !== null && typeof e === 'object' && 'message' in (e as Record<string, unknown>);
+      const msg = hasMsg ? String((e as Record<string, unknown>).message) : ChatWebviewProvider.LOAD_HISTORY_ERR;
       this._postMessage({type: 'showError', error: msg});
     } finally {
       this._historyLoading = false;
@@ -104,7 +105,8 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
         this._postMessage({type: 'historyPrependEvents', events: resp.events});
       }
     } catch (e: unknown) {
-      const msg = e && typeof e === 'object' && 'message' in (e as Record<string, unknown>) ? String((e as Record<string, unknown>).message) : ChatWebviewProvider.LOAD_HISTORY_ERR;
+      const hasMsg = e !== null && typeof e === 'object' && 'message' in (e as Record<string, unknown>);
+      const msg = hasMsg ? String((e as Record<string, unknown>).message) : ChatWebviewProvider.LOAD_HISTORY_ERR;
       this._postMessage({type: 'showError', error: msg});
     } finally {
       this._historyLoading = false;
@@ -155,7 +157,8 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
             const doc = await vscode.workspace.openTextDocument(uri);
             await vscode.window.showTextDocument(doc, {preview: false});
           } catch (err: unknown) {
-            const msg = err && typeof err === 'object' && 'message' in (err as Record<string, unknown>) ? String((err as Record<string, unknown>).message) : `Failed to open file: ${String(message.file)}`;
+            const hasMsg = err !== null && typeof err === 'object' && 'message' in (err as Record<string, unknown>);
+            const msg = hasMsg ? String((err as Record<string, unknown>).message) : `Failed to open file: ${String(message.file)}`;
             vscode.window.showErrorMessage(String(msg));
           }
           break;

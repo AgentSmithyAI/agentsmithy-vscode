@@ -63,9 +63,9 @@ export const activate = (context: vscode.ExtensionContext) => {
   );
 
   // Show a welcome message
-  const hasShownWelcome = context.globalState.get('agentsmithy.welcomeShown', false);
+  const hasShownWelcome = Boolean(context.globalState.get('agentsmithy.welcomeShown', false));
 
-  if (!hasShownWelcome) {
+  if (hasShownWelcome === false) {
     void vscode.window
       .showInformationMessage(
         'AgentSmithy is ready! Open the chat from the sidebar or use Command Palette → "AgentSmithy: Open Chat"',
