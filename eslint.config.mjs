@@ -4,18 +4,18 @@
  */
 // @ts-check
 import js from '@eslint/js';
-import * as tseslint from 'typescript-eslint';
 import stylistic from '@stylistic/eslint-plugin';
-import unicorn from 'eslint-plugin-unicorn';
-import sonarjs from 'eslint-plugin-sonarjs';
 import importPlugin from 'eslint-plugin-import';
 import preferArrow from 'eslint-plugin-prefer-arrow-functions';
+import sonarjs from 'eslint-plugin-sonarjs';
+import unicorn from 'eslint-plugin-unicorn';
+import * as tseslint from 'typescript-eslint';
 
 const tsconfigRootDir = new URL('.', import.meta.url).pathname;
 
 export default [
-  // Ignore build/test artifacts (replace .eslintignore)
-  {ignores: ['out', '.vscode-test']},
+  // Ignore build/test artifacts
+  {ignores: ['out', '.vscode-test', 'dist', 'src/webview', 'node_modules', 'esbuild.webview.mjs']},
 
   // Lint this config file under Node, allow URL global
   {

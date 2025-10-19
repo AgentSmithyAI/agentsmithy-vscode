@@ -1,6 +1,8 @@
-import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as vscode from 'vscode';
+import { CONFIG_KEYS, DEFAULT_SERVER_URL, STATUS_FILE_PATH } from './constants';
+import { asString, isRecord, safeJsonParse } from './utils/typeGuards';
 
 export interface AgentSmithyMessage {
   role: 'user' | 'assistant';
@@ -84,22 +86,17 @@ export class AgentSmithyClient {
     this.baseUrl = baseUrl || this.getServerUrl();
   }
 
-  // Narrow unknown to a plain object
-  isRecord = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v);
-
-  asString = (v: unknown): string | undefined => (typeof v === 'string' ? v : undefined);
-
-  private normalizeFileEdit(obj: Record<string, unknown>): SSEEvent {
+  private normalizeFileEdit = (obj: Record<string, unknown>): SSEEvent => {
     const fileVal = obj.file ?? obj.path ?? obj.file_path;
     const diffVal = obj.diff ?? obj.patch;
     const checkpointVal = obj.checkpoint;
     return {
       type: 'file_edit',
-      file: this.asString(fileVal),
-      diff: this.asString(diffVal),
-      checkpoint: this.asString(checkpointVal),
+      file: asString(fileVal),
+      diff: asString(diffVal),
+      checkpoint: asString(checkpointVal),
     };
-  }
+  };
 
   async getCurrentDialog(): Promise<CurrentDialogResponse> {
     const url = `${this.baseUrl}/api/dialogs/current`;
@@ -157,19 +154,11 @@ export class AgentSmithyClient {
     const workspaceFolders = vscode.workspace.workspaceFolders;
     if (Array.isArray(workspaceFolders) && workspaceFolders.length > 0) {
       const workspaceRoot: string = String(workspaceFolders[0]?.uri.fsPath ?? '');
-      const statusPath = path.join(workspaceRoot, '.agentsmithy', 'status.json');
+      const statusPath = path.join(workspaceRoot, STATUS_FILE_PATH);
 
       try {
         if (fs.existsSync(statusPath)) {
           const statusContent = fs.readFileSync(statusPath, 'utf8');
-          // Safe JSON parse wrapper to avoid assigning `any`
-          const safeJsonParse = <T>(s: string): T | undefined => {
-            try {
-              return JSON.parse(s) as T;
-            } catch {
-              return undefined;
-            }
-          };
           const parsed = safeJsonParse<{port?: unknown}>(statusContent);
           if (parsed && typeof parsed.port !== 'undefined') {
             const port = parsed.port;
@@ -185,7 +174,7 @@ export class AgentSmithyClient {
 
     // Fallback to configuration or default
     const config = vscode.workspace.getConfiguration('agentsmithy');
-    return config.get<string>('serverUrl', 'http://localhost:8765');
+    return config.get<string>(CONFIG_KEYS.SERVER_URL, DEFAULT_SERVER_URL);
   };
 
   abort() {
@@ -196,11 +185,11 @@ export class AgentSmithyClient {
   }
 
   normalizeEvent = (raw: unknown): SSEEvent | null => {
-    if (!this.isRecord(raw)) {
+    if (!isRecord(raw)) {
       return null;
     }
     const obj = raw;
-    const type = this.asString(obj.type);
+    const type = asString(obj.type);
 
     // Normalize patch/diff/file_edit to a unified file_edit event
     if (type === 'patch' || type === 'diff' || type === 'file_edit') {
@@ -212,30 +201,30 @@ export class AgentSmithyClient {
       case 'chat_start':
         return {type: 'chat_start'};
       case 'chat': {
-        return {type: 'chat', content: this.asString(obj.content)};
+        return {type: 'chat', content: asString(obj.content)};
       }
       case 'chat_end':
         return {type: 'chat_end'};
       case 'reasoning_start':
         return {type: 'reasoning_start'};
       case 'reasoning': {
-        return {type: 'reasoning', content: this.asString(obj.content)};
+        return {type: 'reasoning', content: asString(obj.content)};
       }
       case 'reasoning_end':
         return {type: 'reasoning_end'};
       case 'tool_call': {
-        return {type: 'tool_call', name: this.asString(obj.name), args: obj.args};
+        return {type: 'tool_call', name: asString(obj.name), args: obj.args};
       }
       case 'error': {
-        const err = this.asString(obj.error) ?? this.asString(obj.message);
+        const err = asString(obj.error) ?? asString(obj.message);
         return {type: 'error', error: err};
       }
       case 'done': {
-        const dialog_id = this.asString(obj.dialog_id);
+        const dialog_id = asString(obj.dialog_id);
         return {type: 'done', dialog_id};
       }
       default: {
-        const content = this.asString(obj.content);
+        const content = asString(obj.content);
         if (content && !type) {
           return {type: 'chat', content};
         }
