@@ -2,14 +2,11 @@ name: CI
 
 on:
   push:
-    branches: ["**"]
-  pull_request:
-    branches: ["**"]
-
+    branches: ['**']
 jobs:
   check:
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -31,4 +28,3 @@ jobs:
 
       - name: TypeScript compilation check
         run: npm run compile
-
