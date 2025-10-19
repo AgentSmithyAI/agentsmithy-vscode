@@ -125,7 +125,21 @@ class ChatWebview {
       return;
     }
 
+    // Check if user was at bottom BEFORE adding the message
+    // If they were scrolled up reading history, don't auto-scroll
+    const wasAtBottom = this.scrollManager.isAtBottom();
+
+    // Temporarily suppress auto-scroll if user was scrolled up
+    if (!wasAtBottom) {
+      this.renderer.setSuppressAutoScroll(true);
+    }
+
     this.renderer.addMessage('user', text);
+
+    // Restore auto-scroll behavior
+    if (!wasAtBottom) {
+      this.renderer.setSuppressAutoScroll(false);
+    }
 
     this.vscode.postMessage({
       type: WEBVIEW_IN_MSG.SEND_MESSAGE,

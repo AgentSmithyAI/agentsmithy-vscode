@@ -246,6 +246,30 @@ describe('MessageRenderer with smart auto-scroll', () => {
 
       vi.restoreAllMocks();
     });
+
+    it('should preserve scroll position when adding user message while scrolled up', () => {
+      const scrollIntoViewSpy = vi.fn();
+
+      const originalCreateElement = document.createElement.bind(document);
+      vi.spyOn(document, 'createElement').mockImplementation((tag: string) => {
+        const element = originalCreateElement(tag);
+        element.scrollIntoView = scrollIntoViewSpy;
+        return element;
+      });
+
+      // User is NOT at bottom (scrolled up reading history)
+      mockScrollManager.isAtBottom = vi.fn(() => false);
+      renderer.setSuppressAutoScroll(true);
+
+      // Add user message (like when sending a new message)
+      renderer.addMessage('user', 'New question while reading history');
+
+      // Should NOT scroll
+      expect(scrollIntoViewSpy).not.toHaveBeenCalled();
+
+      renderer.setSuppressAutoScroll(false);
+      vi.restoreAllMocks();
+    });
   });
 
   describe('scrollManager not set', () => {
