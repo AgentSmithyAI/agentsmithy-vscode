@@ -34,11 +34,7 @@ export class HistoryService {
     this._visibleFloor = nextVisible;
 
     // Minimal guard: only perform reset when clearly at/after latest boundary
-    if (
-      nextVisible !== undefined &&
-      this._latestFirstIdx !== undefined &&
-      nextVisible >= this._latestFirstIdx
-    ) {
+    if (nextVisible !== undefined && this._latestFirstIdx !== undefined && nextVisible >= this._latestFirstIdx) {
       this._serverCursor = this._latestFirstIdx;
       this._historyCursor = this._latestFirstIdx;
       this._historyHasMore = Boolean(this._latestHasMore);

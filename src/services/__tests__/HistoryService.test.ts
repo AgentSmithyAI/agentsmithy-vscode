@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import {beforeEach, describe, expect, it, vi} from 'vitest';
 
 // Minimal vscode mock for EventEmitter used inside HistoryService
 vi.mock('vscode', () => {
@@ -12,11 +12,11 @@ vi.mock('vscode', () => {
       for (const l of this.listeners) l(data as T);
     }
   }
-  return { EventEmitter: Emitter };
+  return {EventEmitter: Emitter};
 });
 
-import type { ApiService, HistoryEvent, HistoryResponse } from '../../api/ApiService';
-import { HistoryService } from '../HistoryService';
+import type {ApiService, HistoryEvent, HistoryResponse} from '../../api/ApiService';
+import {HistoryService} from '../HistoryService';
 
 const mkHistoryResp = (over: Partial<HistoryResponse>): HistoryResponse => ({
   dialog_id: 'dlg',
@@ -45,11 +45,11 @@ describe('HistoryService cursor logic', () => {
 
   it('uses server first_idx as cursor and relies on server has_more', async () => {
     // Latest at 300
-    api.loadHistory.mockResolvedValueOnce(mkHistoryResp({ first_idx: 300, has_more: true }));
+    api.loadHistory.mockResolvedValueOnce(mkHistoryResp({first_idx: 300, has_more: true}));
     await svc.loadLatest('dlg');
 
     // Previous page from 300 boundary
-    api.loadHistory.mockResolvedValueOnce(mkHistoryResp({ first_idx: 250, has_more: true }));
+    api.loadHistory.mockResolvedValueOnce(mkHistoryResp({first_idx: 250, has_more: true}));
     await svc.loadPrevious('dlg');
     expect(api.loadHistory).toHaveBeenLastCalledWith('dlg', 20, 300);
   });
@@ -138,7 +138,9 @@ describe('HistoryService cursor logic', () => {
     // Set hasMore=true and simulate concurrent call
     // First call enters and we do not await it immediately
     api.loadHistory.mockResolvedValueOnce(
-      new Promise<HistoryResponse>((resolve) => setTimeout(() => resolve(mkHistoryResp({first_idx: 40, has_more: true})), 5)),
+      new Promise<HistoryResponse>((resolve) =>
+        setTimeout(() => resolve(mkHistoryResp({first_idx: 40, has_more: true})), 5),
+      ),
     );
     // Re-load latest to set hasMore=true
     api.loadHistory.mockResolvedValueOnce(mkHistoryResp({first_idx: 50, has_more: true}));

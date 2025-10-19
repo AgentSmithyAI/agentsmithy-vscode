@@ -70,8 +70,8 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
       return;
     }
     try {
-      const idx: unknown = await this._view.webview.postMessage({type: WEBVIEW_OUT_MSG.GET_VISIBLE_FIRST_IDX});
-      // webview.postMessage doesn't return a value; we will receive it via onDidReceiveMessage
+      await this._view.webview.postMessage({type: WEBVIEW_OUT_MSG.GET_VISIBLE_FIRST_IDX});
+      // Note: postMessage is fire-and-forget; response handled via onDidReceiveMessage
     } catch {
       // noop
     }
