@@ -1,256 +1,418 @@
 import * as vscode from 'vscode';
-import { AgentSmithyClient } from './agentSmithyClient';
+import {AgentSmithyClient} from './agentSmithyClient';
+
+// Messages sent from the webview to the extension
+type WebviewInMessage =
+  | {type: 'sendMessage'; text?: string}
+  | {type: 'openFile'; file?: string}
+  | {type: 'stopProcessing'}
+  | {type: 'ready'}
+  | {type: 'loadMoreHistory'};
+
+// Messages sent from the extension to the webview
+// Narrowed union to satisfy lint rules and avoid unsafe/any payloads
+// Keep fields as strings where rendered into DOM
+// Note: args is unknown but handled safely in webview script
+type WebviewOutMessage =
+  | {type: 'addMessage'; message: {role: 'user' | 'assistant'; content: string}}
+  | {type: 'startAssistantMessage'}
+  | {type: 'appendToAssistant'; content: string}
+  | {type: 'endAssistantMessage'}
+  | {type: 'startReasoning'}
+  | {type: 'appendToReasoning'; content: string}
+  | {type: 'endReasoning'}
+  | {type: 'showToolCall'; tool?: string; args?: unknown}
+  | {type: 'showFileEdit'; file: string; diff?: string}
+  | {type: 'showError'; error: string}
+  | {type: 'showInfo'; message: string}
+  | {type: 'endStream'}
+  | {type: 'historySetLoadMoreVisible'; visible: boolean}
+  | {type: 'historySetLoadMoreEnabled'; enabled: boolean}
+  | {type: 'historyPrependEvents'; events: unknown[]}
+  | {type: 'historyReplaceAll'; events: unknown[]}
+  | {type: 'scrollToBottom'};
 
 export class ChatWebviewProvider implements vscode.WebviewViewProvider {
-    public static readonly viewType = 'agentsmithy.chatView';
-    
-    private _view?: vscode.WebviewView;
-    private _client: AgentSmithyClient;
-    private _currentDialogId?: string;
-    
-    constructor(private readonly _extensionUri: vscode.Uri) {
-        this._client = new AgentSmithyClient();
+  public static readonly viewType = 'agentsmithy.chatView';
+  private static readonly LOAD_HISTORY_ERR = 'Failed to load history';
+
+  private _view?: vscode.WebviewView;
+  private _client: AgentSmithyClient;
+  private _currentDialogId?: string;
+  private _historyCursor?: number; // history paging cursor (first_idx of last page)
+  private _historyHasMore: boolean = false;
+  private _historyLoading: boolean = false; // guard to prevent parallel loads
+
+  constructor(private readonly _extensionUri: vscode.Uri) {
+    this._client = new AgentSmithyClient();
+  }
+
+  private _postMessage(msg: WebviewOutMessage) {
+    // Centralized type-safe postMessage
+    this._view?.webview.postMessage(msg);
+  }
+
+  private async _loadLatestHistoryPage(dialogId: string, options?: {replace?: boolean}) {
+    if (!this._view || this._historyLoading) {
+      return;
     }
-    
-    public sendMessage(content: string) {
-        if (this._view) {
-            this._view.webview.postMessage({
-                type: 'addMessage',
-                message: {
-                    role: 'user',
-                    content: content
+    this._historyLoading = true;
+    this._postMessage({type: 'historySetLoadMoreEnabled', enabled: false});
+    try {
+      const resp = await this._client.loadHistory(dialogId);
+      // Debug placeholder retained intentionally (no side effects)
+      this._historyCursor = resp.first_idx ?? undefined;
+      this._historyHasMore = !!resp.has_more;
+      this._postMessage({type: 'historySetLoadMoreVisible', visible: !!resp.has_more});
+      if (Array.isArray(resp.events) && resp.events.length > 0) {
+        if (options?.replace === true) {
+          this._postMessage({type: 'historyReplaceAll', events: resp.events});
+        } else {
+          this._postMessage({type: 'historyPrependEvents', events: resp.events});
+        }
+      } else if (options?.replace === true) {
+        // Clear even if no events
+        this._postMessage({type: 'historyReplaceAll', events: []});
+      }
+    } catch (e: unknown) {
+      const hasMsg = e !== null && typeof e === 'object' && 'message' in (e as Record<string, unknown>);
+      const msg = hasMsg ? String((e as Record<string, unknown>).message) : ChatWebviewProvider.LOAD_HISTORY_ERR;
+      this._postMessage({type: 'showError', error: msg});
+    } finally {
+      this._historyLoading = false;
+      this._postMessage({type: 'historySetLoadMoreEnabled', enabled: true});
+    }
+  }
+
+  // (removed) _loadEntireHistory: we only load the latest page per product requirement
+
+  private async _loadPreviousHistoryPage(dialogId: string) {
+    if (!this._view || this._historyLoading) {
+      return;
+    }
+    const before = this._historyCursor;
+    if (before === undefined) {
+      return;
+    }
+    this._historyLoading = true;
+    this._postMessage({type: 'historySetLoadMoreEnabled', enabled: false});
+    try {
+      const resp = await this._client.loadHistory(dialogId, undefined, before);
+      this._historyCursor = resp.first_idx ?? undefined;
+      this._historyHasMore = !!resp.has_more;
+      this._postMessage({type: 'historySetLoadMoreVisible', visible: !!resp.has_more});
+      if (Array.isArray(resp.events) && resp.events.length > 0) {
+        this._postMessage({type: 'historyPrependEvents', events: resp.events});
+      }
+    } catch (e: unknown) {
+      const hasMsg = e !== null && typeof e === 'object' && 'message' in (e as Record<string, unknown>);
+      const msg = hasMsg ? String((e as Record<string, unknown>).message) : ChatWebviewProvider.LOAD_HISTORY_ERR;
+      this._postMessage({type: 'showError', error: msg});
+    } finally {
+      this._historyLoading = false;
+      this._postMessage({type: 'historySetLoadMoreEnabled', enabled: true});
+    }
+  }
+
+  public sendMessage(content: string) {
+    if (this._view) {
+      this._postMessage({
+        type: 'addMessage',
+        message: {
+          role: 'user',
+          content: String(content),
+        },
+      });
+
+      this._handleSendMessage(content);
+    }
+  }
+
+  public resolveWebviewView(
+    webviewView: vscode.WebviewView,
+    _context: vscode.WebviewViewResolveContext,
+    _token: vscode.CancellationToken,
+  ) {
+    this._view = webviewView;
+
+    webviewView.webview.options = {
+      enableScripts: true,
+      localResourceRoots: [this._extensionUri, vscode.Uri.joinPath(this._extensionUri, 'node_modules')],
+    };
+
+    webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
+
+    // Handle messages from the webview
+    webviewView.webview.onDidReceiveMessage(async (message: WebviewInMessage) => {
+      switch (message.type) {
+        case 'sendMessage':
+          await this._handleSendMessage(message.text ?? '');
+          break;
+        case 'openFile': {
+          try {
+            if (typeof message.file !== 'string' || message.file.length === 0) {
+              throw new Error('Invalid file path');
+            }
+            const uri = vscode.Uri.file(message.file);
+            const doc = await vscode.workspace.openTextDocument(uri);
+            await vscode.window.showTextDocument(doc, {preview: false});
+          } catch (err: unknown) {
+            const hasMsg = err !== null && typeof err === 'object' && 'message' in (err as Record<string, unknown>);
+            const msg = hasMsg
+              ? String((err as Record<string, unknown>).message)
+              : `Failed to open file: ${String(message.file)}`;
+            vscode.window.showErrorMessage(String(msg));
+          }
+          break;
+        }
+        case 'stopProcessing':
+          // Stop the current request
+          this._client.abort();
+          break;
+        case 'ready':
+          // Webview is ready: resolve dialog id and load initial history if available
+          (async () => {
+            try {
+              let dialogId = this._currentDialogId;
+              if (!dialogId) {
+                const current = await this._client.getCurrentDialog();
+                if (current.id) {
+                  dialogId = current.id;
                 }
+              }
+              if (!dialogId) {
+                try {
+                  const list = await this._client.listDialogs();
+                  if (list.current_dialog_id) {
+                    dialogId = list.current_dialog_id;
+                  } else if (Array.isArray(list.items) && list.items.length > 0) {
+                    const sorted = [...list.items].sort(
+                      (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime(),
+                    );
+                    dialogId = sorted[0].id;
+                  }
+                } catch {
+                  /* noop */
+                }
+              }
+              if (dialogId) {
+                this._currentDialogId = dialogId;
+                // Load only the latest history page and replace current content
+                await this._loadLatestHistoryPage(dialogId, {replace: true});
+              }
+            } catch {
+              /* noop */
+            }
+          })();
+          break;
+        case 'loadMoreHistory':
+          if (this._currentDialogId && this._historyHasMore && !this._historyLoading) {
+            this._loadPreviousHistoryPage(this._currentDialogId).catch((err: unknown) => {
+              const msg =
+                err && typeof err === 'object' && 'message' in (err as Record<string, unknown>)
+                  ? String((err as Record<string, unknown>).message)
+                  : ChatWebviewProvider.LOAD_HISTORY_ERR;
+              this._postMessage({type: 'showError', error: String(msg)});
             });
-            
-            this._handleSendMessage(content);
+          }
+          break;
+      }
+    });
+
+    // Update client when configuration changes or when status.json might have changed
+    vscode.workspace.onDidChangeConfiguration((e) => {
+      if (e.affectsConfiguration('agentsmithy.serverUrl')) {
+        this._client = new AgentSmithyClient();
+      }
+    });
+
+    // Watch for changes to status.json
+    const watcher = vscode.workspace.createFileSystemWatcher('**/.agentsmithy/status.json');
+    watcher.onDidChange(() => {
+      this._client = new AgentSmithyClient();
+    });
+    watcher.onDidCreate(() => {
+      this._client = new AgentSmithyClient();
+    });
+  }
+
+  private async _handleSendMessage(text: string) {
+    if (!this._view) {
+      return;
+    }
+
+    // Get current file context
+    const context = this._client.getCurrentFileContext();
+
+    // Prepare request
+    const request = {
+      messages: [
+        {
+          role: 'user' as const,
+          content: text,
+        },
+      ],
+      context,
+      stream: true,
+      dialog_id: this._currentDialogId,
+    };
+
+    // User message is already shown by the webview itself
+
+    // No history refresh needed post-stream: SSE events are authoritative
+    // and already include finalized reasoning/tool/file blocks.
+    try {
+      let _chatBuffer = '';
+      let hasReceivedEvents = false;
+      const openedFiles = new Set<string>();
+
+      // Stream response
+      for await (const event of this._client.streamChat(request)) {
+        hasReceivedEvents = true;
+        switch (event.type) {
+          case 'chat_start':
+            _chatBuffer = '';
+            this._postMessage({type: 'startAssistantMessage'});
+            break;
+          case 'chat':
+            if (event.content !== undefined) {
+              _chatBuffer += event.content;
+              this._postMessage({
+                type: 'appendToAssistant',
+                content: String(event.content),
+              });
+            }
+            break;
+          case 'chat_end':
+            this._postMessage({type: 'endAssistantMessage'});
+            break;
+
+          case 'reasoning_start':
+            this._postMessage({
+              type: 'startReasoning',
+            });
+            break;
+
+          case 'reasoning':
+            if (event.content) {
+              this._postMessage({
+                type: 'appendToReasoning',
+                content: String(event.content),
+              });
+            }
+            break;
+
+          case 'reasoning_end':
+            this._postMessage({
+              type: 'endReasoning',
+            });
+            break;
+
+          case 'tool_call':
+            this._postMessage({
+              type: 'showToolCall',
+              tool: event.name,
+              args: event.args,
+            });
+            break;
+
+          case 'file_edit':
+            if (typeof event.file === 'string') {
+              this._postMessage({
+                type: 'showFileEdit',
+                file: event.file,
+                diff: typeof event.diff === 'string' ? event.diff : undefined,
+              });
+            }
+            // Auto-open edited file immediately (focus editor)
+            if (event.file && !openedFiles.has(event.file)) {
+              openedFiles.add(event.file);
+              try {
+                const uri = vscode.Uri.file(String(event.file));
+                const doc = await vscode.workspace.openTextDocument(uri);
+                await vscode.window.showTextDocument(doc, {preview: false});
+              } catch {
+                // noop
+              }
+            }
+            break;
+
+          case 'error':
+            this._postMessage({
+              type: 'showError',
+              error: String(event.error ?? 'Unknown error'),
+            });
+            break;
+
+          case 'done':
+            if (event.dialog_id) {
+              // Update current dialog id; no history refresh required
+              this._currentDialogId = event.dialog_id;
+            }
+            break;
         }
+      }
+
+      // If no events were received at all, ensure UI is unlocked
+      if (!hasReceivedEvents) {
+        this._postMessage({
+          type: 'showError',
+          error: 'No response from server',
+        });
+        this._postMessage({
+          type: 'endAssistantMessage',
+        });
+      }
+    } catch (error) {
+      // Don't show error for aborted requests
+      if (error instanceof Error && error.name === 'AbortError') {
+        this._postMessage({
+          type: 'showInfo',
+          message: 'Request cancelled',
+        });
+      } else {
+        this._postMessage({
+          type: 'showError',
+          error: error instanceof Error ? String(error.message) : 'Connection error',
+        });
+      }
+      this._postMessage({
+        type: 'endAssistantMessage',
+      });
+    } finally {
+      // Ensure processing state is always cleared
+      this._postMessage({
+        type: 'endStream',
+      });
+      // No-op: do not reload history after SSE completion
     }
-    
-    public resolveWebviewView(
-        webviewView: vscode.WebviewView,
-        context: vscode.WebviewViewResolveContext,
-        _token: vscode.CancellationToken,
-    ) {
-        this._view = webviewView;
-        
-        webviewView.webview.options = {
-            enableScripts: true,
-            localResourceRoots: [
-                this._extensionUri,
-                vscode.Uri.joinPath(this._extensionUri, 'node_modules')
-            ]
-        };
-        
-        webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
-        
-        // Handle messages from the webview
-        webviewView.webview.onDidReceiveMessage(async message => {
-            switch (message.type) {
-                case 'sendMessage':
-                    await this._handleSendMessage(message.text);
-                    break;
-                case 'openFile': {
-                    try {
-                        const uri = vscode.Uri.file(message.file);
-                        const doc = await vscode.workspace.openTextDocument(uri);
-                        await vscode.window.showTextDocument(doc, { preview: false });
-                    } catch (err) {
-                        vscode.window.showErrorMessage(`Failed to open file: ${message.file}`);
-                    }
-                    break;
-                }
-                case 'stopProcessing':
-                    // Stop the current request
-                    this._client.abort();
-                    break;
-                case 'ready':
-                    // Webview is ready, send initial state if needed
-                    break;
-            }
-        });
-        
-        // Update client when configuration changes or when status.json might have changed
-        vscode.workspace.onDidChangeConfiguration(e => {
-            if (e.affectsConfiguration('agentsmithy.serverUrl')) {
-                this._client = new AgentSmithyClient();
-            }
-        });
-        
-        // Watch for changes to status.json
-        const watcher = vscode.workspace.createFileSystemWatcher('**/.agentsmithy/status.json');
-        watcher.onDidChange(() => {
-            this._client = new AgentSmithyClient();
-        });
-        watcher.onDidCreate(() => {
-            this._client = new AgentSmithyClient();
-        });
-    }
-    
-    private async _handleSendMessage(text: string) {
-        if (!this._view) {
-            return;
-        }
-        
-        // Get current file context
-        const context = this._client.getCurrentFileContext();
-        
-        // Prepare request
-        const request = {
-            messages: [{
-                role: 'user' as const,
-                content: text
-            }],
-            context,
-            stream: true,
-            dialog_id: this._currentDialogId
-        };
-        
-        // User message is already shown by the webview itself
-        
-        try {
-            let chatBuffer = '';
-            let hasReceivedEvents = false;
-            const openedFiles = new Set<string>();
-            
-            // Stream response
-            for await (const event of this._client.streamChat(request)) {
-                hasReceivedEvents = true;
-                switch (event.type) {
-                    case 'chat_start':
-                        chatBuffer = '';
-                        this._view.webview.postMessage({ type: 'startAssistantMessage' });
-                        break;
-                    case 'chat':
-                        if (event.content !== undefined) {
-                            chatBuffer += event.content;
-                            this._view.webview.postMessage({
-                                type: 'appendToAssistant',
-                                content: event.content
-                            });
-                        }
-                        break;
-                    case 'chat_end':
-                        this._view.webview.postMessage({ type: 'endAssistantMessage' });
-                        break;
-                        
-                    case 'reasoning_start':
-                        this._view.webview.postMessage({
-                            type: 'startReasoning'
-                        });
-                        break;
-                        
-                    case 'reasoning':
-                        if (event.content) {
-                            this._view.webview.postMessage({
-                                type: 'appendToReasoning',
-                                content: event.content
-                            });
-                        }
-                        break;
-                        
-                    case 'reasoning_end':
-                        this._view.webview.postMessage({
-                            type: 'endReasoning'
-                        });
-                        break;
-                        
-                    case 'tool_call':
-                        this._view.webview.postMessage({
-                            type: 'showToolCall',
-                            tool: event.name,
-                            args: event.args
-                        });
-                        break;
-                        
-                    case 'file_edit':
-                        this._view.webview.postMessage({
-                            type: 'showFileEdit',
-                            file: event.file,
-                            diff: event.diff
-                        });
-                        // Auto-open edited file immediately (focus editor)
-                        if (event.file && !openedFiles.has(event.file)) {
-                            openedFiles.add(event.file);
-                            try {
-                                const uri = vscode.Uri.file(event.file);
-                                const doc = await vscode.workspace.openTextDocument(uri);
-                                await vscode.window.showTextDocument(doc, { preview: false });
-                            } catch {}
-                        }
-                        break;
-                        
-                    case 'error':
-                        this._view.webview.postMessage({
-                            type: 'showError',
-                            error: event.error
-                        });
-                        break;
-                        
-                    case 'done':
-                        if (event.dialog_id) {
-                            this._currentDialogId = event.dialog_id;
-                        }
-                        break;
-                }
-            }
-            
-            // If no events were received at all, ensure UI is unlocked
-            if (!hasReceivedEvents) {
-                this._view.webview.postMessage({
-                    type: 'showError',
-                    error: 'No response from server'
-                });
-                this._view.webview.postMessage({
-                    type: 'endAssistantMessage'
-                });
-            }
-            } catch (error) {
-                // Don't show error for aborted requests
-                if (error instanceof Error && error.name === 'AbortError') {
-                    this._view.webview.postMessage({
-                        type: 'showInfo',
-                        message: 'Request cancelled'
-                    });
-                } else {
-                    this._view.webview.postMessage({
-                        type: 'showError',
-                        error: error instanceof Error ? error.message : 'Connection error'
-                    });
-                }
-                this._view.webview.postMessage({
-                    type: 'endAssistantMessage'
-                });
-            } finally {
-                // Ensure processing state is always cleared
-                this._view.webview.postMessage({
-                    type: 'endStream'
-                });
-            }
-    }
-    
-    private _getHtmlForWebview(webview: vscode.Webview) {
-        const nonce = getNonce();
-        
-        // Get path to marked library
-        const markedPath = vscode.Uri.joinPath(this._extensionUri, 'node_modules', 'marked', 'lib', 'marked.umd.js');
-        const markedUri = webview.asWebviewUri(markedPath);
-        
-        // Get workspace root
-        const workspaceRoot = (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders[0] && vscode.workspace.workspaceFolders[0].uri.fsPath) || '';
-        
-        return `<!DOCTYPE html>
+  }
+
+  private _getHtmlForWebview(webview: vscode.Webview) {
+    const nonce: string = getNonce();
+
+    // Get path to marked library
+    const markedPath = vscode.Uri.joinPath(this._extensionUri, 'node_modules', 'marked', 'lib', 'marked.umd.js');
+    const markedUri = webview.asWebviewUri(markedPath);
+
+    // Get workspace root
+    const workspaceRoot = String(vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '');
+
+    /* eslint-disable no-useless-escape */
+    return `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src ${webview.cspSource} 'nonce-${nonce}';">
     <title>AgentSmithy Chat</title>
-    <link rel="stylesheet" href="${webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'media', 'chat.css'))}">
-    <script nonce="${nonce}" src="${markedUri}"></script>
+    <link rel="stylesheet" href="${webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'media', 'chat.css')).toString()}">
+    <script nonce="${nonce}" src="${markedUri.toString()}"></script>
 </head>
 <body>
     <div class="chat-container">
         <div class="messages" id="messages">
+            <button id="loadMoreBtn" class="load-more" style="display:none;">Load previous</button>
             <div class="welcome-placeholder" id="welcomePlaceholder">
                 Type a message to start...
             </div>
@@ -275,12 +437,29 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
         const messageInput = document.getElementById('messageInput');
         const sendButton = document.getElementById('sendButton');
         const welcomePlaceholder = document.getElementById('welcomePlaceholder');
+        const loadMoreBtn = document.getElementById('loadMoreBtn');
         
         let currentAssistantMessage = null;
         let currentAssistantText = '';
         let currentReasoningBlock = null;
         let currentReasoningText = '';
         let isProcessing = false;
+        let isPrepending = false;
+        let suppressAutoScroll = false; // avoid per-item scroll during batch renders
+        
+        function insertNode(node) {
+            const anchor = (loadMoreBtn && loadMoreBtn.parentNode === messagesContainer)
+                ? loadMoreBtn.nextSibling
+                : messagesContainer.firstChild;
+            if (isPrepending) {
+                messagesContainer.insertBefore(node, anchor);
+            } else {
+                messagesContainer.appendChild(node);
+                if (!suppressAutoScroll) {
+                    node.scrollIntoView({ behavior: 'smooth', block: 'end' });
+                }
+            }
+        }
         
         // Auto-resize textarea
         messageInput.addEventListener('input', () => {
@@ -305,6 +484,12 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
                 sendMessage();
             }
         });
+        
+        if (loadMoreBtn) {
+            loadMoreBtn.addEventListener('click', () => {
+                vscode.postMessage({ type: 'loadMoreHistory' });
+            });
+        }
         
         function sendMessage() {
             const text = messageInput.value.trim();
@@ -371,17 +556,17 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
                     messageDiv.innerHTML = linkifyUrls(escapedContent);
                 }
             }
-            messagesContainer.appendChild(messageDiv);
-            messageDiv.scrollIntoView({ behavior: 'smooth', block: 'end' });
+            insertNode(messageDiv);
             return messageDiv;
         }
         
         function escapeHtml(str) {
-            return str
+            const s = (str === undefined || str === null) ? '' : String(str);
+            return s
                 .replace(/&/g, '&amp;')
                 .replace(/</g, '&lt;')
                 .replace(/>/g, '&gt;')
-                .replace(/\"/g, '&quot;')
+                .replace(/\\"/g, '&quot;')
                 .replace(/'/g, '&#39;');
         }
         
@@ -394,15 +579,15 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
 
         // Use marked library for markdown rendering
         function renderMarkdown(text) {
+            const t = (text === undefined || text === null) ? '' : String(text);
             if (window.marked) {
                 // Ensure single newlines are preserved as breaks
-                return window.marked.parse(text, { breaks: true, gfm: true });
+                return window.marked.parse(t, { breaks: true, gfm: true });
             }
             
             // Fallback if marked is not loaded
-            return escapeHtml(text).replace(/\\n/g, '<br>');
+            return escapeHtml(t).replace(/\\n/g, '<br>');
         }
-
 
         function formatDiff(diff) {
             const esc = escapeHtml;
@@ -664,8 +849,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
                 toolDiv.innerHTML = '• ' + linkifyUrls(escapedText);
             }
             
-            messagesContainer.appendChild(toolDiv);
-            toolDiv.scrollIntoView({ behavior: 'smooth', block: 'end' });
+            insertNode(toolDiv);
         }
         
         function addFileEdit(file, diff) {
@@ -698,8 +882,41 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
                     '<div class="diff"><pre>' + formatted + '</pre></div>' +
                     '</details>';
             }
-            messagesContainer.appendChild(editDiv);
-            editDiv.scrollIntoView({ behavior: 'smooth', block: 'end' });
+            insertNode(editDiv);
+        }
+ 
+        function renderHistoryEvent(evt) {
+            switch (evt.type) {
+                case 'user':
+                    addMessage('user', evt && typeof evt.content !== 'undefined' ? evt.content : '');
+                    break;
+                case 'chat':
+                    addMessage('assistant', evt && typeof evt.content !== 'undefined' ? evt.content : '');
+                    break;
+                case 'reasoning':
+                    // Insert a collapsed reasoning block with rendered markdown
+                    const rb = createReasoningBlock();
+                    rb.content.innerHTML = renderMarkdown(evt && typeof evt.content !== 'undefined' ? evt.content : '');
+                    // Immediately collapse
+                    rb.content.style.display = 'none';
+                    const toggle = rb.header.querySelector('.reasoning-toggle');
+                    if (toggle) toggle.textContent = '▶';
+                    break;
+                case 'tool_call':
+                    addToolCall(evt ? evt.name : undefined, evt ? evt.args : undefined);
+                    break;
+                case 'file_edit':
+                    addFileEdit(evt ? evt.file : undefined, evt ? evt.diff : undefined);
+                    break;
+            }
+        }
+
+        function safeRenderHistoryEvent(evt) {
+            try {
+                renderHistoryEvent(evt);
+            } catch (e) {
+                // noop: suppress render errors from history to avoid console noise in production
+            }
         }
         
         function showError(error) {
@@ -758,7 +975,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
             
             reasoningDiv.appendChild(header);
             reasoningDiv.appendChild(content);
-            messagesContainer.appendChild(reasoningDiv);
+            insertNode(reasoningDiv);
             reasoningDiv.scrollIntoView({ behavior: 'smooth', block: 'end' });
             
             return { block: reasoningDiv, content: content, header: header };
@@ -766,7 +983,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
         
         // Handle messages from extension
         window.addEventListener('message', event => {
-            const message = event.data;
+            const message = event.data || {};
             
             switch (message.type) {
                 case 'addMessage':
@@ -777,7 +994,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
                     // Don't clear reasoning block here - it should be handled by endReasoning
                     currentAssistantText = '';
                     currentAssistantMessage = addMessage('assistant', '');
-                    if (currentAssistantMessage && currentAssistantMessage.classList) {
+                    if (currentAssistantMessage) {
                         currentAssistantMessage.classList.add('streaming');
                     }
                     break;
@@ -786,7 +1003,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
                     if (!currentAssistantMessage) {
                         currentAssistantText = '';
                         currentAssistantMessage = addMessage('assistant', '');
-                        if (currentAssistantMessage && currentAssistantMessage.classList) {
+                        if (currentAssistantMessage) {
                             currentAssistantMessage.classList.add('streaming');
                         }
                     }
@@ -802,10 +1019,10 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
                 case 'endAssistantMessage':
                     // Ensure final text is displayed with markdown
                     if (currentAssistantMessage && currentAssistantText) {
-                        if (currentAssistantMessage.classList) {
-                            currentAssistantMessage.classList.remove('streaming');
-                        }
+                        currentAssistantMessage.classList.remove('streaming');
                         currentAssistantMessage.innerHTML = renderMarkdown(currentAssistantText);
+                        // Ensure we see the tail of the message
+                        currentAssistantMessage.scrollIntoView({ behavior: 'smooth', block: 'end' });
                     }
                     currentAssistantMessage = null;
                     currentAssistantText = '';
@@ -866,6 +1083,88 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
                     currentReasoningBlock = null;
                     currentReasoningText = '';
                     break;
+
+                case 'historySetLoadMoreVisible':
+                    if (loadMoreBtn) {
+                        loadMoreBtn.style.display = message.visible ? 'block' : 'none';
+                    }
+                    break;
+
+                case 'historySetLoadMoreEnabled':
+                    if (loadMoreBtn) {
+                        loadMoreBtn.disabled = message.enabled === false ? true : false;
+                    }
+                    break;
+
+                case 'historyPrependEvents':
+                    if (Array.isArray(message.events)) {
+                        // When injecting history, ensure we are not in a streaming state
+                        currentAssistantMessage = null;
+                        currentAssistantText = '';
+                        currentReasoningBlock = null;
+                        currentReasoningText = '';
+
+                        // Remember scroll position before insertion
+                        const prevTop = messagesContainer.scrollTop;
+                        const prevHeight = messagesContainer.scrollHeight;
+
+                        // Enable prepend mode so insertNode places nodes at top
+                        isPrepending = true;
+                        suppressAutoScroll = true;
+                        try {
+                            // Render exactly in server-provided order to preserve interleaving of blocks
+                            for (const evt of message.events) {
+                                safeRenderHistoryEvent(evt);
+                            }
+                        } finally {
+                            isPrepending = false;
+                            suppressAutoScroll = false;
+                        }
+
+                        // Restore scroll so content doesn't jump
+                        const newHeight = messagesContainer.scrollHeight;
+                        messagesContainer.scrollTop = prevTop + (newHeight - prevHeight);
+                    }
+                    break;
+
+                case 'scrollToBottom':
+                    // Ensure we are at the bottom (used after initial history load)
+                    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                    break;
+
+                case 'historyReplaceAll':
+                    // Replace all message contents with provided events
+                    // Reset any streaming buffers so nothing overwrites history-rendered DOM
+                    currentAssistantMessage = null;
+                    currentAssistantText = '';
+                    currentReasoningBlock = null;
+                    currentReasoningText = '';
+
+                    // Clear container except the loadMore button
+                    const toRemove = [];
+                    for (const child of Array.from(messagesContainer.children)) {
+                        if (child !== loadMoreBtn) {
+                            toRemove.push(child);
+                        }
+                    }
+                    toRemove.forEach(n => n.remove());
+
+                    // Render fresh
+                    if (Array.isArray(message.events)) {
+                        // Render in server-provided order to preserve interleaving
+                        isPrepending = false; // render in natural order
+                        suppressAutoScroll = true; // don't scroll per item
+                        try {
+                            for (const evt of message.events) {
+                                safeRenderHistoryEvent(evt);
+                            }
+                        } finally {
+                            suppressAutoScroll = false;
+                        }
+                        // Ensure we end up at the bottom after initial render
+                        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                    }
+                    break;
             }
         });
 
@@ -874,7 +1173,8 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
             const target = e.target;
             if (target && target.matches && target.matches('.file-link')) {
                 e.preventDefault();
-                const f = decodeURIComponent(target.getAttribute('data-file'));
+                const fileAttr = target.getAttribute('data-file') || '';
+                const f = decodeURIComponent(fileAttr);
                 vscode.postMessage({ type: 'openFile', file: f });
             }
         });
@@ -883,9 +1183,9 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
         if (window.marked) {
             // Use a proper Renderer instance to avoid TypeError: this.renderer.paragraph is not a function
             const renderer = new window.marked.Renderer();
-            renderer.code = function(code, infostring, escaped) {
-                const langMatch = (infostring || '').match(/\S*/);
-                const lang = langMatch ? langMatch[0] : '';
+            renderer.code = function(code, infostring) {
+                const first = String(infostring || '').trim().split(/\s+/)[0] || '';
+                const lang = first;
                 const escapedCode = escapeHtml(code);
                 if (lang) {
                     return '<pre><code class="language-' + escapeHtml(lang) + '">' + escapedCode + '</code></pre>';
@@ -910,15 +1210,16 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
         vscode.postMessage({ type: 'ready' });
     </script>
 </body>
-</html>`.replace(/\${workspaceRoot(?:\.replace\(.*?\))?}/g, workspaceRoot);
-    }
+</html>`.replace(/\\${workspaceRoot(?:\\.replace\\(.*?\\))?}/g, workspaceRoot);
+    /* eslint-enable no-useless-escape */
+  }
 }
 
-function getNonce() {
-    let text = '';
-    const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    for (let i = 0; i < 32; i++) {
-        text += possible.charAt(Math.floor(Math.random() * possible.length));
-    }
-    return text;
-}
+const getNonce = () => {
+  let text = '';
+  const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  for (let i = 0; i < 32; i++) {
+    text += possible.charAt(Math.floor(Math.random() * possible.length));
+  }
+  return text;
+};

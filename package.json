@@ -1,111 +1,119 @@
 {
-	"name": "agentsmithy-vscode",
-	"publisher": "agentsmithy",
-	"displayName": "AgentSmithy VSCode",
-	"description": "VSCode extension for AgentSmithy coding assistant",
-	"version": "0.0.1",
-	"repository": {
-		"type": "git",
-		"url": "https://github.com/agentsmithy/agentsmithy-vscode"
-	},
-	"engines": {
-		"vscode": "^1.100.0"
-	},
-	"categories": [
-		"AI",
-		"Chat"
-	],
-	"activationEvents": [],
-	"main": "./out/extension.js",
-	"contributes": {
-		"viewsContainers": {
-			"activitybar": [
-				{
-					"id": "agentsmithy",
-					"title": "AgentSmithy",
-					"icon": "$(comment-discussion)"
-				}
-			]
-		},
-		"views": {
-			"agentsmithy": [
-				{
-					"type": "webview",
-					"id": "agentsmithy.chatView",
-					"name": "Chat",
-					"icon": "$(comment-discussion)",
-					"contextualTitle": "AgentSmithy Chat"
-				}
-			]
-		},
-		"commands": [
-			{
-				"command": "agentsmithy.openChat",
-				"title": "Open Chat",
-				"category": "AgentSmithy",
-				"icon": "$(comment-discussion)"
-			},
-			{
-				"command": "agentsmithy.sendSelection",
-				"title": "Send Selection to AgentSmithy",
-				"category": "AgentSmithy"
-			},
-			{
-				"command": "agentsmithy.moveToSecondarySidebar",
-				"title": "Move to Secondary Sidebar (Instructions)",
-				"category": "AgentSmithy"
-			}
-		],
-		"menus": {
-			"editor/context": [
-				{
-					"when": "editorHasSelection",
-					"command": "agentsmithy.sendSelection",
-					"group": "agentsmithy"
-				}
-			],
-			"commandPalette": [
-				{
-					"command": "agentsmithy.openChat"
-				},
-				{
-					"command": "agentsmithy.sendSelection",
-					"when": "editorHasSelection"
-				}
-			]
-		},
-		"configuration": {
-			"title": "AgentSmithy",
-			"properties": {
-				"agentsmithy.serverUrl": {
-					"type": "string",
-					"default": "http://localhost:11434",
-					"description": "AgentSmithy server URL"
-				},
-				"agentsmithy.showReasoning": {
-					"type": "boolean",
-					"default": false,
-					"description": "Show reasoning/thinking process in chat"
-				}
-			}
-		}
-	},
-	"scripts": {
-		"vscode:prepublish": "npm run compile",
-		"compile": "tsc -p ./",
-		"watch": "tsc -watch -p ./",
-		"lint": "eslint"
-	},
-	"devDependencies": {
-		"@eslint/js": "^9.13.0",
-		"@stylistic/eslint-plugin": "^2.9.0",
-		"@types/node": "^22.17.0",
-		"@types/vscode": "^1.100.0",
-		"eslint": "^9.13.0",
-		"typescript": "^5.9.2",
-		"typescript-eslint": "^8.39.0"
-	},
-	"dependencies": {
-		"marked": "^16.3.0"
-	}
+  "name": "agentsmithy-vscode",
+  "publisher": "agentsmithy",
+  "displayName": "AgentSmithy VSCode",
+  "description": "VSCode extension for AgentSmithy coding assistant",
+  "version": "0.0.1",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/agentsmithy/agentsmithy-vscode"
+  },
+  "engines": {
+    "vscode": "^1.100.0"
+  },
+  "categories": [
+    "AI",
+    "Chat"
+  ],
+  "activationEvents": [],
+  "main": "./out/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "agentsmithy",
+          "title": "AgentSmithy",
+          "icon": "$(comment-discussion)"
+        }
+      ]
+    },
+    "views": {
+      "agentsmithy": [
+        {
+          "type": "webview",
+          "id": "agentsmithy.chatView",
+          "name": "Chat",
+          "icon": "$(comment-discussion)",
+          "contextualTitle": "AgentSmithy Chat"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "agentsmithy.openChat",
+        "title": "Open Chat",
+        "category": "AgentSmithy",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "agentsmithy.sendSelection",
+        "title": "Send Selection to AgentSmithy",
+        "category": "AgentSmithy"
+      },
+      {
+        "command": "agentsmithy.moveToSecondarySidebar",
+        "title": "Move to Secondary Sidebar (Instructions)",
+        "category": "AgentSmithy"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "when": "editorHasSelection",
+          "command": "agentsmithy.sendSelection",
+          "group": "agentsmithy"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "agentsmithy.openChat"
+        },
+        {
+          "command": "agentsmithy.sendSelection",
+          "when": "editorHasSelection"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "AgentSmithy",
+      "properties": {
+        "agentsmithy.serverUrl": {
+          "type": "string",
+          "default": "http://localhost:8765",
+          "description": "AgentSmithy server URL"
+        },
+        "agentsmithy.showReasoning": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show reasoning/thinking process in chat"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier . --write",
+    "format:check": "prettier . --check"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.13.0",
+    "@stylistic/eslint-plugin": "^2.9.0",
+    "@types/node": "^22.17.0",
+    "@types/vscode": "^1.100.0",
+    "eslint": "^9.13.0",
+    "eslint-plugin-import": "^2.31.0",
+    "eslint-plugin-prefer-arrow-functions": "^3.5.2",
+    "eslint-plugin-sonarjs": "^3.0.1",
+    "eslint-plugin-unicorn": "^56.0.0",
+    "typescript": "^5.9.2",
+    "typescript-eslint": "^8.39.0",
+    "prettier": "^3.3.3"
+  },
+  "dependencies": {
+    "marked": "^16.3.0"
+  }
 }
