@@ -1,10 +1,14 @@
 # AgentSmithy VSCode Extension
 
-## Formatting & Linting
+## Formatting, Linting & Tests
 
 - ESLint autofix: npm run lint:fix
 - Prettier write: npm run format
 - Prettier check (CI): npm run format:check
+- Unit tests (Vitest):
+  - Run once: npm test
+  - Watch mode: npm run test:watch
+  - Coverage: npm run test:coverage
 
 Prettier ignores build/test output via .prettierignore.
 

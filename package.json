@@ -100,6 +100,9 @@
     "watch:webview": "node esbuild.webview.mjs --watch",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
     "format": "prettier . --write",
     "format:check": "prettier . --check"
   },
@@ -117,7 +120,9 @@
     "eslint-plugin-unicorn": "^56.0.0",
     "prettier": "^3.3.3",
     "typescript": "^5.9.2",
-    "typescript-eslint": "^8.39.0"
+    "typescript-eslint": "^8.39.0",
+    "vitest": "^2.1.4",
+    "@vitest/coverage-v8": "^2.1.4"
   },
   "dependencies": {
     "marked": "^16.3.0"
