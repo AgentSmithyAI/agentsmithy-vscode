@@ -262,7 +262,8 @@ class ChatWebview {
           this.renderer.setPrepending(true);
           this.renderer.setSuppressAutoScroll(true);
           try {
-            for (const evt of message.events) {
+            for (let i = message.events.length - 1; i >= 0; i--) {
+              const evt = message.events[i];
               try {
                 this.renderer.renderHistoryEvent(evt);
               } catch {
