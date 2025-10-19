@@ -101,3 +101,9 @@ Access settings via `File → Preferences → Settings` → search for "AgentSmi
 1. **Chat not responding**: Ensure AgentSmithy server is running at configured URL
 2. **Connection errors**: Check server URL in settings
 3. **No AgentSmithy icon**: Reload VSCode window (`Developer: Reload Window`)
+
+## License
+
+This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
+
+Copyright 2025 Alexander Morozov
