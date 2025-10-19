@@ -15,7 +15,18 @@ const tsconfigRootDir = new URL('.', import.meta.url).pathname;
 
 export default [
   // Ignore build/test artifacts
-  {ignores: ['out', '.vscode-test', 'dist', 'src/webview', 'src/**/__tests__', 'node_modules', 'esbuild.webview.mjs', 'vitest.config.*']},
+  {
+    ignores: [
+      'out',
+      '.vscode-test',
+      'dist',
+      'src/webview',
+      'src/**/__tests__',
+      'node_modules',
+      'esbuild.webview.mjs',
+      'vitest.config.*',
+    ],
+  },
 
   // Lint this config file under Node, allow URL global
   {
