@@ -48,9 +48,11 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
   ) {
     // Listen to history state changes
     this._historyService.onDidChangeState(() => {
+      // Enable only when not loading AND there is more to load
+      const enable = !this._historyService.isLoading && this._historyService.hasMore;
       this._postMessage({
         type: WEBVIEW_OUT_MSG.HISTORY_SET_LOAD_MORE_ENABLED,
-        enabled: !this._historyService.isLoading,
+        enabled: enable,
       });
     });
   }
@@ -124,7 +126,11 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
       const msg = getErrorMessage(e, ERROR_MESSAGES.LOAD_HISTORY);
       this._postMessage({type: WEBVIEW_OUT_MSG.SHOW_ERROR, error: msg});
     } finally {
-      this._postMessage({type: WEBVIEW_OUT_MSG.HISTORY_SET_LOAD_MORE_ENABLED, enabled: true});
+      // Enable only if there is more to load according to HistoryService
+      this._postMessage({
+        type: WEBVIEW_OUT_MSG.HISTORY_SET_LOAD_MORE_ENABLED,
+        enabled: this._historyService.hasMore,
+      });
     }
   }
 
@@ -210,7 +216,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
 
   private _handleLoadMoreHistory = async (): Promise<void> => {
     const dialogId = this._historyService.currentDialogId;
-    if (dialogId && this._historyService.hasMore && !this._historyService.isLoading) {
+    if (dialogId && !this._historyService.isLoading) {
       this._loadPreviousHistoryPage(dialogId).catch((err: unknown) => {
         const msg = getErrorMessage(err, ERROR_MESSAGES.LOAD_HISTORY);
         this._postMessage({type: WEBVIEW_OUT_MSG.SHOW_ERROR, error: msg});

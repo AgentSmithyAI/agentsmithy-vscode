@@ -43,6 +43,17 @@ describe('HistoryService cursor logic', () => {
     svc = new HistoryService(api as unknown as ApiService);
   });
 
+  it('uses server first_idx as cursor and relies on server has_more', async () => {
+    // Latest at 300
+    api.loadHistory.mockResolvedValueOnce(mkHistoryResp({ first_idx: 300, has_more: true }));
+    await svc.loadLatest('dlg');
+
+    // Previous page from 300 boundary
+    api.loadHistory.mockResolvedValueOnce(mkHistoryResp({ first_idx: 250, has_more: true }));
+    await svc.loadPrevious('dlg');
+    expect(api.loadHistory).toHaveBeenLastCalledWith('dlg', 20, 300);
+  });
+
   it('sets cursor from loadLatest and respects hasMore', async () => {
     api.loadHistory.mockResolvedValueOnce(
       mkHistoryResp({first_idx: 120, has_more: true, events: [{type: 'user', idx: 120} as HistoryEvent]}),
@@ -91,25 +102,24 @@ describe('HistoryService cursor logic', () => {
     expect(api.loadHistory).toHaveBeenNthCalledWith(4, 'dlg', 20, 180);
   });
 
-  it('visibleFirstIdx only moves cursor forward (never regresses)', async () => {
-    api.loadHistory.mockResolvedValueOnce(mkHistoryResp({first_idx: 100, has_more: true}));
+  it('resets cursor/hasMore when returning to latest via setVisibleFirstIdx', async () => {
+    // Load latest -> snapshot latestFirstIdx=500, has_more=true
+    api.loadHistory.mockResolvedValueOnce(mkHistoryResp({first_idx: 500, has_more: true}));
     await svc.loadLatest('dlg');
 
-    // Webview prunes and top visible becomes 120 -> cursor should advance to 120
-    svc.setVisibleFirstIdx(120);
-
-    api.loadHistory.mockResolvedValueOnce(mkHistoryResp({first_idx: 80, has_more: true}));
+    // Go back one page -> cursor becomes 450
+    api.loadHistory.mockResolvedValueOnce(mkHistoryResp({first_idx: 450, has_more: true}));
     await svc.loadPrevious('dlg');
 
-    // Should have used updated before=120, NOT 100, NOT 80
-    expect(api.loadHistory).toHaveBeenNthCalledWith(2, 'dlg', 20, 120);
+    // Sanity: next call would use before=450
+    api.loadHistory.mockResolvedValueOnce(mkHistoryResp({first_idx: 400, has_more: false}));
 
-    // If webview reports a lower idx (regression), cursor must remain at 120
-    svc.setVisibleFirstIdx(90);
-    api.loadHistory.mockResolvedValueOnce(mkHistoryResp({first_idx: 60, has_more: false}));
+    // Now emulate returning to latest view by setting visible idx >= latestFirstIdx
+    svc.setVisibleFirstIdx(505);
+
+    // After reset, loadPrevious should use the latest boundary (500), not 450
     await svc.loadPrevious('dlg');
-
-    expect(api.loadHistory).toHaveBeenNthCalledWith(3, 'dlg', 20, 120);
+    expect(api.loadHistory).toHaveBeenLastCalledWith('dlg', 20, 500);
   });
 
   it('ignores loadPrevious when already loading or when hasMore=false or cursor is undefined', async () => {
@@ -130,8 +140,7 @@ describe('HistoryService cursor logic', () => {
     api.loadHistory.mockResolvedValueOnce(
       new Promise<HistoryResponse>((resolve) => setTimeout(() => resolve(mkHistoryResp({first_idx: 40, has_more: true})), 5)),
     );
-    // We need to set hasMore true because previous loadLatest set it false
-    // Manually mark internal flag by calling setVisibleFirstIdx (does not change hasMore), so instead reload latest
+    // Re-load latest to set hasMore=true
     api.loadHistory.mockResolvedValueOnce(mkHistoryResp({first_idx: 50, has_more: true}));
     await svc.loadLatest('dlg');
 
