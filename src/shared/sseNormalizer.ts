@@ -10,7 +10,7 @@ export const normalizeSSEEvent = (raw: unknown): SSEEvent | null => {
   }
   const obj = raw as Record<string, unknown>;
   const get = (k: string): unknown => obj[k];
-  const getString = (k: string): string | undefined => (typeof obj[k] === 'string' ? (obj[k]) : undefined);
+  const getString = (k: string): string | undefined => (typeof obj[k] === 'string' ? obj[k] : undefined);
   const type = getString('type');
 
   // Normalize file edits (supports legacy aliases)
@@ -21,9 +21,9 @@ export const normalizeSSEEvent = (raw: unknown): SSEEvent | null => {
     const checkpointVal = get('checkpoint');
     return {
       type: E.FILE_EDIT,
-      file: typeof fileVal === 'string' ? (fileVal) : undefined,
-      diff: typeof diffVal === 'string' ? (diffVal) : undefined,
-      checkpoint: typeof checkpointVal === 'string' ? (checkpointVal) : undefined,
+      file: typeof fileVal === 'string' ? fileVal : undefined,
+      diff: typeof diffVal === 'string' ? diffVal : undefined,
+      checkpoint: typeof checkpointVal === 'string' ? checkpointVal : undefined,
     } as const;
   }
 
