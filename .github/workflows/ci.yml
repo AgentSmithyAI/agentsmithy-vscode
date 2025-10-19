@@ -9,7 +9,7 @@ permissions:
 
 env:
   NODE_VERSION: '20'
-  SEMANTIC_VERSION: '19.0.2'
+  SEMANTIC_VERSION: '24'
 
 jobs:
   build-test:
@@ -40,7 +40,15 @@ jobs:
         run: npm run compile
 
       - name: Test
-        run: npm test
+        run: npm run test:coverage
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          directory: ./coverage
+          flags: unittests
+          fail_ci_if_error: false
+          verbose: true
 
       - name: Upload coverage artifact
         if: always()
@@ -80,10 +88,10 @@ jobs:
         with:
           semantic_version: ${{ env.SEMANTIC_VERSION }}
           extra_plugins: |
-            @semantic-release/changelog@6.0.0
-            @semantic-release/git@10.0.0
-            @semantic-release/exec@6.0.1
-            @semantic-release/npm@12.0.1
+            @semantic-release/changelog
+            @semantic-release/git
+            @semantic-release/exec
+            @semantic-release/github
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

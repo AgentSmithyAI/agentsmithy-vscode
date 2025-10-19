@@ -10,7 +10,7 @@ export default defineConfig({
       enabled: true,
       provider: 'v8',
       reportsDirectory: './coverage',
-      reporter: ['text', 'html'],
+      reporter: ['text', 'html', 'json'],
     },
   },
   esbuild: {
