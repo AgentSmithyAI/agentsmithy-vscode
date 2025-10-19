@@ -76,7 +76,7 @@ jobs:
       - name: Semantic Release
         id: semantic
         if: startsWith(github.ref, 'refs/heads/master')
-        uses: cycjimmy/semantic-release-action@v4
+        uses: cycjimmy/semantic-release-action@v5
         with:
           semantic_version: ${{ env.SEMANTIC_VERSION }}
           extra_plugins: |
