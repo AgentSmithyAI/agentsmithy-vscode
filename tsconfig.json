@@ -6,8 +6,9 @@
     "lib": ["ES2023"],
     "sourceMap": true,
     "rootDir": "src",
-    "strict": true
+    "strict": true,
+    "types": ["vscode", "node", "vitest/globals"]
   },
   "include": ["src"],
-  "exclude": ["src/webview/**", "src/**/__tests__/**"]
+  "exclude": ["src/webview/**"]
 }
