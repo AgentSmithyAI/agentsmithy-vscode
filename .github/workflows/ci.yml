@@ -163,7 +163,7 @@ jobs:
     if: needs.build_vsix.result == 'success' && (needs.semver.outputs.new_release_published == 'true' || startsWith(github.ref, 'refs/tags/'))
     steps:
       - name: Download artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           pattern: agentsmithy-vscode-*
           merge-multiple: true
