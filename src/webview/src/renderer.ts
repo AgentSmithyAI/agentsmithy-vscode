@@ -64,6 +64,12 @@ export class MessageRenderer {
     }
   }
 
+  private scrollIntoViewIfBottom(node: HTMLElement): void {
+    if (!this.suppressAutoScroll && this.scrollManager?.isAtBottom()) {
+      node.scrollIntoView({behavior: 'smooth', block: 'end'});
+    }
+  }
+
   private insertNode(node: HTMLElement): void {
     const anchor =
       this.loadMoreBtn && this.loadMoreBtn.parentNode === this.messagesContainer
@@ -73,10 +79,7 @@ export class MessageRenderer {
       this.messagesContainer.insertBefore(node, anchor);
     } else {
       this.messagesContainer.appendChild(node);
-      // Only auto-scroll if user is already at the bottom
-      if (!this.suppressAutoScroll && this.scrollManager?.isAtBottom()) {
-        node.scrollIntoView({behavior: 'smooth', block: 'end'});
-      }
+      this.scrollIntoViewIfBottom(node);
     }
   }
 
@@ -208,10 +211,7 @@ export class MessageRenderer {
     reasoningDiv.appendChild(header);
     reasoningDiv.appendChild(content);
     this.insertNode(reasoningDiv);
-    // Only auto-scroll if user is already at the bottom
-    if (this.scrollManager?.isAtBottom()) {
-      reasoningDiv.scrollIntoView({behavior: 'smooth', block: 'end'});
-    }
+    this.scrollIntoViewIfBottom(reasoningDiv);
 
     return {block: reasoningDiv, content: content, header: header};
   }
@@ -223,10 +223,7 @@ export class MessageRenderer {
     errorDiv.className = 'error';
     errorDiv.textContent = '❌ Error: ' + error;
     this.messagesContainer.appendChild(errorDiv);
-    // Only auto-scroll if user is already at the bottom
-    if (this.scrollManager?.isAtBottom()) {
-      errorDiv.scrollIntoView({behavior: 'smooth', block: 'end'});
-    }
+    this.scrollIntoViewIfBottom(errorDiv);
   }
 
   showInfo(message: string): void {
@@ -236,10 +233,7 @@ export class MessageRenderer {
     infoDiv.className = 'info';
     infoDiv.textContent = 'ℹ️ ' + message;
     this.messagesContainer.appendChild(infoDiv);
-    // Only auto-scroll if user is already at the bottom
-    if (this.scrollManager?.isAtBottom()) {
-      infoDiv.scrollIntoView({behavior: 'smooth', block: 'end'});
-    }
+    this.scrollIntoViewIfBottom(infoDiv);
   }
 
   renderHistoryEvent(evt: HistoryEvent): void {

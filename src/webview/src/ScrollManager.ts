@@ -62,6 +62,15 @@ export class ScrollManager {
     return this.isNearBottom();
   }
 
+  /**
+   * Scroll element into view only if user is at the bottom
+   */
+  scrollIntoViewIfAtBottom(element: HTMLElement): void {
+    if (this.isAtBottom()) {
+      element.scrollIntoView({behavior: 'smooth', block: 'end'});
+    }
+  }
+
   private pruneOldMessages(): void {
     // Cache current first visible idx so provider can keep cursor forward-only
     this.cachedFirstVisibleIdx = this.getFirstVisibleIdx();

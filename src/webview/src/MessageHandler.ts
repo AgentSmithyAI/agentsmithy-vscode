@@ -7,6 +7,8 @@ import {UIController} from './UIController';
 /**
  * Handles incoming messages from the extension
  */
+const PRUNE_TAIL_COUNT = 20;
+
 export class MessageHandler {
   constructor(
     private renderer: MessageRenderer,
@@ -94,7 +96,7 @@ export class MessageHandler {
   private handleAddMessage(role: 'user' | 'assistant', content: string): void {
     this.renderer.addMessage(role, content);
     // User message means new tail content → prune older
-    this.renderer.pruneByIdx(20);
+    this.renderer.pruneByIdx(PRUNE_TAIL_COUNT);
   }
 
   private handleStartAssistantMessage(): void {
@@ -114,7 +116,7 @@ export class MessageHandler {
     }
     if (content && messageElement) {
       this.streamingState.appendToAssistant(content);
-      messageElement.scrollIntoView({behavior: 'smooth', block: 'end'});
+      this.scrollManager.scrollIntoViewIfAtBottom(messageElement);
     }
   }
 
@@ -122,10 +124,10 @@ export class MessageHandler {
     const messageElement = this.streamingState.getCurrentAssistantMessage();
     if (messageElement && this.streamingState.getCurrentAssistantText()) {
       this.streamingState.endAssistantMessage((text) => this.renderer.renderMarkdown(text));
-      messageElement.scrollIntoView({behavior: 'smooth', block: 'end'});
+      this.scrollManager.scrollIntoViewIfAtBottom(messageElement);
     }
     // Finalized assistant message → prune older
-    this.renderer.pruneByIdx(20);
+    this.renderer.pruneByIdx(PRUNE_TAIL_COUNT);
   }
 
   private handleEndStream(): void {
@@ -146,7 +148,7 @@ export class MessageHandler {
     }
     if (reasoningBlock?.content && content) {
       this.streamingState.appendToReasoning(content, (text) => this.renderer.renderMarkdown(text));
-      reasoningBlock.block.scrollIntoView({behavior: 'smooth', block: 'end'});
+      this.scrollManager.scrollIntoViewIfAtBottom(reasoningBlock.block);
     }
   }
 
@@ -191,7 +193,7 @@ export class MessageHandler {
   private handleScrollToBottom(): void {
     this.renderer.scrollToBottom();
     // Prune when we explicitly move to bottom
-    this.renderer.pruneByIdx(20);
+    this.renderer.pruneByIdx(PRUNE_TAIL_COUNT);
   }
 
   private handleHistoryReplaceAll(events: unknown[]): void {
