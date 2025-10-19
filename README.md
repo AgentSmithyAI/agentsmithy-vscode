@@ -1,5 +1,7 @@
 # AgentSmithy VSCode Extension
 
+[![CI](https://github.com/agentsmithy/agentsmithy-vscode/actions/workflows/ci.yml/badge.svg)](https://github.com/agentsmithy/agentsmithy-vscode/actions/workflows/ci.yml)
+
 ## Formatting, Linting & Tests
 
 - ESLint autofix: npm run lint:fix
