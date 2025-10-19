@@ -1,5 +1,6 @@
 import {MessageRenderer} from './renderer';
 import {ReasoningBlock, VSCodeAPI, WebviewOutMessage} from './types';
+import {WEBVIEW_IN_MSG, WEBVIEW_OUT_MSG} from '../../shared/messages';
 import {escapeHtml} from './utils';
 
 declare const acquireVsCodeApi: () => VSCodeAPI;
@@ -64,7 +65,7 @@ class ChatWebview {
     this.initializeMarked();
 
     // Notify extension
-    this.vscode.postMessage({type: 'ready'});
+    this.vscode.postMessage({type: WEBVIEW_IN_MSG.READY});
   }
 
   private setupEventListeners(): void {
@@ -85,7 +86,7 @@ class ChatWebview {
     // Send/Stop button
     this.sendButton.addEventListener('click', () => {
       if (this.isProcessing) {
-        this.vscode.postMessage({type: 'stopProcessing'});
+        this.vscode.postMessage({type: WEBVIEW_IN_MSG.STOP_PROCESSING});
       } else {
         this.sendMessage();
       }
@@ -119,7 +120,7 @@ class ChatWebview {
       if (nearBottom) {
         // Before pruning, cache current first visible idx so provider can keep cursor forward-only
         this.cachedFirstVisibleIdx = this.getFirstVisibleIdx();
-        this.vscode.postMessage({type: 'visibleFirstIdx', idx: this.cachedFirstVisibleIdx});
+        this.vscode.postMessage({type: WEBVIEW_IN_MSG.VISIBLE_FIRST_IDX, idx: this.cachedFirstVisibleIdx});
         this.renderer.pruneByIdx(this.PRUNE_MAX_IDX);
       }
 
@@ -133,7 +134,7 @@ class ChatWebview {
         e.preventDefault();
         const fileAttr = target.getAttribute('data-file') || '';
         const f = decodeURIComponent(fileAttr);
-        this.vscode.postMessage({type: 'openFile', file: f});
+        this.vscode.postMessage({type: WEBVIEW_IN_MSG.OPEN_FILE, file: f});
       }
     });
 
@@ -145,10 +146,10 @@ class ChatWebview {
     // Respond to provider's query for the first visible idx
     window.addEventListener('message', (event) => {
       const data = event.data as {type?: string} | undefined;
-      if (data && data.type === 'getVisibleFirstIdx') {
+      if (data && data.type === WEBVIEW_OUT_MSG.GET_VISIBLE_FIRST_IDX) {
         const idx = this.getFirstVisibleIdx();
         // Send back to extension
-        this.vscode.postMessage({type: 'visibleFirstIdx', idx});
+        this.vscode.postMessage({type: WEBVIEW_IN_MSG.VISIBLE_FIRST_IDX, idx});
       }
     });
   }
@@ -165,7 +166,7 @@ class ChatWebview {
     this.renderer.addMessage('user', text);
 
     this.vscode.postMessage({
-      type: 'sendMessage',
+      type: WEBVIEW_IN_MSG.SEND_MESSAGE,
       text: text,
     });
 
@@ -429,7 +430,7 @@ class ChatWebview {
   private maybeLoadMoreHistory(): void {
     if (this.isLoadingHistory || !this.canLoadMoreHistory) return;
     this.isLoadingHistory = true;
-    this.vscode.postMessage({type: 'loadMoreHistory'});
+    this.vscode.postMessage({type: WEBVIEW_IN_MSG.LOAD_MORE_HISTORY});
   }
 }
 

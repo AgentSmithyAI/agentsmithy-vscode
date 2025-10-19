@@ -1,6 +1,8 @@
 /**
  * VSCode API acquired in webview context
  */
+import {WEBVIEW_IN_MSG, WEBVIEW_OUT_MSG} from '../../shared/messages';
+
 export interface VSCodeAPI {
   postMessage(message: unknown): void;
   getState(): unknown;
@@ -11,33 +13,33 @@ export interface VSCodeAPI {
  * Messages sent from webview to extension
  */
 export type WebviewInMessage =
-  | {type: 'sendMessage'; text?: string}
-  | {type: 'openFile'; file?: string}
-  | {type: 'stopProcessing'}
-  | {type: 'ready'}
-  | {type: 'loadMoreHistory'};
+  | {type: typeof WEBVIEW_IN_MSG.SEND_MESSAGE; text?: string}
+  | {type: typeof WEBVIEW_IN_MSG.OPEN_FILE; file?: string}
+  | {type: typeof WEBVIEW_IN_MSG.STOP_PROCESSING}
+  | {type: typeof WEBVIEW_IN_MSG.READY}
+  | {type: typeof WEBVIEW_IN_MSG.LOAD_MORE_HISTORY};
 
 /**
  * Messages sent from extension to webview
  */
 export type WebviewOutMessage =
-  | {type: 'addMessage'; message: {role: 'user' | 'assistant'; content: string}}
-  | {type: 'startAssistantMessage'}
-  | {type: 'appendToAssistant'; content: string}
-  | {type: 'endAssistantMessage'}
-  | {type: 'startReasoning'}
-  | {type: 'appendToReasoning'; content: string}
-  | {type: 'endReasoning'}
-  | {type: 'showToolCall'; tool?: string; args?: unknown}
-  | {type: 'showFileEdit'; file: string; diff?: string}
-  | {type: 'showError'; error: string}
-  | {type: 'showInfo'; message: string}
-  | {type: 'endStream'}
-  | {type: 'historySetLoadMoreVisible'; visible: boolean}
-  | {type: 'historySetLoadMoreEnabled'; enabled: boolean}
-  | {type: 'historyPrependEvents'; events: unknown[]}
-  | {type: 'historyReplaceAll'; events: unknown[]}
-  | {type: 'scrollToBottom'};
+  | {type: typeof WEBVIEW_OUT_MSG.ADD_MESSAGE; message: {role: 'user' | 'assistant'; content: string}}
+  | {type: typeof WEBVIEW_OUT_MSG.START_ASSISTANT_MESSAGE}
+  | {type: typeof WEBVIEW_OUT_MSG.APPEND_TO_ASSISTANT; content: string}
+  | {type: typeof WEBVIEW_OUT_MSG.END_ASSISTANT_MESSAGE}
+  | {type: typeof WEBVIEW_OUT_MSG.START_REASONING}
+  | {type: typeof WEBVIEW_OUT_MSG.APPEND_TO_REASONING; content: string}
+  | {type: typeof WEBVIEW_OUT_MSG.END_REASONING}
+  | {type: typeof WEBVIEW_OUT_MSG.SHOW_TOOL_CALL; tool?: string; args?: unknown}
+  | {type: typeof WEBVIEW_OUT_MSG.SHOW_FILE_EDIT; file: string; diff?: string}
+  | {type: typeof WEBVIEW_OUT_MSG.SHOW_ERROR; error: string}
+  | {type: typeof WEBVIEW_OUT_MSG.SHOW_INFO; message: string}
+  | {type: typeof WEBVIEW_OUT_MSG.END_STREAM}
+  | {type: typeof WEBVIEW_OUT_MSG.HISTORY_SET_LOAD_MORE_VISIBLE; visible: boolean}
+  | {type: typeof WEBVIEW_OUT_MSG.HISTORY_SET_LOAD_MORE_ENABLED; enabled: boolean}
+  | {type: typeof WEBVIEW_OUT_MSG.HISTORY_PREPEND_EVENTS; events: unknown[]}
+  | {type: typeof WEBVIEW_OUT_MSG.HISTORY_REPLACE_ALL; events: unknown[]}
+  | {type: typeof WEBVIEW_OUT_MSG.SCROLL_TO_BOTTOM};
 
 export interface HistoryEvent {
   type: 'user' | 'chat' | 'reasoning' | 'tool_call' | 'file_edit';
