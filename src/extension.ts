@@ -1,19 +1,23 @@
 import * as vscode from 'vscode';
 import {AgentSmithyClient} from './agentSmithyClient';
+import {ApiService} from './api/ApiService';
 import {ChatWebviewProvider} from './chatWebviewProvider';
 import {registerCommands} from './commands';
-import {COMMANDS, ERROR_MESSAGES, VIEWS, WELCOME_MESSAGE} from './constants';
+import {COMMANDS, ERROR_MESSAGES, STATE_KEYS, VIEWS, WELCOME_MESSAGE} from './constants';
 import {ConfigService} from './services/ConfigService';
 import {HistoryService} from './services/HistoryService';
 
 export const activate = (context: vscode.ExtensionContext) => {
   // Create services
   const configService = new ConfigService();
-  const client = new AgentSmithyClient(configService.getServerUrl());
-  const historyService = new HistoryService(client);
+  const serverUrl = configService.getServerUrl();
 
-  // Note: When server URL changes, we recreate the client instance,
-  // but existing services will continue using the old client.
+  const apiService = new ApiService(serverUrl);
+  const client = new AgentSmithyClient(serverUrl);
+  const historyService = new HistoryService(apiService);
+
+  // Note: When server URL changes, we recreate service instances,
+  // but existing providers will continue using old instances.
   // This is acceptable as config changes are rare.
 
   // Register the webview provider
@@ -31,7 +35,7 @@ export const activate = (context: vscode.ExtensionContext) => {
   registerCommands(context, provider);
 
   // Show a welcome message
-  const hasShownWelcome = Boolean(context.globalState.get('agentsmithy.welcomeShown', false));
+  const hasShownWelcome = Boolean(context.globalState.get(STATE_KEYS.WELCOME_SHOWN, false));
 
   if (hasShownWelcome === false) {
     void vscode.window.showInformationMessage(WELCOME_MESSAGE, ERROR_MESSAGES.OPEN_CHAT).then((selection) => {
@@ -40,7 +44,7 @@ export const activate = (context: vscode.ExtensionContext) => {
       }
     });
 
-    void context.globalState.update('agentsmithy.welcomeShown', true);
+    void context.globalState.update(STATE_KEYS.WELCOME_SHOWN, true);
   }
 };
 

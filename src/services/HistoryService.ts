@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
-import {AgentSmithyClient, HistoryEvent} from '../agentSmithyClient';
-import {ERROR_MESSAGES} from '../constants';
-import {getErrorMessage} from '../utils/typeGuards';
+import { ApiService, HistoryEvent } from '../api/ApiService';
+import { ERROR_MESSAGES } from '../constants';
+import { getErrorMessage } from '../utils/typeGuards';
 
 /**
  * Service for managing chat history and pagination
@@ -15,7 +15,7 @@ export class HistoryService {
   private readonly _onDidChangeState = new vscode.EventEmitter<void>();
   readonly onDidChangeState = this._onDidChangeState.event;
 
-  constructor(private readonly client: AgentSmithyClient) {}
+  constructor(private readonly apiService: ApiService) {}
 
   get currentDialogId(): string | undefined {
     return this._currentDialogId;
@@ -46,7 +46,7 @@ export class HistoryService {
     this._onDidChangeState.fire();
 
     try {
-      const resp = await this.client.loadHistory(dialogId);
+      const resp = await this.apiService.loadHistory(dialogId);
       this._historyCursor = resp.first_idx ?? undefined;
       this._historyHasMore = Boolean(resp.has_more);
       this._onDidChangeState.fire();
@@ -76,7 +76,7 @@ export class HistoryService {
     this._onDidChangeState.fire();
 
     try {
-      const resp = await this.client.loadHistory(dialogId, undefined, this._historyCursor);
+      const resp = await this.apiService.loadHistory(dialogId, undefined, this._historyCursor);
       this._historyCursor = resp.first_idx ?? undefined;
       this._historyHasMore = Boolean(resp.has_more);
       this._onDidChangeState.fire();
@@ -103,13 +103,13 @@ export class HistoryService {
     }
 
     try {
-      const current = await this.client.getCurrentDialog();
+      const current = await this.apiService.getCurrentDialog();
       if (current.id) {
         this._currentDialogId = current.id;
         return current.id;
       }
 
-      const list = await this.client.listDialogs();
+      const list = await this.apiService.listDialogs();
       if (list.current_dialog_id) {
         this._currentDialogId = list.current_dialog_id;
         return list.current_dialog_id;

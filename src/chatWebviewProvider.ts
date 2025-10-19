@@ -1,10 +1,10 @@
 import * as vscode from 'vscode';
-import {AgentSmithyClient} from './agentSmithyClient';
-import {ERROR_MESSAGES, VIEWS} from './constants';
-import {ConfigService} from './services/ConfigService';
-import {StreamEventHandlers} from './services/EventHandlers';
-import {HistoryService} from './services/HistoryService';
-import {getErrorMessage} from './utils/typeGuards';
+import { AgentSmithyClient } from './agentSmithyClient';
+import { CSS_CLASSES, DOM_IDS, ERROR_MESSAGES, ERROR_NAMES, VIEWS } from './constants';
+import { ConfigService } from './services/ConfigService';
+import { StreamEventHandlers } from './services/EventHandlers';
+import { HistoryService } from './services/HistoryService';
+import { getErrorMessage } from './utils/typeGuards';
 
 // Messages sent from the webview to the extension
 type WebviewInMessage =
@@ -223,7 +223,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
         eventHandlers.handleNoResponse();
       }
     } catch (error) {
-      if (error instanceof Error && error.name === 'AbortError') {
+      if (error instanceof Error && error.name === ERROR_NAMES.ABORT) {
         eventHandlers.handleAbort();
       } else if (error instanceof Error) {
         eventHandlers.handleConnectionError(error);
@@ -256,20 +256,20 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     <script nonce="${nonce}" src="${markedUri.toString()}"></script>
 </head>
 <body>
-    <div class="chat-container">
-        <div class="messages" id="messages">
-            <button id="loadMoreBtn" class="load-more" style="display:none;">Load previous</button>
-            <div class="welcome-placeholder" id="welcomePlaceholder">
+    <div class="${CSS_CLASSES.CHAT_CONTAINER}">
+        <div class="${CSS_CLASSES.MESSAGES}" id="${DOM_IDS.MESSAGES}">
+            <button id="${DOM_IDS.LOAD_MORE_BTN}" class="${CSS_CLASSES.LOAD_MORE}" style="display:none;">Load previous</button>
+            <div class="${CSS_CLASSES.WELCOME_PLACEHOLDER}" id="${DOM_IDS.WELCOME_PLACEHOLDER}">
                 Type a message to start...
             </div>
         </div>
-        <div class="input-container">
+        <div class="${CSS_CLASSES.INPUT_CONTAINER}">
             <textarea 
-                id="messageInput" 
+                id="${DOM_IDS.MESSAGE_INPUT}" 
                 placeholder="Type your message..."
                 rows="1"
             ></textarea>
-            <button id="sendButton" title="Send (Enter)" aria-label="Send">
+            <button id="${DOM_IDS.SEND_BUTTON}" title="Send (Enter)" aria-label="Send">
                 <svg viewBox="0 0 24 24" aria-hidden="true">
                     <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
                 </svg>

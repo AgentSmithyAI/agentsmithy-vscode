@@ -39,3 +39,33 @@ export const WELCOME_MESSAGE =
 
 export const MOVE_TO_SECONDARY_MESSAGE =
   'To move AgentSmithy to secondary sidebar: Right-click on AgentSmithy icon in activity bar → "Move to Secondary Side Bar"';
+
+// Error names
+export const ERROR_NAMES = {
+  ABORT: 'AbortError',
+} as const;
+
+// Global state keys
+export const STATE_KEYS = {
+  WELCOME_SHOWN: 'agentsmithy.welcomeShown',
+} as const;
+
+// HTML element IDs for webview
+export const DOM_IDS = {
+  MESSAGES: 'messages',
+  LOAD_MORE_BTN: 'loadMoreBtn',
+  WELCOME_PLACEHOLDER: 'welcomePlaceholder',
+  MESSAGE_INPUT: 'messageInput',
+  SEND_BUTTON: 'sendButton',
+} as const;
+
+// CSS class names
+export const CSS_CLASSES = {
+  CHAT_CONTAINER: 'chat-container',
+  MESSAGES: 'messages',
+  LOAD_MORE: 'load-more',
+  WELCOME_PLACEHOLDER: 'welcome-placeholder',
+  INPUT_CONTAINER: 'input-container',
+  REASONING_TOGGLE: 'reasoning-toggle',
+  FILE_LINK: 'file-link',
+} as const;
