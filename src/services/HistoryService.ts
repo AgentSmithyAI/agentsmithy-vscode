@@ -11,6 +11,10 @@ export class HistoryService {
   private _historyCursor?: number;
   private _historyHasMore = false;
   private _historyLoading = false;
+  // The server-reported first_idx of the topmost loaded page
+  private _serverCursor?: number;
+  // The first visible user/chat idx currently rendered in the webview (floor)
+  private _visibleFloor?: number;
 
   private readonly _onDidChangeState = new vscode.EventEmitter<void>();
   readonly onDidChangeState = this._onDidChangeState.event;
@@ -24,15 +28,25 @@ export class HistoryService {
    */
   setVisibleFirstIdx(idx: number | undefined | null): void {
     const normalized = typeof idx === 'number' ? idx : undefined;
-    // Only move the cursor forward (to a more recent boundary). Never regress.
-    const next =
+    // Only move the visible floor forward; never regress it.
+    const nextVisible =
       normalized === undefined
-        ? this._historyCursor
-        : this._historyCursor === undefined
+        ? this._visibleFloor
+        : this._visibleFloor === undefined
           ? normalized
-          : Math.max(this._historyCursor, normalized);
-    if (this._historyCursor !== next) {
-      this._historyCursor = next;
+          : Math.max(this._visibleFloor, normalized);
+
+    const prevCursor = this._historyCursor;
+
+    if (this._visibleFloor !== nextVisible) {
+      this._visibleFloor = nextVisible;
+    }
+
+    // Always recompute effective cursor when visible floor is set/invoked,
+    // because server cursor might have changed since the last recompute.
+    const effective = this._computeEffectiveCursor();
+    if (prevCursor !== effective) {
+      this._historyCursor = effective;
       this._onDidChangeState.fire();
     }
   }
@@ -68,6 +82,9 @@ export class HistoryService {
     try {
       const PAGE_SIZE = 20;
       const resp = await this.apiService.loadHistory(dialogId, PAGE_SIZE);
+      this._serverCursor = resp.first_idx ?? undefined;
+      // Fresh load resets visible floor; cursor comes directly from server
+      this._visibleFloor = undefined;
       this._historyCursor = resp.first_idx ?? undefined;
       this._historyHasMore = Boolean(resp.has_more);
       this._onDidChangeState.fire();
@@ -98,8 +115,16 @@ export class HistoryService {
 
     try {
       const PAGE_SIZE = 20;
-      const resp = await this.apiService.loadHistory(dialogId, PAGE_SIZE, this._historyCursor);
-      this._historyCursor = resp.first_idx ?? undefined;
+      const before = this._historyCursor;
+      const resp = await this.apiService.loadHistory(dialogId, PAGE_SIZE, before);
+
+      const nextFirst = resp.first_idx ?? undefined;
+      if (nextFirst !== undefined) {
+        this._serverCursor = nextFirst;
+      }
+
+      // Cursor for previous page strictly follows server first_idx
+      this._historyCursor = nextFirst;
       this._historyHasMore = Boolean(resp.has_more);
       this._onDidChangeState.fire();
 
@@ -154,8 +179,22 @@ export class HistoryService {
   reset(): void {
     this._currentDialogId = undefined;
     this._historyCursor = undefined;
+    this._serverCursor = undefined;
+    this._visibleFloor = undefined;
     this._historyHasMore = false;
     this._historyLoading = false;
     this._onDidChangeState.fire();
+  }
+
+  private _computeEffectiveCursor(): number | undefined {
+    const a = this._serverCursor;
+    const b = this._visibleFloor;
+    if (a === undefined && b === undefined) return undefined;
+    if (a === undefined) return b;
+    if (b === undefined) return a;
+    // When the webview prunes and advances the visible floor beyond the server cursor,
+    // we must re-fetch starting from the NEWER boundary to avoid loading already-pruned items.
+    // Therefore choose the newer (higher idx) boundary.
+    return Math.max(a, b);
   }
 }
