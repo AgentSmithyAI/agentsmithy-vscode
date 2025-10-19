@@ -4,6 +4,7 @@
   "displayName": "AgentSmithy VSCode",
   "description": "VSCode extension for AgentSmithy coding assistant",
   "version": "1.0.0",
+  "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/AgentSmithyAI/agentsmithy-vscode"

@@ -1,13 +1,11 @@
 # AgentSmithy VSCode Extension
 
+[![GitHub release](https://img.shields.io/github/v/release/AgentSmithyAI/agentsmithy-vscode)](https://github.com/AgentSmithyAI/agentsmithy-vscode/releases)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 [![CI](https://github.com/AgentSmithyAI/agentsmithy-vscode/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/AgentSmithyAI/agentsmithy-vscode/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/AgentSmithyAI/agentsmithy-vscode/branch/master/graph/badge.svg)](https://codecov.io/gh/AgentSmithyAI/agentsmithy-vscode)
-[![GitHub release](https://img.shields.io/github/v/release/AgentSmithyAI/agentsmithy-vscode)](https://github.com/AgentSmithyAI/agentsmithy-vscode/releases)
 [![VSCode Version](https://img.shields.io/badge/VSCode-1.100.0%2B-blue)](https://code.visualstudio.com/)
-[![Node Version](https://img.shields.io/badge/node-20-green)](https://nodejs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue)](https://www.typescriptlang.org/)
-[![GitHub issues](https://img.shields.io/github/issues/AgentSmithyAI/agentsmithy-vscode)](https://github.com/AgentSmithyAI/agentsmithy-vscode/issues)
-[![GitHub pull requests](https://img.shields.io/github/issues-pr/AgentSmithyAI/agentsmithy-vscode)](https://github.com/AgentSmithyAI/agentsmithy-vscode/pulls)
 
 ## Formatting, Linting & Tests
 
@@ -101,3 +99,9 @@ Access settings via `File → Preferences → Settings` → search for "AgentSmi
 1. **Chat not responding**: Ensure AgentSmithy server is running at configured URL
 2. **Connection errors**: Check server URL in settings
 3. **No AgentSmithy icon**: Reload VSCode window (`Developer: Reload Window`)
+
+## License
+
+This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
+
+Copyright 2025 Alexander Morozov
