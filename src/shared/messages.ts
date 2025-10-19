@@ -7,7 +7,7 @@ export const WEBVIEW_IN_MSG = {
   VISIBLE_FIRST_IDX: 'visibleFirstIdx',
 } as const;
 
-export type WebviewInMessageType = typeof WEBVIEW_IN_MSG[keyof typeof WEBVIEW_IN_MSG];
+export type WebviewInMessageType = (typeof WEBVIEW_IN_MSG)[keyof typeof WEBVIEW_IN_MSG];
 
 export const WEBVIEW_OUT_MSG = {
   ADD_MESSAGE: 'addMessage',
@@ -30,4 +30,4 @@ export const WEBVIEW_OUT_MSG = {
   GET_VISIBLE_FIRST_IDX: 'getVisibleFirstIdx',
 } as const;
 
-export type WebviewOutMessageType = typeof WEBVIEW_OUT_MSG[keyof typeof WEBVIEW_OUT_MSG];
+export type WebviewOutMessageType = (typeof WEBVIEW_OUT_MSG)[keyof typeof WEBVIEW_OUT_MSG];

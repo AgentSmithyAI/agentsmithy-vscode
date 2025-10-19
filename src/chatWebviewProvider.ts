@@ -10,31 +10,31 @@ import {StreamService, type ChatContext} from './api/StreamService';
 import {SSE_EVENT_TYPES as E} from './constants';
 
 // Messages sent from the webview to the extension
- type WebviewInMessage =
-   | {type: typeof WEBVIEW_IN_MSG.SEND_MESSAGE; text?: string}
-   | {type: typeof WEBVIEW_IN_MSG.OPEN_FILE; file?: string}
-   | {type: typeof WEBVIEW_IN_MSG.STOP_PROCESSING}
-   | {type: typeof WEBVIEW_IN_MSG.READY}
-   | {type: typeof WEBVIEW_IN_MSG.LOAD_MORE_HISTORY};
+type WebviewInMessage =
+  | {type: typeof WEBVIEW_IN_MSG.SEND_MESSAGE; text?: string}
+  | {type: typeof WEBVIEW_IN_MSG.OPEN_FILE; file?: string}
+  | {type: typeof WEBVIEW_IN_MSG.STOP_PROCESSING}
+  | {type: typeof WEBVIEW_IN_MSG.READY}
+  | {type: typeof WEBVIEW_IN_MSG.LOAD_MORE_HISTORY};
 // Messages sent from the extension to the webview
- type WebviewOutMessage =
-   | {type: typeof WEBVIEW_OUT_MSG.ADD_MESSAGE; message: {role: 'user' | 'assistant'; content: string}}
-   | {type: typeof WEBVIEW_OUT_MSG.START_ASSISTANT_MESSAGE}
-   | {type: typeof WEBVIEW_OUT_MSG.APPEND_TO_ASSISTANT; content: string}
-   | {type: typeof WEBVIEW_OUT_MSG.END_ASSISTANT_MESSAGE}
-   | {type: typeof WEBVIEW_OUT_MSG.START_REASONING}
-   | {type: typeof WEBVIEW_OUT_MSG.APPEND_TO_REASONING; content: string}
-   | {type: typeof WEBVIEW_OUT_MSG.END_REASONING}
-   | {type: typeof WEBVIEW_OUT_MSG.SHOW_TOOL_CALL; tool?: string; args?: unknown}
-   | {type: typeof WEBVIEW_OUT_MSG.SHOW_FILE_EDIT; file: string; diff?: string}
-   | {type: typeof WEBVIEW_OUT_MSG.SHOW_ERROR; error: string}
-   | {type: typeof WEBVIEW_OUT_MSG.SHOW_INFO; message: string}
-   | {type: typeof WEBVIEW_OUT_MSG.END_STREAM}
-   | {type: typeof WEBVIEW_OUT_MSG.HISTORY_SET_LOAD_MORE_VISIBLE; visible: boolean}
-   | {type: typeof WEBVIEW_OUT_MSG.HISTORY_SET_LOAD_MORE_ENABLED; enabled: boolean}
-   | {type: typeof WEBVIEW_OUT_MSG.HISTORY_PREPEND_EVENTS; events: HistoryEvent[]}
-   | {type: typeof WEBVIEW_OUT_MSG.HISTORY_REPLACE_ALL; events: HistoryEvent[]}
-   | {type: typeof WEBVIEW_OUT_MSG.SCROLL_TO_BOTTOM};
+type WebviewOutMessage =
+  | {type: typeof WEBVIEW_OUT_MSG.ADD_MESSAGE; message: {role: 'user' | 'assistant'; content: string}}
+  | {type: typeof WEBVIEW_OUT_MSG.START_ASSISTANT_MESSAGE}
+  | {type: typeof WEBVIEW_OUT_MSG.APPEND_TO_ASSISTANT; content: string}
+  | {type: typeof WEBVIEW_OUT_MSG.END_ASSISTANT_MESSAGE}
+  | {type: typeof WEBVIEW_OUT_MSG.START_REASONING}
+  | {type: typeof WEBVIEW_OUT_MSG.APPEND_TO_REASONING; content: string}
+  | {type: typeof WEBVIEW_OUT_MSG.END_REASONING}
+  | {type: typeof WEBVIEW_OUT_MSG.SHOW_TOOL_CALL; tool?: string; args?: unknown}
+  | {type: typeof WEBVIEW_OUT_MSG.SHOW_FILE_EDIT; file: string; diff?: string}
+  | {type: typeof WEBVIEW_OUT_MSG.SHOW_ERROR; error: string}
+  | {type: typeof WEBVIEW_OUT_MSG.SHOW_INFO; message: string}
+  | {type: typeof WEBVIEW_OUT_MSG.END_STREAM}
+  | {type: typeof WEBVIEW_OUT_MSG.HISTORY_SET_LOAD_MORE_VISIBLE; visible: boolean}
+  | {type: typeof WEBVIEW_OUT_MSG.HISTORY_SET_LOAD_MORE_ENABLED; enabled: boolean}
+  | {type: typeof WEBVIEW_OUT_MSG.HISTORY_PREPEND_EVENTS; events: HistoryEvent[]}
+  | {type: typeof WEBVIEW_OUT_MSG.HISTORY_REPLACE_ALL; events: HistoryEvent[]}
+  | {type: typeof WEBVIEW_OUT_MSG.SCROLL_TO_BOTTOM};
 export class ChatWebviewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = VIEWS.CHAT;
 
@@ -48,7 +48,10 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
   ) {
     // Listen to history state changes
     this._historyService.onDidChangeState(() => {
-      this._postMessage({type: WEBVIEW_OUT_MSG.HISTORY_SET_LOAD_MORE_ENABLED, enabled: !this._historyService.isLoading});
+      this._postMessage({
+        type: WEBVIEW_OUT_MSG.HISTORY_SET_LOAD_MORE_ENABLED,
+        enabled: !this._historyService.isLoading,
+      });
     });
   }
 
@@ -61,7 +64,9 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
    * and feed it back to HistoryService so pruning cannot regress the cursor.
    */
   private async _syncVisibleFirstIdx(): Promise<void> {
-    if (!this._view) {return;}
+    if (!this._view) {
+      return;
+    }
     try {
       const idx: unknown = await this._view.webview.postMessage({type: WEBVIEW_OUT_MSG.GET_VISIBLE_FIRST_IDX});
       // webview.postMessage doesn't return a value; we will receive it via onDidReceiveMessage
