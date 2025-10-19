@@ -1,4 +1,4 @@
-import { isRecord } from '../utils/typeGuards';
+import {isRecord} from '../utils/typeGuards';
 
 interface CurrentDialogResponse {
   id: string | null;

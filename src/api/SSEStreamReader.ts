@@ -1,4 +1,4 @@
-import {SSEEvent} from '../agentSmithyClient';
+import type {SSEEvent} from './StreamService';
 
 /**
  * Parses Server-Sent Events (SSE) stream

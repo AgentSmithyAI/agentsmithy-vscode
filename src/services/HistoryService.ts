@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
-import { ApiService, HistoryEvent } from '../api/ApiService';
-import { ERROR_MESSAGES } from '../constants';
-import { getErrorMessage } from '../utils/typeGuards';
+import {ApiService, HistoryEvent} from '../api/ApiService';
+import {ERROR_MESSAGES} from '../constants';
+import {getErrorMessage} from '../utils/typeGuards';
 
 /**
  * Service for managing chat history and pagination
@@ -46,7 +46,8 @@ export class HistoryService {
     this._onDidChangeState.fire();
 
     try {
-      const resp = await this.apiService.loadHistory(dialogId);
+      const PAGE_SIZE = 20;
+      const resp = await this.apiService.loadHistory(dialogId, PAGE_SIZE);
       this._historyCursor = resp.first_idx ?? undefined;
       this._historyHasMore = Boolean(resp.has_more);
       this._onDidChangeState.fire();
@@ -76,7 +77,8 @@ export class HistoryService {
     this._onDidChangeState.fire();
 
     try {
-      const resp = await this.apiService.loadHistory(dialogId, undefined, this._historyCursor);
+      const PAGE_SIZE = 20;
+      const resp = await this.apiService.loadHistory(dialogId, PAGE_SIZE, this._historyCursor);
       this._historyCursor = resp.first_idx ?? undefined;
       this._historyHasMore = Boolean(resp.has_more);
       this._onDidChangeState.fire();

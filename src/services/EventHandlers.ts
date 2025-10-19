@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import {SSEEvent} from '../agentSmithyClient';
+import type {SSEEvent} from '../api/StreamService';
 import {ERROR_MESSAGES} from '../constants';
 
 export type PostMessage = (msg: unknown) => void;

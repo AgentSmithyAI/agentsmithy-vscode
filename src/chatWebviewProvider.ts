@@ -1,10 +1,11 @@
 import * as vscode from 'vscode';
-import { AgentSmithyClient } from './agentSmithyClient';
-import { CSS_CLASSES, DOM_IDS, ERROR_MESSAGES, ERROR_NAMES, VIEWS } from './constants';
-import { ConfigService } from './services/ConfigService';
-import { StreamEventHandlers } from './services/EventHandlers';
-import { HistoryService } from './services/HistoryService';
-import { getErrorMessage } from './utils/typeGuards';
+import {CSS_CLASSES, DOM_IDS, ERROR_MESSAGES, ERROR_NAMES, VIEWS} from './constants';
+import {ConfigService} from './services/ConfigService';
+import {StreamEventHandlers} from './services/EventHandlers';
+import {HistoryService} from './services/HistoryService';
+import {getErrorMessage} from './utils/typeGuards';
+import type {HistoryEvent} from './api/ApiService';
+import {StreamService, type ChatContext} from './api/StreamService';
 
 // Messages sent from the webview to the extension
 type WebviewInMessage =
@@ -30,8 +31,8 @@ type WebviewOutMessage =
   | {type: 'endStream'}
   | {type: 'historySetLoadMoreVisible'; visible: boolean}
   | {type: 'historySetLoadMoreEnabled'; enabled: boolean}
-  | {type: 'historyPrependEvents'; events: unknown[]}
-  | {type: 'historyReplaceAll'; events: unknown[]}
+  | {type: 'historyPrependEvents'; events: HistoryEvent[]}
+  | {type: 'historyReplaceAll'; events: HistoryEvent[]}
   | {type: 'scrollToBottom'};
 
 export class ChatWebviewProvider implements vscode.WebviewViewProvider {
@@ -41,7 +42,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
 
   constructor(
     private readonly _extensionUri: vscode.Uri,
-    private readonly _client: AgentSmithyClient,
+    private readonly _stream: StreamService,
     private readonly _historyService: HistoryService,
     private readonly _configService: ConfigService,
   ) {
@@ -80,7 +81,8 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
       const msg = getErrorMessage(e, ERROR_MESSAGES.LOAD_HISTORY);
       this._postMessage({type: 'showError', error: msg});
     } finally {
-      this._postMessage({type: 'historySetLoadMoreEnabled', enabled: true});
+      // Enable only when there is more to load to avoid inconsistent UI states when button is hidden
+      this._postMessage({type: 'historySetLoadMoreEnabled', enabled: this._historyService.hasMore});
     }
   }
 
@@ -145,7 +147,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
           await this._handleOpenFile(message.file);
           break;
         case 'stopProcessing':
-          this._client.abort();
+          this._stream.abort();
           break;
         case 'ready':
           await this._handleWebviewReady();
@@ -197,7 +199,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
       return;
     }
 
-    const context = this._client.getCurrentFileContext();
+    const context = this._getCurrentFileContext();
     const request = {
       messages: [{role: 'user' as const, content: text}],
       context,
@@ -210,7 +212,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     try {
       let hasReceivedEvents = false;
 
-      for await (const event of this._client.streamChat(request)) {
+      for await (const event of this._stream.streamChat(request)) {
         hasReceivedEvents = true;
         await eventHandlers.handleEvent(event);
 
@@ -228,7 +230,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
       } else if (error instanceof Error) {
         eventHandlers.handleConnectionError(error);
       }
-      this._postMessage({type: 'endAssistantMessage'});
+      // endAssistantMessage is sent inside eventHandlers for errors; avoid duplicate messages here
     } finally {
       eventHandlers.finalize();
     }
@@ -283,6 +285,24 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     <script nonce="${nonce}" src="${scriptUri.toString()}"></script>
 </body>
 </html>`;
+  };
+  private _getCurrentFileContext = (): ChatContext | undefined => {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor) {
+      return undefined;
+    }
+
+    const document = editor.document;
+    const selection = editor.selection;
+
+    return {
+      current_file: {
+        path: document.fileName,
+        language: document.languageId,
+        content: document.getText(),
+        selection: !selection.isEmpty ? document.getText(selection) : undefined,
+      },
+    };
   };
 }
 
