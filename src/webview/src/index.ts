@@ -1,6 +1,6 @@
-import { MessageRenderer } from './renderer';
-import { ReasoningBlock, VSCodeAPI, WebviewOutMessage } from './types';
-import { escapeHtml } from './utils';
+import {MessageRenderer} from './renderer';
+import {ReasoningBlock, VSCodeAPI, WebviewOutMessage} from './types';
+import {escapeHtml} from './utils';
 
 declare const acquireVsCodeApi: () => VSCodeAPI;
 declare const marked: {
@@ -42,7 +42,12 @@ class ChatWebview {
     this.loadMoreBtn = document.getElementById('loadMoreBtn');
     this.welcomePlaceholder = document.getElementById('welcomePlaceholder');
 
-    this.renderer = new MessageRenderer(this.messagesContainer, this.loadMoreBtn, this.welcomePlaceholder, workspaceRoot);
+    this.renderer = new MessageRenderer(
+      this.messagesContainer,
+      this.loadMoreBtn,
+      this.welcomePlaceholder,
+      workspaceRoot,
+    );
 
     this.setupEventListeners();
     this.initializeMarked();
@@ -139,7 +144,8 @@ class ChatWebview {
       this.sendButton.title = 'Stop';
       this.sendButton.setAttribute('aria-label', 'Stop');
     } else {
-      this.sendButton.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>';
+      this.sendButton.innerHTML =
+        '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>';
       this.sendButton.classList.remove('processing');
       this.sendButton.title = 'Send (Enter)';
       this.sendButton.setAttribute('aria-label', 'Send');
@@ -319,7 +325,10 @@ class ChatWebview {
 
     const renderer = new marked.Renderer();
     renderer.code = (code: string, infostring?: string): string => {
-      const first = String(infostring || '').trim().split(/\s+/)[0] || '';
+      const first =
+        String(infostring || '')
+          .trim()
+          .split(/\s+/)[0] || '';
       const lang = first;
       const escapedCode = escapeHtml(code);
       if (lang) {
@@ -345,4 +354,3 @@ class ChatWebview {
 // Initialize when DOM is ready
 const workspaceRoot = (window as unknown as {WORKSPACE_ROOT: string}).WORKSPACE_ROOT || '';
 new ChatWebview(workspaceRoot);
-

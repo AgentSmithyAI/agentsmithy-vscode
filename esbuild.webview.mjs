@@ -22,4 +22,3 @@ if (watch) {
   await ctx.dispose();
   console.log('Webview build complete');
 }
-

@@ -1,9 +1,9 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { SSEStreamReader } from './api/SSEStreamReader';
-import { CONFIG_KEYS, DEFAULT_SERVER_URL, STATUS_FILE_PATH } from './constants';
-import { asString, isRecord, safeJsonParse } from './utils/typeGuards';
+import {SSEStreamReader} from './api/SSEStreamReader';
+import {CONFIG_KEYS, DEFAULT_SERVER_URL, STATUS_FILE_PATH} from './constants';
+import {asString, isRecord, safeJsonParse} from './utils/typeGuards';
 
 export interface AgentSmithyMessage {
   role: 'user' | 'assistant';

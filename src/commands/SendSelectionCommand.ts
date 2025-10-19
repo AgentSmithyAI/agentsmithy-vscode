@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
-import { ChatWebviewProvider } from '../chatWebviewProvider';
-import { COMMANDS, ERROR_MESSAGES, TIMEOUTS } from '../constants';
-import { ICommand } from './BaseCommand';
+import {ChatWebviewProvider} from '../chatWebviewProvider';
+import {COMMANDS, ERROR_MESSAGES, TIMEOUTS} from '../constants';
+import {ICommand} from './BaseCommand';
 
 export class SendSelectionCommand implements ICommand {
   readonly id = COMMANDS.SEND_SELECTION;
@@ -34,4 +34,3 @@ export class SendSelectionCommand implements ICommand {
     }, TIMEOUTS.WEBVIEW_INIT);
   };
 }
-

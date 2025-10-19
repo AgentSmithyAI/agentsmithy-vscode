@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
-import { AgentSmithyClient, HistoryEvent } from '../agentSmithyClient';
-import { ERROR_MESSAGES } from '../constants';
-import { getErrorMessage } from '../utils/typeGuards';
+import {AgentSmithyClient, HistoryEvent} from '../agentSmithyClient';
+import {ERROR_MESSAGES} from '../constants';
+import {getErrorMessage} from '../utils/typeGuards';
 
 /**
  * Service for managing chat history and pagination
@@ -116,7 +116,9 @@ export class HistoryService {
       }
 
       if (Array.isArray(list.items) && list.items.length > 0) {
-        const sorted = [...list.items].sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
+        const sorted = [...list.items].sort(
+          (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime(),
+        );
         this._currentDialogId = sorted[0].id;
         return sorted[0].id;
       }
@@ -135,4 +137,3 @@ export class HistoryService {
     this._onDidChangeState.fire();
   }
 }
-

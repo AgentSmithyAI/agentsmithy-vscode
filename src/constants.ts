@@ -34,8 +34,8 @@ export const TIMEOUTS = {
 
 export const STATUS_FILE_PATH = '.agentsmithy/status.json';
 
-export const WELCOME_MESSAGE = 'AgentSmithy is ready! Open the chat from the sidebar or use Command Palette → "AgentSmithy: Open Chat"';
+export const WELCOME_MESSAGE =
+  'AgentSmithy is ready! Open the chat from the sidebar or use Command Palette → "AgentSmithy: Open Chat"';
 
 export const MOVE_TO_SECONDARY_MESSAGE =
   'To move AgentSmithy to secondary sidebar: Right-click on AgentSmithy icon in activity bar → "Move to Secondary Side Bar"';
-

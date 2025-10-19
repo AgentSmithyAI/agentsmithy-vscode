@@ -55,4 +55,3 @@ export const formatDiff = (diff: string): string => {
     })
     .join('');
 };
-

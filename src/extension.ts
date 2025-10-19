@@ -1,10 +1,10 @@
 import * as vscode from 'vscode';
-import { AgentSmithyClient } from './agentSmithyClient';
-import { ChatWebviewProvider } from './chatWebviewProvider';
-import { registerCommands } from './commands';
-import { COMMANDS, ERROR_MESSAGES, VIEWS, WELCOME_MESSAGE } from './constants';
-import { ConfigService } from './services/ConfigService';
-import { HistoryService } from './services/HistoryService';
+import {AgentSmithyClient} from './agentSmithyClient';
+import {ChatWebviewProvider} from './chatWebviewProvider';
+import {registerCommands} from './commands';
+import {COMMANDS, ERROR_MESSAGES, VIEWS, WELCOME_MESSAGE} from './constants';
+import {ConfigService} from './services/ConfigService';
+import {HistoryService} from './services/HistoryService';
 
 export const activate = (context: vscode.ExtensionContext) => {
   // Create services
@@ -34,13 +34,11 @@ export const activate = (context: vscode.ExtensionContext) => {
   const hasShownWelcome = Boolean(context.globalState.get('agentsmithy.welcomeShown', false));
 
   if (hasShownWelcome === false) {
-    void vscode.window
-      .showInformationMessage(WELCOME_MESSAGE, ERROR_MESSAGES.OPEN_CHAT)
-      .then((selection) => {
-        if (selection === ERROR_MESSAGES.OPEN_CHAT) {
-          void vscode.commands.executeCommand(COMMANDS.OPEN_CHAT);
-        }
-      });
+    void vscode.window.showInformationMessage(WELCOME_MESSAGE, ERROR_MESSAGES.OPEN_CHAT).then((selection) => {
+      if (selection === ERROR_MESSAGES.OPEN_CHAT) {
+        void vscode.commands.executeCommand(COMMANDS.OPEN_CHAT);
+      }
+    });
 
     void context.globalState.update('agentsmithy.welcomeShown', true);
   }

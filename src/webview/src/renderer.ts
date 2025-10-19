@@ -1,6 +1,6 @@
-import { formatToolCallWithPath } from './toolFormatter';
-import { HistoryEvent, ReasoningBlock } from './types';
-import { escapeHtml, formatDiff, linkifyUrls, stripProjectPrefix } from './utils';
+import {formatToolCallWithPath} from './toolFormatter';
+import {HistoryEvent, ReasoningBlock} from './types';
+import {escapeHtml, formatDiff, linkifyUrls, stripProjectPrefix} from './utils';
 
 declare const marked: {
   parse: (text: string, options?: {breaks?: boolean; gfm?: boolean}) => string;
@@ -13,7 +13,7 @@ export class MessageRenderer {
     private messagesContainer: HTMLElement,
     private loadMoreBtn: HTMLElement | null,
     private welcomePlaceholder: HTMLElement | null,
-    private workspaceRoot: string
+    private workspaceRoot: string,
   ) {}
 
   private isPrepending = false;
@@ -133,7 +133,11 @@ export class MessageRenderer {
     if (diff) {
       const formatted = formatDiff(diff);
       editDiv.innerHTML +=
-        '<details class="diff-block"><summary>Show diff</summary>' + '<div class="diff"><pre>' + formatted + '</pre></div>' + '</details>';
+        '<details class="diff-block"><summary>Show diff</summary>' +
+        '<div class="diff"><pre>' +
+        formatted +
+        '</pre></div>' +
+        '</details>';
     }
     this.insertNode(editDiv);
   }
@@ -232,4 +236,3 @@ export class MessageRenderer {
     this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
   }
 }
-

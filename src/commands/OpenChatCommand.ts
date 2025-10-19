@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
-import { COMMANDS, VIEWS } from '../constants';
-import { ICommand } from './BaseCommand';
+import {COMMANDS, VIEWS} from '../constants';
+import {ICommand} from './BaseCommand';
 
 export class OpenChatCommand implements ICommand {
   readonly id = COMMANDS.OPEN_CHAT;
@@ -12,4 +12,3 @@ export class OpenChatCommand implements ICommand {
     await vscode.commands.executeCommand(`${VIEWS.CHAT}.focus`);
   };
 }
-

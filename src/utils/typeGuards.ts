@@ -11,8 +11,7 @@ export const isRecord = (value: unknown): value is Record<string, unknown> =>
 /**
  * Checks if value is a string
  */
-export const asString = (value: unknown): string | undefined =>
-  typeof value === 'string' ? value : undefined;
+export const asString = (value: unknown): string | undefined => (typeof value === 'string' ? value : undefined);
 
 /**
  * Checks if value is an Error instance
@@ -62,4 +61,3 @@ export const safeJsonParse = <T>(str: string): T | undefined => {
     return undefined;
   }
 };
-

@@ -1,10 +1,10 @@
 import * as vscode from 'vscode';
-import { AgentSmithyClient } from './agentSmithyClient';
-import { ERROR_MESSAGES, VIEWS } from './constants';
-import { ConfigService } from './services/ConfigService';
-import { StreamEventHandlers } from './services/EventHandlers';
-import { HistoryService } from './services/HistoryService';
-import { getErrorMessage } from './utils/typeGuards';
+import {AgentSmithyClient} from './agentSmithyClient';
+import {ERROR_MESSAGES, VIEWS} from './constants';
+import {ConfigService} from './services/ConfigService';
+import {StreamEventHandlers} from './services/EventHandlers';
+import {HistoryService} from './services/HistoryService';
+import {getErrorMessage} from './utils/typeGuards';
 
 // Messages sent from the webview to the extension
 type WebviewInMessage =

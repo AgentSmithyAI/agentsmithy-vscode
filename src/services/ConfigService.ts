@@ -1,8 +1,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { CONFIG_KEYS, DEFAULT_SERVER_URL, STATUS_FILE_PATH } from '../constants';
-import { safeJsonParse } from '../utils/typeGuards';
+import {CONFIG_KEYS, DEFAULT_SERVER_URL, STATUS_FILE_PATH} from '../constants';
+import {safeJsonParse} from '../utils/typeGuards';
 
 /**
  * Service for managing extension configuration
@@ -76,4 +76,3 @@ export class ConfigService {
     return config.get<string>(CONFIG_KEYS.SERVER_URL, DEFAULT_SERVER_URL);
   };
 }
-

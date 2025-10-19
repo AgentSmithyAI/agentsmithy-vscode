@@ -1,4 +1,4 @@
-import { stripProjectPrefix } from './utils';
+import {stripProjectPrefix} from './utils';
 
 interface ToolFormattedInfo {
   prefix?: string;
@@ -12,7 +12,7 @@ interface ToolFormattedInfo {
 export const formatToolCallWithPath = (
   toolName: string | undefined,
   args: Record<string, unknown> | undefined,
-  workspaceRoot: string
+  workspaceRoot: string,
 ): ToolFormattedInfo => {
   const name = toolName ? toolName.toLowerCase() : '';
   const a = args || {};
@@ -102,14 +102,18 @@ export const formatToolCallWithPath = (
           path: firstPath,
           displayPath: stripProjectPrefix(firstPath, workspaceRoot),
           suffix: a.paths.length > 1 ? ' and ' + (a.paths.length - 1) + ' more' : '',
-          text: 'Reading linter errors for ' + (a.paths as string[]).map((p) => stripProjectPrefix(p, workspaceRoot)).join(', '),
+          text:
+            'Reading linter errors for ' +
+            (a.paths as string[]).map((p) => stripProjectPrefix(p, workspaceRoot)).join(', '),
         };
       }
       return {text: 'Reading linter errors'};
 
     case 'list_files':
     case 'list_dir':
-      return {text: 'List: ' + ((a.path as string) || (a.directory as string) || (a.target_directory as string) || 'unknown')};
+      return {
+        text: 'List: ' + ((a.path as string) || (a.directory as string) || (a.target_directory as string) || 'unknown'),
+      };
 
     case 'run_command':
     case 'run_terminal_cmd':
@@ -170,4 +174,3 @@ export const formatToolCallWithPath = (
     }
   }
 };
-

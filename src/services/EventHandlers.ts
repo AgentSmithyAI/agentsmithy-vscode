@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
-import { SSEEvent } from '../agentSmithyClient';
-import { ERROR_MESSAGES } from '../constants';
+import {SSEEvent} from '../agentSmithyClient';
+import {ERROR_MESSAGES} from '../constants';
 
 export type PostMessage = (msg: unknown) => void;
 
@@ -159,4 +159,3 @@ export class StreamEventHandlers {
     this.openedFiles.clear();
   }
 }
-

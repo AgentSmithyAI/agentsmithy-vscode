@@ -56,4 +56,3 @@ export interface ReasoningBlock {
   content: HTMLElement;
   header: HTMLElement;
 }
-

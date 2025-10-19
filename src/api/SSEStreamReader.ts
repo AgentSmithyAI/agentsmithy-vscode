@@ -1,4 +1,4 @@
-import { SSEEvent } from '../agentSmithyClient';
+import {SSEEvent} from '../agentSmithyClient';
 
 /**
  * Parses Server-Sent Events (SSE) stream
@@ -75,4 +75,3 @@ export class SSEStreamReader {
     this.eventLines = [];
   }
 }
-
