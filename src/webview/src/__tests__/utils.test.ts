@@ -1,4 +1,4 @@
-import { escapeHtml, formatDiff, linkifyUrls, stripProjectPrefix } from '../utils';
+import {escapeHtml, formatDiff, linkifyUrls, stripProjectPrefix} from '../utils';
 
 describe('webview utils', () => {
   describe('escapeHtml', () => {
@@ -162,4 +162,3 @@ describe('webview utils', () => {
     });
   });
 });
-

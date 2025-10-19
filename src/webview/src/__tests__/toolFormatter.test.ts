@@ -1,11 +1,15 @@
-import { formatToolCallWithPath } from '../toolFormatter';
+import {formatToolCallWithPath} from '../toolFormatter';
 
 describe('toolFormatter', () => {
   const workspaceRoot = '/home/user/project';
 
   describe('file operations', () => {
     it('formats read_file tool call', () => {
-      const result = formatToolCallWithPath('read_file', {target_file: '/home/user/project/src/test.ts'}, workspaceRoot);
+      const result = formatToolCallWithPath(
+        'read_file',
+        {target_file: '/home/user/project/src/test.ts'},
+        workspaceRoot,
+      );
       expect(result).toEqual({
         prefix: 'Reading: ',
         path: '/home/user/project/src/test.ts',
@@ -94,11 +98,7 @@ describe('toolFormatter', () => {
 
   describe('linter operations', () => {
     it('formats read_lints with single file', () => {
-      const result = formatToolCallWithPath(
-        'read_lints',
-        {paths: ['/home/user/project/src/main.ts']},
-        workspaceRoot,
-      );
+      const result = formatToolCallWithPath('read_lints', {paths: ['/home/user/project/src/main.ts']}, workspaceRoot);
       expect(result).toEqual({
         prefix: 'Reading linter errors for ',
         path: '/home/user/project/src/main.ts',
@@ -112,11 +112,7 @@ describe('toolFormatter', () => {
       const result = formatToolCallWithPath(
         'read_lints',
         {
-          paths: [
-            '/home/user/project/src/a.ts',
-            '/home/user/project/src/b.ts',
-            '/home/user/project/src/c.ts',
-          ],
+          paths: ['/home/user/project/src/a.ts', '/home/user/project/src/b.ts', '/home/user/project/src/c.ts'],
         },
         workspaceRoot,
       );
@@ -248,4 +244,3 @@ describe('toolFormatter', () => {
     });
   });
 });
-

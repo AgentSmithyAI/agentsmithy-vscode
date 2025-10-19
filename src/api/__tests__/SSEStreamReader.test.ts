@@ -1,6 +1,6 @@
-import { SSE_EVENT_TYPES as E } from '../../constants';
-import { normalizeSSEEvent } from '../../shared/sseNormalizer';
-import { SSEStreamReader } from '../SSEStreamReader';
+import {SSE_EVENT_TYPES as E} from '../../constants';
+import {normalizeSSEEvent} from '../../shared/sseNormalizer';
+import {SSEStreamReader} from '../SSEStreamReader';
 
 describe('SSEStreamReader', () => {
   let reader: SSEStreamReader;
@@ -58,7 +58,8 @@ describe('SSEStreamReader', () => {
   });
 
   it('stops processing after done event', () => {
-    const chunk = 'data: {"type":"chat","content":"hi"}\n\ndata: {"type":"done"}\n\ndata: {"type":"chat","content":"ignored"}\n\n';
+    const chunk =
+      'data: {"type":"chat","content":"hi"}\n\ndata: {"type":"done"}\n\ndata: {"type":"chat","content":"ignored"}\n\n';
     const events = Array.from(reader.processChunk(chunk));
 
     expect(events).toHaveLength(2);
@@ -124,7 +125,8 @@ describe('SSEStreamReader', () => {
   });
 
   it('handles reasoning events', () => {
-    const chunk = 'data: {"type":"reasoning_start"}\n\ndata: {"type":"reasoning","content":"thinking..."}\n\ndata: {"type":"reasoning_end"}\n\n';
+    const chunk =
+      'data: {"type":"reasoning_start"}\n\ndata: {"type":"reasoning","content":"thinking..."}\n\ndata: {"type":"reasoning_end"}\n\n';
     const events = Array.from(reader.processChunk(chunk));
 
     expect(events).toHaveLength(3);
@@ -146,4 +148,3 @@ describe('SSEStreamReader', () => {
     });
   });
 });
-

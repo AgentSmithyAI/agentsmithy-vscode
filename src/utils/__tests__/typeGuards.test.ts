@@ -1,12 +1,12 @@
 import {
-    asString,
-    getErrorMessage,
-    hasMessage,
-    isBoolean,
-    isError,
-    isNumber,
-    isRecord,
-    safeJsonParse,
+  asString,
+  getErrorMessage,
+  hasMessage,
+  isBoolean,
+  isError,
+  isNumber,
+  isRecord,
+  safeJsonParse,
 } from '../typeGuards';
 
 describe('typeGuards', () => {
@@ -169,4 +169,3 @@ describe('typeGuards', () => {
     });
   });
 });
-

@@ -121,12 +121,6 @@ class ChatWebview {
     });
 
     this.setProcessing(true);
-
-    setTimeout(() => {
-      if (this.isProcessing) {
-        this.setProcessing(false);
-      }
-    }, 30000);
   }
 
   private setProcessing(processing: boolean): void {
