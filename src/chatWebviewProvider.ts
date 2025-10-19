@@ -3,34 +3,34 @@ import {AgentSmithyClient} from './agentSmithyClient';
 
 // Messages sent from the webview to the extension
 type WebviewInMessage =
-  | { type: 'sendMessage'; text?: string }
-  | { type: 'openFile'; file?: string }
-  | { type: 'stopProcessing' }
-  | { type: 'ready' }
-  | { type: 'loadMoreHistory' };
+  | {type: 'sendMessage'; text?: string}
+  | {type: 'openFile'; file?: string}
+  | {type: 'stopProcessing'}
+  | {type: 'ready'}
+  | {type: 'loadMoreHistory'};
 
 // Messages sent from the extension to the webview
 // Narrowed union to satisfy lint rules and avoid unsafe/any payloads
 // Keep fields as strings where rendered into DOM
 // Note: args is unknown but handled safely in webview script
 type WebviewOutMessage =
-  | { type: 'addMessage'; message: { role: 'user' | 'assistant'; content: string } }
-  | { type: 'startAssistantMessage' }
-  | { type: 'appendToAssistant'; content: string }
-  | { type: 'endAssistantMessage' }
-  | { type: 'startReasoning' }
-  | { type: 'appendToReasoning'; content: string }
-  | { type: 'endReasoning' }
-  | { type: 'showToolCall'; tool?: string; args?: unknown }
-  | { type: 'showFileEdit'; file: string; diff?: string }
-  | { type: 'showError'; error: string }
-  | { type: 'showInfo'; message: string }
-  | { type: 'endStream' }
-  | { type: 'historySetLoadMoreVisible'; visible: boolean }
-  | { type: 'historySetLoadMoreEnabled'; enabled: boolean }
-  | { type: 'historyPrependEvents'; events: unknown[] }
-  | { type: 'historyReplaceAll'; events: unknown[] }
-  | { type: 'scrollToBottom' };
+  | {type: 'addMessage'; message: {role: 'user' | 'assistant'; content: string}}
+  | {type: 'startAssistantMessage'}
+  | {type: 'appendToAssistant'; content: string}
+  | {type: 'endAssistantMessage'}
+  | {type: 'startReasoning'}
+  | {type: 'appendToReasoning'; content: string}
+  | {type: 'endReasoning'}
+  | {type: 'showToolCall'; tool?: string; args?: unknown}
+  | {type: 'showFileEdit'; file: string; diff?: string}
+  | {type: 'showError'; error: string}
+  | {type: 'showInfo'; message: string}
+  | {type: 'endStream'}
+  | {type: 'historySetLoadMoreVisible'; visible: boolean}
+  | {type: 'historySetLoadMoreEnabled'; enabled: boolean}
+  | {type: 'historyPrependEvents'; events: unknown[]}
+  | {type: 'historyReplaceAll'; events: unknown[]}
+  | {type: 'scrollToBottom'};
 
 export class ChatWebviewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'agentsmithy.chatView';
@@ -158,7 +158,9 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
             await vscode.window.showTextDocument(doc, {preview: false});
           } catch (err: unknown) {
             const hasMsg = err !== null && typeof err === 'object' && 'message' in (err as Record<string, unknown>);
-            const msg = hasMsg ? String((err as Record<string, unknown>).message) : `Failed to open file: ${String(message.file)}`;
+            const msg = hasMsg
+              ? String((err as Record<string, unknown>).message)
+              : `Failed to open file: ${String(message.file)}`;
             vscode.window.showErrorMessage(String(msg));
           }
           break;
@@ -206,7 +208,10 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
         case 'loadMoreHistory':
           if (this._currentDialogId && this._historyHasMore && !this._historyLoading) {
             this._loadPreviousHistoryPage(this._currentDialogId).catch((err: unknown) => {
-              const msg = err && typeof err === 'object' && 'message' in (err as Record<string, unknown>) ? String((err as Record<string, unknown>).message) : ChatWebviewProvider.LOAD_HISTORY_ERR;
+              const msg =
+                err && typeof err === 'object' && 'message' in (err as Record<string, unknown>)
+                  ? String((err as Record<string, unknown>).message)
+                  : ChatWebviewProvider.LOAD_HISTORY_ERR;
               this._postMessage({type: 'showError', error: String(msg)});
             });
           }

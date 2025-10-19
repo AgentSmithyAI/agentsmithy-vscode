@@ -67,10 +67,12 @@ export interface HistoryResponse {
   last_idx: number | null;
 }
 
-interface CurrentDialogResponse { id: string | null }
+interface CurrentDialogResponse {
+  id: string | null;
+}
 
 interface ListDialogsResponse {
-  items: Array<{ id: string; updated_at: string }>;
+  items: Array<{id: string; updated_at: string}>;
   current_dialog_id?: string;
 }
 
@@ -85,11 +87,11 @@ export class AgentSmithyClient {
   // Narrow unknown to a plain object
   isRecord = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v);
 
-  asString = (v: unknown): string | undefined => typeof v === 'string' ? v : undefined;
+  asString = (v: unknown): string | undefined => (typeof v === 'string' ? v : undefined);
 
   private normalizeFileEdit(obj: Record<string, unknown>): SSEEvent {
-    const fileVal = obj.file ?? (obj).path ?? (obj).file_path;
-    const diffVal = obj.diff ?? (obj).patch;
+    const fileVal = obj.file ?? obj.path ?? obj.file_path;
+    const diffVal = obj.diff ?? obj.patch;
     const checkpointVal = obj.checkpoint;
     return {
       type: 'file_edit',
@@ -102,24 +104,24 @@ export class AgentSmithyClient {
   async getCurrentDialog(): Promise<CurrentDialogResponse> {
     const url = `${this.baseUrl}/api/dialogs/current`;
     try {
-      const resp = await fetch(url, { headers: { Accept: 'application/json' } });
+      const resp = await fetch(url, {headers: {Accept: 'application/json'}});
       if (!resp.ok) {
         throw new Error(String(resp.status));
       }
       const data: unknown = await resp.json();
       if (data !== null && typeof data === 'object' && 'id' in data) {
-        const id = (data as { id: unknown }).id;
-        return { id: typeof id === 'string' || id === null ? id : null };
+        const id = (data as {id: unknown}).id;
+        return {id: typeof id === 'string' || id === null ? id : null};
       }
-      return { id: null };
+      return {id: null};
     } catch {
-      return { id: null };
+      return {id: null};
     }
   }
 
   async listDialogs(): Promise<ListDialogsResponse> {
     const url = `${this.baseUrl}/api/dialogs`;
-    const resp = await fetch(url, { headers: { Accept: 'application/json' } });
+    const resp = await fetch(url, {headers: {Accept: 'application/json'}});
     if (!resp.ok) {
       throw new Error(`HTTP error! status: ${resp.status}`);
     }
@@ -129,10 +131,10 @@ export class AgentSmithyClient {
       data !== null &&
       typeof data === 'object' &&
       'items' in data &&
-      Array.isArray((data as { items: unknown }).items)
+      Array.isArray((data as {items: unknown}).items)
     ) {
-      const items = (data as { items: unknown }).items as unknown[];
-      const normalizedItems: Array<{ id: string; updated_at: string }> = items
+      const items = (data as {items: unknown}).items as unknown[];
+      const normalizedItems: Array<{id: string; updated_at: string}> = items
         .filter((x): x is Record<string, unknown> => x !== null && typeof x === 'object')
         .map((x) => ({
           id: typeof x.id === 'string' ? x.id : '',
@@ -140,15 +142,14 @@ export class AgentSmithyClient {
         }));
       const current_dialog_id =
         'current_dialog_id' in (data as Record<string, unknown>)
-          ? (data as { current_dialog_id?: unknown }).current_dialog_id
+          ? (data as {current_dialog_id?: unknown}).current_dialog_id
           : undefined;
       return {
         items: normalizedItems,
-        current_dialog_id:
-          typeof current_dialog_id === 'string' ? current_dialog_id : undefined,
+        current_dialog_id: typeof current_dialog_id === 'string' ? current_dialog_id : undefined,
       };
     }
-    return { items: [] };
+    return {items: []};
   }
 
   getServerUrl = (): string => {
@@ -163,9 +164,13 @@ export class AgentSmithyClient {
           const statusContent = fs.readFileSync(statusPath, 'utf8');
           // Safe JSON parse wrapper to avoid assigning `any`
           const safeJsonParse = <T>(s: string): T | undefined => {
-            try { return JSON.parse(s) as T; } catch { return undefined; }
+            try {
+              return JSON.parse(s) as T;
+            } catch {
+              return undefined;
+            }
           };
-          const parsed = safeJsonParse<{ port?: unknown }>(statusContent);
+          const parsed = safeJsonParse<{port?: unknown}>(statusContent);
           if (parsed && typeof parsed.port !== 'undefined') {
             const port = parsed.port;
             if (typeof port === 'number' || (typeof port === 'string' && String(port).trim().length > 0)) {
@@ -205,34 +210,34 @@ export class AgentSmithyClient {
     // Pass through known types with minimal mapping
     switch (type) {
       case 'chat_start':
-        return { type: 'chat_start' };
+        return {type: 'chat_start'};
       case 'chat': {
-        return { type: 'chat', content: this.asString(obj.content) };
+        return {type: 'chat', content: this.asString(obj.content)};
       }
       case 'chat_end':
-        return { type: 'chat_end' };
+        return {type: 'chat_end'};
       case 'reasoning_start':
-        return { type: 'reasoning_start' };
+        return {type: 'reasoning_start'};
       case 'reasoning': {
-        return { type: 'reasoning', content: this.asString(obj.content) };
+        return {type: 'reasoning', content: this.asString(obj.content)};
       }
       case 'reasoning_end':
-        return { type: 'reasoning_end' };
+        return {type: 'reasoning_end'};
       case 'tool_call': {
-        return { type: 'tool_call', name: this.asString(obj.name), args: obj.args };
+        return {type: 'tool_call', name: this.asString(obj.name), args: obj.args};
       }
       case 'error': {
-        const err = this.asString(obj.error) ?? this.asString((obj).message);
-        return { type: 'error', error: err };
+        const err = this.asString(obj.error) ?? this.asString(obj.message);
+        return {type: 'error', error: err};
       }
       case 'done': {
         const dialog_id = this.asString(obj.dialog_id);
-        return { type: 'done', dialog_id };
+        return {type: 'done', dialog_id};
       }
       default: {
-        const content = this.asString((obj).content);
+        const content = this.asString(obj.content);
         if (content && !type) {
-          return { type: 'chat', content };
+          return {type: 'chat', content};
         }
         return null;
       }
@@ -273,13 +278,13 @@ export class AgentSmithyClient {
     try {
       for (;;) {
         const readResult = await reader.read();
-        const done: boolean = Boolean((readResult as { done?: boolean }).done);
-        const value: Uint8Array | undefined = (readResult as { value?: Uint8Array }).value;
+        const done: boolean = Boolean((readResult as {done?: boolean}).done);
+        const value: Uint8Array | undefined = (readResult as {value?: Uint8Array}).value;
         if (done) {
           break;
         }
 
-        buffer += decoder.decode(value ?? new Uint8Array(), { stream: true });
+        buffer += decoder.decode(value ?? new Uint8Array(), {stream: true});
         const lines = buffer.split(/\r?\n/);
         buffer = lines.pop() || '';
 
@@ -358,7 +363,7 @@ export class AgentSmithyClient {
     }
     const url = `${this.baseUrl}/api/dialogs/${encodeURIComponent(dialogId)}/history${params.toString() ? `?${params.toString()}` : ''}`;
 
-    const resp = await fetch(url, { headers: { Accept: 'application/json' } });
+    const resp = await fetch(url, {headers: {Accept: 'application/json'}});
     if (!resp.ok) {
       throw new Error(`HTTP error! status: ${resp.status}`);
     }
@@ -371,7 +376,9 @@ export class AgentSmithyClient {
     const obj = data as Record<string, unknown>;
     const eventsRaw = Array.isArray(obj.events) ? (obj.events as unknown[]) : [];
     const events: HistoryEvent[] = eventsRaw.map((e) => {
-      if (e === null || typeof e !== 'object') {return { type: 'chat' };}
+      if (e === null || typeof e !== 'object') {
+        return {type: 'chat'};
+      }
       const ev = e as Record<string, unknown>;
       const type = typeof ev.type === 'string' ? ev.type : 'chat';
       const idx = typeof ev.idx === 'number' ? ev.idx : undefined;
@@ -381,16 +388,26 @@ export class AgentSmithyClient {
       const diff = typeof ev.diff === 'string' ? ev.diff : undefined;
       const checkpoint = typeof ev.checkpoint === 'string' ? ev.checkpoint : undefined;
       const model_name = typeof ev.model_name === 'string' ? ev.model_name : undefined;
-      return { type: type as HistoryEvent['type'], idx, content, name, args: ev.args, file, diff, checkpoint, model_name };
+      return {
+        type: type as HistoryEvent['type'],
+        idx,
+        content,
+        name,
+        args: ev.args,
+        file,
+        diff,
+        checkpoint,
+        model_name,
+      };
     });
 
     const dialog_id = typeof obj.dialog_id === 'string' ? obj.dialog_id : dialogId;
     const total_events = typeof obj.total_events === 'number' ? obj.total_events : events.length;
     const has_more = Boolean(obj.has_more);
-    const first_idx = obj.first_idx === null || typeof obj.first_idx === 'number' ? (obj.first_idx) : null;
-    const last_idx = obj.last_idx === null || typeof obj.last_idx === 'number' ? (obj.last_idx) : null;
+    const first_idx = obj.first_idx === null || typeof obj.first_idx === 'number' ? obj.first_idx : null;
+    const last_idx = obj.last_idx === null || typeof obj.last_idx === 'number' ? obj.last_idx : null;
 
-    return { dialog_id, events, total_events, has_more, first_idx, last_idx };
+    return {dialog_id, events, total_events, has_more, first_idx, last_idx};
   }
 
   getCurrentFileContext = (): ChatContext | undefined => {
