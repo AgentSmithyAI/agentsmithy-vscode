@@ -1,6 +1,13 @@
 # AgentSmithy VSCode Extension
 
-[![CI](https://github.com/agentsmithy/agentsmithy-vscode/actions/workflows/ci.yml/badge.svg)](https://github.com/agentsmithy/agentsmithy-vscode/actions/workflows/ci.yml)
+[![CI](https://github.com/AgentSmithyAI/agentsmithy-vscode/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/AgentSmithyAI/agentsmithy-vscode/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/AgentSmithyAI/agentsmithy-vscode/branch/master/graph/badge.svg)](https://codecov.io/gh/AgentSmithyAI/agentsmithy-vscode)
+[![GitHub release](https://img.shields.io/github/v/release/AgentSmithyAI/agentsmithy-vscode)](https://github.com/AgentSmithyAI/agentsmithy-vscode/releases)
+[![VSCode Version](https://img.shields.io/badge/VSCode-1.100.0%2B-blue)](https://code.visualstudio.com/)
+[![Node Version](https://img.shields.io/badge/node-20-green)](https://nodejs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue)](https://www.typescriptlang.org/)
+[![GitHub issues](https://img.shields.io/github/issues/AgentSmithyAI/agentsmithy-vscode)](https://github.com/AgentSmithyAI/agentsmithy-vscode/issues)
+[![GitHub pull requests](https://img.shields.io/github/issues-pr/AgentSmithyAI/agentsmithy-vscode)](https://github.com/AgentSmithyAI/agentsmithy-vscode/pulls)
 
 ## Formatting, Linting & Tests
 
