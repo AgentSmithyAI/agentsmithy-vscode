@@ -57,7 +57,7 @@ export class ConfigService {
       if (fs.existsSync(statusPath)) {
         const statusContent = fs.readFileSync(statusPath, 'utf8');
         const parsed = safeJsonParse<{port?: unknown}>(statusContent);
-        if (parsed && typeof parsed.port !== 'undefined') {
+        if (typeof parsed?.port !== 'undefined') {
           const port = parsed.port;
           if (typeof port === 'number' || (typeof port === 'string' && String(port).trim().length > 0)) {
             return `http://localhost:${String(port)}`;
