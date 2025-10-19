@@ -1,20 +1,4 @@
 import {beforeEach, describe, expect, it, vi} from 'vitest';
-
-// Minimal vscode mock for EventEmitter used inside HistoryService
-vi.mock('vscode', () => {
-  class Emitter<T = void> {
-    private listeners: Array<(e: T) => unknown> = [];
-    event = (listener: (e: T) => unknown) => {
-      this.listeners.push(listener);
-      return {dispose() {}};
-    };
-    fire(data: T extends void ? never : T = undefined as never) {
-      for (const l of this.listeners) l(data as T);
-    }
-  }
-  return {EventEmitter: Emitter};
-});
-
 import type {ApiService, HistoryEvent, HistoryResponse} from '../../api/ApiService';
 import {HistoryService} from '../HistoryService';
 
@@ -28,18 +12,25 @@ const mkHistoryResp = (over: Partial<HistoryResponse>): HistoryResponse => ({
   ...over,
 });
 
+// Helper to create mock API service
+const createMockApiService = () => {
+  return {
+    loadHistory: vi.fn<Parameters<ApiService['loadHistory']>, ReturnType<ApiService['loadHistory']>>(),
+    getCurrentDialog: vi.fn<Parameters<ApiService['getCurrentDialog']>, ReturnType<ApiService['getCurrentDialog']>>(
+      async () => ({id: null}),
+    ),
+    listDialogs: vi.fn<Parameters<ApiService['listDialogs']>, ReturnType<ApiService['listDialogs']>>(async () => ({
+      items: [],
+    })),
+  } as Pick<ApiService, 'loadHistory' | 'getCurrentDialog' | 'listDialogs'>;
+};
+
 describe('HistoryService cursor logic', () => {
-  let api: Pick<ApiService, 'loadHistory' | 'getCurrentDialog' | 'listDialogs'> & {
-    loadHistory: ReturnType<typeof vi.fn>;
-  };
+  let api: ReturnType<typeof createMockApiService>;
   let svc: HistoryService;
 
   beforeEach(() => {
-    api = {
-      loadHistory: vi.fn(),
-      getCurrentDialog: vi.fn(async () => ({id: null})),
-      listDialogs: vi.fn(async () => ({items: []})),
-    };
+    api = createMockApiService();
     svc = new HistoryService(api as unknown as ApiService);
   });
 
