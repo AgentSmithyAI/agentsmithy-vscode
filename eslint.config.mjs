@@ -57,6 +57,8 @@ export default [
         URL: 'readonly',
         URLSearchParams: 'readonly',
         TextDecoder: 'readonly',
+        Response: 'readonly',
+        ReadableStreamDefaultReader: 'readonly',
       },
     },
     rules: {

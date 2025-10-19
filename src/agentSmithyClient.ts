@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
+import { SSEStreamReader } from './api/SSEStreamReader';
 import { CONFIG_KEYS, DEFAULT_SERVER_URL, STATUS_FILE_PATH } from './constants';
 import { asString, isRecord, safeJsonParse } from './utils/typeGuards';
 
@@ -240,93 +241,18 @@ export class AgentSmithyClient {
     // Create new abort controller for this request
     this.abortController = new AbortController();
 
-    const response = await fetch(`${this.baseUrl}/api/chat`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'text/event-stream',
-        'Cache-Control': 'no-cache',
-      },
-      body: JSON.stringify({...request, stream: true}),
-      signal: this.abortController.signal,
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const reader = response.body?.getReader();
-    if (!reader) {
-      throw new Error('No response body');
-    }
-
+    const response = await this.createChatRequest(request);
+    const reader = this.getResponseReader(response);
+    const sseReader = new SSEStreamReader(this.normalizeEvent);
     const decoder = new TextDecoder();
-    let buffer = '';
-    let eventLines: string[] = [];
 
     try {
-      for (;;) {
-        const readResult = await reader.read();
-        const done: boolean = Boolean((readResult as {done?: boolean}).done);
-        const value: Uint8Array | undefined = (readResult as {value?: Uint8Array}).value;
-        if (done) {
-          break;
-        }
-
-        buffer += decoder.decode(value ?? new Uint8Array(), {stream: true});
-        const lines = buffer.split(/\r?\n/);
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          // Blank line indicates end of one SSE message
-          if (line === '') {
-            const dataPayload = eventLines
-              .filter((l) => l.startsWith('data:'))
-              .map((l) => l.slice(5).trimStart())
-              .join('\n');
-            if (dataPayload) {
-              try {
-                const raw: unknown = JSON.parse(dataPayload);
-                const event = this.normalizeEvent(raw);
-                if (event) {
-                  yield event;
-                  if (event.type === 'done') {
-                    return;
-                  }
-                }
-              } catch {
-                // Skip invalid JSON
-              }
-            }
-            eventLines = [];
-            continue;
+      for await (const chunk of this.readStream(reader, decoder)) {
+        for (const event of sseReader.processChunk(chunk)) {
+          yield event;
+          if (event.type === 'done') {
+            return;
           }
-
-          // Accumulate data lines; handle both 'data:' and 'data: '
-          if (line.startsWith('data:')) {
-            // Try to parse per-line JSON immediately (many servers send one JSON per line)
-            const candidate = line.slice(5).trimStart();
-            let emitted = false;
-            if (candidate.startsWith('{') && candidate.endsWith('}')) {
-              try {
-                const raw: unknown = JSON.parse(candidate);
-                const event = this.normalizeEvent(raw);
-                if (event) {
-                  yield event;
-                  if (event.type === 'done') {
-                    return;
-                  }
-                  emitted = true;
-                }
-              } catch {
-                /* noop */
-              }
-            }
-            if (!emitted) {
-              eventLines.push(line);
-            }
-          }
-          // Ignore comments (lines starting with ':') and other fields for now
         }
       }
     } catch (error) {
@@ -337,8 +263,51 @@ export class AgentSmithyClient {
       throw error;
     } finally {
       reader.releaseLock();
-      // Clear abort controller when done
       this.abortController = undefined;
+    }
+  }
+
+  private async createChatRequest(request: ChatRequest): Promise<Response> {
+    const response = await fetch(`${this.baseUrl}/api/chat`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'text/event-stream',
+        'Cache-Control': 'no-cache',
+      },
+      body: JSON.stringify({...request, stream: true}),
+      signal: this.abortController?.signal,
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    return response;
+  }
+
+  private getResponseReader = (response: Response): ReadableStreamDefaultReader<Uint8Array> => {
+    const reader = response.body?.getReader();
+    if (!reader) {
+      throw new Error('No response body');
+    }
+    return reader;
+  };
+
+  private async *readStream(
+    reader: ReadableStreamDefaultReader<Uint8Array>,
+    decoder: {decode: (input?: Uint8Array, options?: {stream?: boolean}) => string},
+  ): AsyncGenerator<string> {
+    for (;;) {
+      const readResult = await reader.read();
+      const done: boolean = Boolean((readResult as {done?: boolean}).done);
+      const value: Uint8Array | undefined = (readResult as {value?: Uint8Array}).value;
+
+      if (done) {
+        break;
+      }
+
+      yield decoder.decode(value ?? new Uint8Array(), {stream: true});
     }
   }
 
