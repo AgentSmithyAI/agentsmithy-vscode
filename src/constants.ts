@@ -69,3 +69,17 @@ export const CSS_CLASSES = {
   REASONING_TOGGLE: 'reasoning-toggle',
   FILE_LINK: 'file-link',
 } as const;
+
+// SSE event types
+export const SSE_EVENT_TYPES = {
+  CHAT_START: 'chat_start',
+  CHAT: 'chat',
+  CHAT_END: 'chat_end',
+  REASONING_START: 'reasoning_start',
+  REASONING: 'reasoning',
+  REASONING_END: 'reasoning_end',
+  TOOL_CALL: 'tool_call',
+  FILE_EDIT: 'file_edit',
+  ERROR: 'error',
+  DONE: 'done',
+} as const;
