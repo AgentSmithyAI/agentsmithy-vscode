@@ -1,20 +1,46 @@
+# Build files
 .vscode/**
 .vscode-test/**
 src/**
 .gitignore
-tsconfig.json
-**/*.map
-**/.DS_Store
-*.vsix
-.agentsmithy/**
 .github/**
+.yarnrc
+tsconfig.json
+vitest.config.ts
+vitest.config.js
+esbuild.webview.mjs
+
+# Test files
+**/__tests__/**
+coverage/**
+
+# Linting and formatting
+.eslintrc*
+.prettierrc*
+.prettierignore
+eslint.config.mjs
+
+# CI/CD
+.releaserc.json
+
+# Git
+.git/**
+
+# AgentSmithy working directory
+.agentsmithy/**
+
+# Source maps (optional - remove if you want to include them)
+**/*.map
+
+# macOS
+**/.DS_Store
+
+# VSIX packages
+*.vsix
+
+# node_modules cleanup - keep .js files but exclude tests, TS sources, and docs
 node_modules/**/test/**
 node_modules/**/tests/**
 node_modules/**/*.ts
 node_modules/**/*.md
 !node_modules/marked/**
-eslint.config.mjs
-.prettierignore
-.prettierrc
-esbuild.webview.mjs
-src/webview/**

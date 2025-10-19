@@ -104,13 +104,16 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "format": "prettier . --write",
-    "format:check": "prettier . --check"
+    "format:check": "prettier . --check",
+    "vsce:package": "vsce package --no-git-tag-version --no-update-package-json"
   },
   "devDependencies": {
     "@eslint/js": "^9.13.0",
     "@stylistic/eslint-plugin": "^2.9.0",
     "@types/node": "^22.17.0",
     "@types/vscode": "^1.100.0",
+    "@vitest/coverage-v8": "^2.1.4",
+    "@vscode/vsce": "^3.6.2",
     "concurrently": "^9.2.1",
     "esbuild": "^0.25.11",
     "eslint": "^9.13.0",
@@ -121,8 +124,7 @@
     "prettier": "^3.3.3",
     "typescript": "^5.9.2",
     "typescript-eslint": "^8.39.0",
-    "vitest": "^2.1.4",
-    "@vitest/coverage-v8": "^2.1.4"
+    "vitest": "^2.1.4"
   },
   "dependencies": {
     "marked": "^16.3.0"

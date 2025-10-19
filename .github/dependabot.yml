@@ -23,3 +23,12 @@ updates:
         patterns:
           - 'vitest'
           - '@vitest/*'
+      vscode:
+        patterns:
+          - '@types/vscode'
+          - '@vscode/*'
+      prettier:
+        patterns:
+          - 'prettier'
+          - '@prettier/*'
+          - 'prettier-*'
