@@ -14,7 +14,8 @@ type WebviewInMessage =
   | {type: typeof WEBVIEW_IN_MSG.OPEN_FILE; file?: string}
   | {type: typeof WEBVIEW_IN_MSG.STOP_PROCESSING}
   | {type: typeof WEBVIEW_IN_MSG.READY}
-  | {type: typeof WEBVIEW_IN_MSG.LOAD_MORE_HISTORY};
+  | {type: typeof WEBVIEW_IN_MSG.LOAD_MORE_HISTORY}
+  | {type: typeof WEBVIEW_IN_MSG.VISIBLE_FIRST_IDX; idx?: number};
 // Messages sent from the extension to the webview
 type WebviewOutMessage =
   | {type: typeof WEBVIEW_OUT_MSG.ADD_MESSAGE; message: {role: 'user' | 'assistant'; content: string}}
@@ -33,7 +34,8 @@ type WebviewOutMessage =
   | {type: typeof WEBVIEW_OUT_MSG.HISTORY_SET_LOAD_MORE_ENABLED; enabled: boolean}
   | {type: typeof WEBVIEW_OUT_MSG.HISTORY_PREPEND_EVENTS; events: HistoryEvent[]}
   | {type: typeof WEBVIEW_OUT_MSG.HISTORY_REPLACE_ALL; events: HistoryEvent[]}
-  | {type: typeof WEBVIEW_OUT_MSG.SCROLL_TO_BOTTOM};
+  | {type: typeof WEBVIEW_OUT_MSG.SCROLL_TO_BOTTOM}
+  | {type: typeof WEBVIEW_OUT_MSG.GET_VISIBLE_FIRST_IDX};
 export class ChatWebviewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = VIEWS.CHAT;
 
@@ -162,30 +164,28 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
 
     // Handle messages from the webview
-    webviewView.webview.onDidReceiveMessage(
-      async (message: WebviewInMessage | {type: typeof WEBVIEW_IN_MSG.VISIBLE_FIRST_IDX; idx?: number}) => {
-        switch (message.type) {
-          case WEBVIEW_IN_MSG.SEND_MESSAGE:
-            await this._handleSendMessage((message as WebviewInMessage & {type: 'sendMessage'}).text ?? '');
-            break;
-          case WEBVIEW_IN_MSG.OPEN_FILE:
-            await this._handleOpenFile((message as WebviewInMessage & {type: 'openFile'}).file);
-            break;
-          case WEBVIEW_IN_MSG.STOP_PROCESSING:
-            this._stream.abort();
-            break;
-          case WEBVIEW_IN_MSG.READY:
-            await this._handleWebviewReady();
-            break;
-          case WEBVIEW_IN_MSG.LOAD_MORE_HISTORY:
-            await this._handleLoadMoreHistory();
-            break;
-          case WEBVIEW_IN_MSG.VISIBLE_FIRST_IDX:
-            this._historyService.setVisibleFirstIdx((message as {type: 'visibleFirstIdx'; idx?: number}).idx);
-            break;
-        }
-      },
-    );
+    webviewView.webview.onDidReceiveMessage(async (message: WebviewInMessage) => {
+      switch (message.type) {
+        case WEBVIEW_IN_MSG.SEND_MESSAGE:
+          await this._handleSendMessage((message as WebviewInMessage & {type: 'sendMessage'}).text ?? '');
+          break;
+        case WEBVIEW_IN_MSG.OPEN_FILE:
+          await this._handleOpenFile((message as WebviewInMessage & {type: 'openFile'}).file);
+          break;
+        case WEBVIEW_IN_MSG.STOP_PROCESSING:
+          this._stream.abort();
+          break;
+        case WEBVIEW_IN_MSG.READY:
+          await this._handleWebviewReady();
+          break;
+        case WEBVIEW_IN_MSG.LOAD_MORE_HISTORY:
+          await this._handleLoadMoreHistory();
+          break;
+        case WEBVIEW_IN_MSG.VISIBLE_FIRST_IDX:
+          this._historyService.setVisibleFirstIdx(message.idx);
+          break;
+      }
+    });
   }
 
   private _handleOpenFile = async (file?: string): Promise<void> => {

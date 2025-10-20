@@ -17,7 +17,8 @@ export type WebviewInMessage =
   | {type: typeof WEBVIEW_IN_MSG.OPEN_FILE; file?: string}
   | {type: typeof WEBVIEW_IN_MSG.STOP_PROCESSING}
   | {type: typeof WEBVIEW_IN_MSG.READY}
-  | {type: typeof WEBVIEW_IN_MSG.LOAD_MORE_HISTORY};
+  | {type: typeof WEBVIEW_IN_MSG.LOAD_MORE_HISTORY}
+  | {type: typeof WEBVIEW_IN_MSG.VISIBLE_FIRST_IDX; idx?: number};
 
 /**
  * Messages sent from extension to webview
@@ -39,7 +40,8 @@ export type WebviewOutMessage =
   | {type: typeof WEBVIEW_OUT_MSG.HISTORY_SET_LOAD_MORE_ENABLED; enabled: boolean}
   | {type: typeof WEBVIEW_OUT_MSG.HISTORY_PREPEND_EVENTS; events: unknown[]}
   | {type: typeof WEBVIEW_OUT_MSG.HISTORY_REPLACE_ALL; events: unknown[]}
-  | {type: typeof WEBVIEW_OUT_MSG.SCROLL_TO_BOTTOM};
+  | {type: typeof WEBVIEW_OUT_MSG.SCROLL_TO_BOTTOM}
+  | {type: typeof WEBVIEW_OUT_MSG.GET_VISIBLE_FIRST_IDX};
 
 export interface HistoryEvent {
   type: 'user' | 'chat' | 'reasoning' | 'tool_call' | 'file_edit';
