@@ -1,6 +1,6 @@
 import {WEBVIEW_IN_MSG} from '../../shared/messages';
 import {MessageRenderer} from './renderer';
-import {VSCodeAPI} from './types';
+import {MAX_MESSAGES_IN_DOM, VSCodeAPI} from './types';
 
 /**
  * Manages scrolling behavior, infinite scroll, and DOM pruning
@@ -12,7 +12,6 @@ export class ScrollManager {
   private canLoadMoreHistory = true;
   private cachedFirstVisibleIdx: number | undefined;
 
-  private readonly PRUNE_MAX_IDX = 20;
   private readonly TOP_TRIGGER_THRESHOLD = 100;
   private readonly REARM_THRESHOLD = 300;
   private readonly BOTTOM_THRESHOLD = 200;
@@ -78,7 +77,7 @@ export class ScrollManager {
       type: WEBVIEW_IN_MSG.VISIBLE_FIRST_IDX,
       idx: this.cachedFirstVisibleIdx,
     });
-    this.renderer.pruneByIdx(this.PRUNE_MAX_IDX);
+    this.renderer.pruneByIdx(MAX_MESSAGES_IN_DOM);
   }
 
   private tryLoadMoreHistory(): void {

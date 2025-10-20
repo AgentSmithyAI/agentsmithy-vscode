@@ -1,13 +1,13 @@
+import {WEBVIEW_OUT_MSG} from '../../shared/messages';
 import {MessageRenderer} from './renderer';
 import {ScrollManager} from './ScrollManager';
 import {StreamingStateManager} from './StreamingStateManager';
-import {HistoryEvent, WebviewOutMessage} from './types';
+import {HistoryEvent, MAX_MESSAGES_IN_DOM, WebviewOutMessage} from './types';
 import {UIController} from './UIController';
 
 /**
  * Handles incoming messages from the extension
  */
-const PRUNE_TAIL_COUNT = 20;
 
 export class MessageHandler {
   constructor(
@@ -23,71 +23,71 @@ export class MessageHandler {
    */
   handle(message: WebviewOutMessage): void {
     switch (message.type) {
-      case 'addMessage':
+      case WEBVIEW_OUT_MSG.ADD_MESSAGE:
         this.handleAddMessage(message.message.role, message.message.content);
         break;
 
-      case 'startAssistantMessage':
+      case WEBVIEW_OUT_MSG.START_ASSISTANT_MESSAGE:
         this.handleStartAssistantMessage();
         break;
 
-      case 'appendToAssistant':
+      case WEBVIEW_OUT_MSG.APPEND_TO_ASSISTANT:
         this.handleAppendToAssistant(message.content);
         break;
 
-      case 'endAssistantMessage':
+      case WEBVIEW_OUT_MSG.END_ASSISTANT_MESSAGE:
         this.handleEndAssistantMessage();
         break;
 
-      case 'showToolCall':
+      case WEBVIEW_OUT_MSG.SHOW_TOOL_CALL:
         this.renderer.addToolCall(message.tool, message.args);
         break;
 
-      case 'showFileEdit':
+      case WEBVIEW_OUT_MSG.SHOW_FILE_EDIT:
         this.renderer.addFileEdit(message.file, message.diff);
         break;
 
-      case 'showError':
+      case WEBVIEW_OUT_MSG.SHOW_ERROR:
         this.renderer.showError(message.error);
         break;
 
-      case 'showInfo':
+      case WEBVIEW_OUT_MSG.SHOW_INFO:
         this.renderer.showInfo(message.message);
         break;
 
-      case 'endStream':
+      case WEBVIEW_OUT_MSG.END_STREAM:
         this.handleEndStream();
         break;
 
-      case 'startReasoning':
+      case WEBVIEW_OUT_MSG.START_REASONING:
         this.handleStartReasoning();
         break;
 
-      case 'appendToReasoning':
+      case WEBVIEW_OUT_MSG.APPEND_TO_REASONING:
         this.handleAppendToReasoning(message.content);
         break;
 
-      case 'endReasoning':
+      case WEBVIEW_OUT_MSG.END_REASONING:
         this.handleEndReasoning();
         break;
 
-      case 'historySetLoadMoreVisible':
+      case WEBVIEW_OUT_MSG.HISTORY_SET_LOAD_MORE_VISIBLE:
         // We use infinite scroll, keep button hidden regardless
         break;
 
-      case 'historySetLoadMoreEnabled':
+      case WEBVIEW_OUT_MSG.HISTORY_SET_LOAD_MORE_ENABLED:
         this.scrollManager.setCanLoadMore(message.enabled !== false);
         break;
 
-      case 'historyPrependEvents':
+      case WEBVIEW_OUT_MSG.HISTORY_PREPEND_EVENTS:
         this.handleHistoryPrepend(message.events);
         break;
 
-      case 'scrollToBottom':
+      case WEBVIEW_OUT_MSG.SCROLL_TO_BOTTOM:
         this.handleScrollToBottom();
         break;
 
-      case 'historyReplaceAll':
+      case WEBVIEW_OUT_MSG.HISTORY_REPLACE_ALL:
         this.handleHistoryReplaceAll(message.events);
         break;
     }
@@ -96,7 +96,7 @@ export class MessageHandler {
   private handleAddMessage(role: 'user' | 'assistant', content: string): void {
     this.renderer.addMessage(role, content);
     // User message means new tail content → prune older
-    this.renderer.pruneByIdx(PRUNE_TAIL_COUNT);
+    this.renderer.pruneByIdx(MAX_MESSAGES_IN_DOM);
   }
 
   private handleStartAssistantMessage(): void {
@@ -128,7 +128,7 @@ export class MessageHandler {
       // This prevents unwanted scrolling if user has manually scrolled up
     }
     // Finalized assistant message → prune older
-    this.renderer.pruneByIdx(PRUNE_TAIL_COUNT);
+    this.renderer.pruneByIdx(MAX_MESSAGES_IN_DOM);
   }
 
   private handleEndStream(): void {
@@ -194,7 +194,7 @@ export class MessageHandler {
   private handleScrollToBottom(): void {
     this.renderer.scrollToBottom();
     // Prune when we explicitly move to bottom
-    this.renderer.pruneByIdx(PRUNE_TAIL_COUNT);
+    this.renderer.pruneByIdx(MAX_MESSAGES_IN_DOM);
   }
 
   private handleHistoryReplaceAll(events: HistoryEvent[]): void {

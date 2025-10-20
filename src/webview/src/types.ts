@@ -3,6 +3,11 @@
  */
 import {WEBVIEW_IN_MSG, WEBVIEW_OUT_MSG} from '../../shared/messages';
 
+/**
+ * Maximum number of indexed messages to keep in DOM before pruning older ones
+ */
+export const MAX_MESSAGES_IN_DOM = 20;
+
 export interface VSCodeAPI {
   postMessage(message: unknown): void;
   getState(): unknown;
