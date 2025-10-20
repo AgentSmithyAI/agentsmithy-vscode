@@ -1,0 +1,61 @@
+/**
+ * Controls UI elements like buttons, inputs, and their states
+ */
+export class UIController {
+  constructor(
+    private messageInput: HTMLTextAreaElement,
+    private sendButton: HTMLButtonElement,
+  ) {
+    this.setupInputAutoResize();
+  }
+
+  private setupInputAutoResize(): void {
+    this.messageInput.addEventListener('input', () => {
+      this.messageInput.style.height = 'auto';
+      this.messageInput.style.height = this.messageInput.scrollHeight + 'px';
+    });
+  }
+
+  /**
+   * Get the current message input value and clear it
+   */
+  getAndClearInput(): string {
+    const text = this.messageInput.value.trim();
+    if (text) {
+      this.messageInput.value = '';
+      this.messageInput.style.height = 'auto';
+    }
+    return text;
+  }
+
+  /**
+   * Update the UI to reflect processing state
+   */
+  setProcessing(processing: boolean): void {
+    this.messageInput.disabled = processing;
+
+    if (processing) {
+      this.sendButton.innerHTML =
+        '<svg class="stop-icon" viewBox="0 0 32 32" aria-hidden="true">' +
+        '<rect x="10" y="10" width="12" height="12" fill="currentColor" rx="2"/>' +
+        '<circle cx="16" cy="16" r="15" stroke="currentColor" stroke-width="2" fill="none" stroke-dasharray="47.1 47.1" class="spinner-ring" opacity="0.4"/>' +
+        '</svg>';
+      this.sendButton.classList.add('processing');
+      this.sendButton.title = 'Stop';
+      this.sendButton.setAttribute('aria-label', 'Stop');
+    } else {
+      this.sendButton.innerHTML =
+        '<svg viewBox="0 0 24 24" aria-hidden="true">' + '<path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>' + '</svg>';
+      this.sendButton.classList.remove('processing');
+      this.sendButton.title = 'Send (Enter)';
+      this.sendButton.setAttribute('aria-label', 'Send');
+    }
+  }
+
+  /**
+   * Check if input is disabled
+   */
+  isInputDisabled(): boolean {
+    return this.messageInput.disabled;
+  }
+}

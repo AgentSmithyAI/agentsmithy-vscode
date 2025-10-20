@@ -9,6 +9,8 @@ declare const marked: {
 };
 
 export class MessageRenderer {
+  private scrollManager?: {isAtBottom: () => boolean};
+
   constructor(
     private messagesContainer: HTMLElement,
     private loadMoreBtn: HTMLElement | null,
@@ -19,12 +21,53 @@ export class MessageRenderer {
   private isPrepending = false;
   private suppressAutoScroll = false;
 
+  setScrollManager(scrollManager: {isAtBottom: () => boolean}): void {
+    this.scrollManager = scrollManager;
+  }
+
   setPrepending(value: boolean): void {
     this.isPrepending = value;
   }
 
   setSuppressAutoScroll(value: boolean): void {
     this.suppressAutoScroll = value;
+  }
+
+  // Remove oldest DOM nodes so that only the last `maxIdxCount` index-bearing
+  // messages (user/chat with data-idx) remain. Removes associated non-indexed
+  // blocks preceding the next indexed message as well.
+  pruneByIdx(maxIdxCount: number): void {
+    if (!maxIdxCount || maxIdxCount <= 0) return;
+    // Count index-bearing elements
+    let idxCount = 0;
+    for (const child of Array.from(this.messagesContainer.children)) {
+      if (child === this.loadMoreBtn) continue;
+      if (child instanceof HTMLElement && child.dataset && child.dataset.idx) {
+        idxCount++;
+      }
+    }
+    if (idxCount <= maxIdxCount) return;
+
+    // Remove from the top until idxCount <= maxIdxCount
+    const toRemove: Element[] = [];
+    let needToRemove = idxCount - maxIdxCount;
+    for (const child of Array.from(this.messagesContainer.children)) {
+      if (child === this.loadMoreBtn) continue;
+      toRemove.push(child);
+      if (child instanceof HTMLElement && child.dataset && child.dataset.idx) {
+        needToRemove--;
+        if (needToRemove <= 0) break;
+      }
+    }
+    for (const el of toRemove) {
+      el.remove();
+    }
+  }
+
+  private scrollIntoViewIfBottom(node: HTMLElement): void {
+    if (!this.suppressAutoScroll && this.scrollManager?.isAtBottom()) {
+      node.scrollIntoView({behavior: 'smooth', block: 'end'});
+    }
   }
 
   private insertNode(node: HTMLElement): void {
@@ -36,9 +79,7 @@ export class MessageRenderer {
       this.messagesContainer.insertBefore(node, anchor);
     } else {
       this.messagesContainer.appendChild(node);
-      if (!this.suppressAutoScroll) {
-        node.scrollIntoView({behavior: 'smooth', block: 'end'});
-      }
+      this.scrollIntoViewIfBottom(node);
     }
   }
 
@@ -170,7 +211,6 @@ export class MessageRenderer {
     reasoningDiv.appendChild(header);
     reasoningDiv.appendChild(content);
     this.insertNode(reasoningDiv);
-    reasoningDiv.scrollIntoView({behavior: 'smooth', block: 'end'});
 
     return {block: reasoningDiv, content: content, header: header};
   }
@@ -182,7 +222,7 @@ export class MessageRenderer {
     errorDiv.className = 'error';
     errorDiv.textContent = '❌ Error: ' + error;
     this.messagesContainer.appendChild(errorDiv);
-    errorDiv.scrollIntoView({behavior: 'smooth', block: 'end'});
+    this.scrollIntoViewIfBottom(errorDiv);
   }
 
   showInfo(message: string): void {
@@ -192,17 +232,25 @@ export class MessageRenderer {
     infoDiv.className = 'info';
     infoDiv.textContent = 'ℹ️ ' + message;
     this.messagesContainer.appendChild(infoDiv);
-    infoDiv.scrollIntoView({behavior: 'smooth', block: 'end'});
+    this.scrollIntoViewIfBottom(infoDiv);
   }
 
   renderHistoryEvent(evt: HistoryEvent): void {
     switch (evt.type) {
-      case 'user':
-        this.addMessage('user', evt && typeof evt.content !== 'undefined' ? evt.content : '');
+      case 'user': {
+        const el = this.addMessage('user', evt && typeof evt.content !== 'undefined' ? evt.content : '');
+        if (el && evt && typeof evt.idx === 'number') {
+          (el as HTMLElement).dataset.idx = String(evt.idx);
+        }
         break;
-      case 'chat':
-        this.addMessage('assistant', evt && typeof evt.content !== 'undefined' ? evt.content : '');
+      }
+      case 'chat': {
+        const el = this.addMessage('assistant', evt && typeof evt.content !== 'undefined' ? evt.content : '');
+        if (el && evt && typeof evt.idx === 'number') {
+          (el as HTMLElement).dataset.idx = String(evt.idx);
+        }
         break;
+      }
       case 'reasoning': {
         const rb = this.createReasoningBlock();
         rb.content.innerHTML = this.renderMarkdown(evt && typeof evt.content !== 'undefined' ? evt.content : '');

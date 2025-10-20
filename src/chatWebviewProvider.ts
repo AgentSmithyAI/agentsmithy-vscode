@@ -1,41 +1,41 @@
 import * as vscode from 'vscode';
-import {CSS_CLASSES, DOM_IDS, ERROR_MESSAGES, ERROR_NAMES, VIEWS} from './constants';
+import type {HistoryEvent} from './api/ApiService';
+import {StreamService, type ChatContext} from './api/StreamService';
+import {CSS_CLASSES, DOM_IDS, SSE_EVENT_TYPES as E, ERROR_MESSAGES, ERROR_NAMES, VIEWS} from './constants';
 import {ConfigService} from './services/ConfigService';
 import {StreamEventHandlers} from './services/EventHandlers';
 import {HistoryService} from './services/HistoryService';
+import {WEBVIEW_IN_MSG, WEBVIEW_OUT_MSG} from './shared/messages';
 import {getErrorMessage} from './utils/typeGuards';
-import type {HistoryEvent} from './api/ApiService';
-import {StreamService, type ChatContext} from './api/StreamService';
-import {SSE_EVENT_TYPES as E} from './constants';
 
 // Messages sent from the webview to the extension
 type WebviewInMessage =
-  | {type: 'sendMessage'; text?: string}
-  | {type: 'openFile'; file?: string}
-  | {type: 'stopProcessing'}
-  | {type: 'ready'}
-  | {type: 'loadMoreHistory'};
-
+  | {type: typeof WEBVIEW_IN_MSG.SEND_MESSAGE; text?: string}
+  | {type: typeof WEBVIEW_IN_MSG.OPEN_FILE; file?: string}
+  | {type: typeof WEBVIEW_IN_MSG.STOP_PROCESSING}
+  | {type: typeof WEBVIEW_IN_MSG.READY}
+  | {type: typeof WEBVIEW_IN_MSG.LOAD_MORE_HISTORY}
+  | {type: typeof WEBVIEW_IN_MSG.VISIBLE_FIRST_IDX; idx?: number};
 // Messages sent from the extension to the webview
 type WebviewOutMessage =
-  | {type: 'addMessage'; message: {role: 'user' | 'assistant'; content: string}}
-  | {type: 'startAssistantMessage'}
-  | {type: 'appendToAssistant'; content: string}
-  | {type: 'endAssistantMessage'}
-  | {type: 'startReasoning'}
-  | {type: 'appendToReasoning'; content: string}
-  | {type: 'endReasoning'}
-  | {type: 'showToolCall'; tool?: string; args?: unknown}
-  | {type: 'showFileEdit'; file: string; diff?: string}
-  | {type: 'showError'; error: string}
-  | {type: 'showInfo'; message: string}
-  | {type: 'endStream'}
-  | {type: 'historySetLoadMoreVisible'; visible: boolean}
-  | {type: 'historySetLoadMoreEnabled'; enabled: boolean}
-  | {type: 'historyPrependEvents'; events: HistoryEvent[]}
-  | {type: 'historyReplaceAll'; events: HistoryEvent[]}
-  | {type: 'scrollToBottom'};
-
+  | {type: typeof WEBVIEW_OUT_MSG.ADD_MESSAGE; message: {role: 'user' | 'assistant'; content: string}}
+  | {type: typeof WEBVIEW_OUT_MSG.START_ASSISTANT_MESSAGE}
+  | {type: typeof WEBVIEW_OUT_MSG.APPEND_TO_ASSISTANT; content: string}
+  | {type: typeof WEBVIEW_OUT_MSG.END_ASSISTANT_MESSAGE}
+  | {type: typeof WEBVIEW_OUT_MSG.START_REASONING}
+  | {type: typeof WEBVIEW_OUT_MSG.APPEND_TO_REASONING; content: string}
+  | {type: typeof WEBVIEW_OUT_MSG.END_REASONING}
+  | {type: typeof WEBVIEW_OUT_MSG.SHOW_TOOL_CALL; tool?: string; args?: unknown}
+  | {type: typeof WEBVIEW_OUT_MSG.SHOW_FILE_EDIT; file: string; diff?: string}
+  | {type: typeof WEBVIEW_OUT_MSG.SHOW_ERROR; error: string}
+  | {type: typeof WEBVIEW_OUT_MSG.SHOW_INFO; message: string}
+  | {type: typeof WEBVIEW_OUT_MSG.END_STREAM}
+  | {type: typeof WEBVIEW_OUT_MSG.HISTORY_SET_LOAD_MORE_VISIBLE; visible: boolean}
+  | {type: typeof WEBVIEW_OUT_MSG.HISTORY_SET_LOAD_MORE_ENABLED; enabled: boolean}
+  | {type: typeof WEBVIEW_OUT_MSG.HISTORY_PREPEND_EVENTS; events: HistoryEvent[]}
+  | {type: typeof WEBVIEW_OUT_MSG.HISTORY_REPLACE_ALL; events: HistoryEvent[]}
+  | {type: typeof WEBVIEW_OUT_MSG.SCROLL_TO_BOTTOM}
+  | {type: typeof WEBVIEW_OUT_MSG.GET_VISIBLE_FIRST_IDX};
 export class ChatWebviewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = VIEWS.CHAT;
 
@@ -49,7 +49,12 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
   ) {
     // Listen to history state changes
     this._historyService.onDidChangeState(() => {
-      this._postMessage({type: 'historySetLoadMoreEnabled', enabled: !this._historyService.isLoading});
+      // Enable only when not loading AND there is more to load
+      const enable = !this._historyService.isLoading && this._historyService.hasMore;
+      this._postMessage({
+        type: WEBVIEW_OUT_MSG.HISTORY_SET_LOAD_MORE_ENABLED,
+        enabled: enable,
+      });
     });
   }
 
@@ -62,28 +67,28 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
       return;
     }
 
-    this._postMessage({type: 'historySetLoadMoreEnabled', enabled: false});
+    this._postMessage({type: WEBVIEW_OUT_MSG.HISTORY_SET_LOAD_MORE_ENABLED, enabled: false});
 
     try {
       const result = await this._historyService.loadLatest(dialogId);
       if (result) {
-        this._postMessage({type: 'historySetLoadMoreVisible', visible: result.hasMore});
+        this._postMessage({type: WEBVIEW_OUT_MSG.HISTORY_SET_LOAD_MORE_VISIBLE, visible: result.hasMore});
         if (result.events.length > 0) {
           if (replace) {
-            this._postMessage({type: 'historyReplaceAll', events: result.events});
+            this._postMessage({type: WEBVIEW_OUT_MSG.HISTORY_REPLACE_ALL, events: result.events});
           } else {
-            this._postMessage({type: 'historyPrependEvents', events: result.events});
+            this._postMessage({type: WEBVIEW_OUT_MSG.HISTORY_PREPEND_EVENTS, events: result.events});
           }
         } else if (replace) {
-          this._postMessage({type: 'historyReplaceAll', events: []});
+          this._postMessage({type: WEBVIEW_OUT_MSG.HISTORY_REPLACE_ALL, events: []});
         }
       }
     } catch (e: unknown) {
       const msg = getErrorMessage(e, ERROR_MESSAGES.LOAD_HISTORY);
-      this._postMessage({type: 'showError', error: msg});
+      this._postMessage({type: WEBVIEW_OUT_MSG.SHOW_ERROR, error: msg});
     } finally {
       // Enable only when there is more to load to avoid inconsistent UI states when button is hidden
-      this._postMessage({type: 'historySetLoadMoreEnabled', enabled: this._historyService.hasMore});
+      this._postMessage({type: WEBVIEW_OUT_MSG.HISTORY_SET_LOAD_MORE_ENABLED, enabled: this._historyService.hasMore});
     }
   }
 
@@ -92,28 +97,32 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
       return;
     }
 
-    this._postMessage({type: 'historySetLoadMoreEnabled', enabled: false});
+    this._postMessage({type: WEBVIEW_OUT_MSG.HISTORY_SET_LOAD_MORE_ENABLED, enabled: false});
 
     try {
       const result = await this._historyService.loadPrevious(dialogId);
       if (result) {
-        this._postMessage({type: 'historySetLoadMoreVisible', visible: result.hasMore});
+        this._postMessage({type: WEBVIEW_OUT_MSG.HISTORY_SET_LOAD_MORE_VISIBLE, visible: result.hasMore});
         if (result.events.length > 0) {
-          this._postMessage({type: 'historyPrependEvents', events: result.events});
+          this._postMessage({type: WEBVIEW_OUT_MSG.HISTORY_PREPEND_EVENTS, events: result.events});
         }
       }
     } catch (e: unknown) {
       const msg = getErrorMessage(e, ERROR_MESSAGES.LOAD_HISTORY);
-      this._postMessage({type: 'showError', error: msg});
+      this._postMessage({type: WEBVIEW_OUT_MSG.SHOW_ERROR, error: msg});
     } finally {
-      this._postMessage({type: 'historySetLoadMoreEnabled', enabled: true});
+      // Enable only if there is more to load according to HistoryService
+      this._postMessage({
+        type: WEBVIEW_OUT_MSG.HISTORY_SET_LOAD_MORE_ENABLED,
+        enabled: this._historyService.hasMore,
+      });
     }
   }
 
   public sendMessage(content: string): void {
     if (this._view) {
       this._postMessage({
-        type: 'addMessage',
+        type: WEBVIEW_OUT_MSG.ADD_MESSAGE,
         message: {
           role: 'user',
           content: String(content),
@@ -141,20 +150,23 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     // Handle messages from the webview
     webviewView.webview.onDidReceiveMessage(async (message: WebviewInMessage) => {
       switch (message.type) {
-        case 'sendMessage':
+        case WEBVIEW_IN_MSG.SEND_MESSAGE:
           await this._handleSendMessage(message.text ?? '');
           break;
-        case 'openFile':
+        case WEBVIEW_IN_MSG.OPEN_FILE:
           await this._handleOpenFile(message.file);
           break;
-        case 'stopProcessing':
+        case WEBVIEW_IN_MSG.STOP_PROCESSING:
           this._stream.abort();
           break;
-        case 'ready':
+        case WEBVIEW_IN_MSG.READY:
           await this._handleWebviewReady();
           break;
-        case 'loadMoreHistory':
+        case WEBVIEW_IN_MSG.LOAD_MORE_HISTORY:
           await this._handleLoadMoreHistory();
+          break;
+        case WEBVIEW_IN_MSG.VISIBLE_FIRST_IDX:
+          this._historyService.setVisibleFirstIdx(message.idx);
           break;
       }
     });
@@ -179,6 +191,8 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
       const dialogId = await this._historyService.resolveCurrentDialogId();
       if (dialogId) {
         await this._loadLatestHistoryPage(dialogId, true);
+        // Scroll to bottom after initial history load
+        this._postMessage({type: WEBVIEW_OUT_MSG.SCROLL_TO_BOTTOM});
       }
     } catch {
       // noop
@@ -190,7 +204,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     if (dialogId && this._historyService.hasMore && !this._historyService.isLoading) {
       this._loadPreviousHistoryPage(dialogId).catch((err: unknown) => {
         const msg = getErrorMessage(err, ERROR_MESSAGES.LOAD_HISTORY);
-        this._postMessage({type: 'showError', error: msg});
+        this._postMessage({type: WEBVIEW_OUT_MSG.SHOW_ERROR, error: msg});
       });
     }
   };
@@ -219,6 +233,12 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
 
         if (event.type === E.DONE && event.dialog_id) {
           this._historyService.currentDialogId = event.dialog_id;
+          // Refresh the latest page to capture finalized blocks
+          try {
+            await this._loadLatestHistoryPage(event.dialog_id, true);
+          } catch {
+            // non-blocking
+          }
         }
       }
 
