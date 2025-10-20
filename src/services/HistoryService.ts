@@ -179,9 +179,4 @@ export class HistoryService {
     this._historyLoading = false;
     this._onDidChangeState.fire();
   }
-
-  private _computeEffectiveCursor(): number | undefined {
-    // Trust server boundary only
-    return this._serverCursor;
-  }
 }
