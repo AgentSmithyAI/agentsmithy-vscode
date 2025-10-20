@@ -211,7 +211,6 @@ export class MessageRenderer {
     reasoningDiv.appendChild(header);
     reasoningDiv.appendChild(content);
     this.insertNode(reasoningDiv);
-    this.scrollIntoViewIfBottom(reasoningDiv);
 
     return {block: reasoningDiv, content: content, header: header};
   }

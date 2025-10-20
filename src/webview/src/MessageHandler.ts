@@ -124,7 +124,8 @@ export class MessageHandler {
     const messageElement = this.streamingState.getCurrentAssistantMessage();
     if (messageElement && this.streamingState.getCurrentAssistantText()) {
       this.streamingState.endAssistantMessage((text) => this.renderer.renderMarkdown(text));
-      this.scrollManager.scrollIntoViewIfAtBottom(messageElement);
+      // Don't auto-scroll on end - only during append
+      // This prevents unwanted scrolling if user has manually scrolled up
     }
     // Finalized assistant message → prune older
     this.renderer.pruneByIdx(PRUNE_TAIL_COUNT);
@@ -215,8 +216,6 @@ export class MessageHandler {
       } finally {
         this.renderer.setSuppressAutoScroll(false);
       }
-
-      this.renderer.scrollToBottom();
     }
   }
 }

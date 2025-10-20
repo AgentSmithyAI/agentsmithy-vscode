@@ -1,13 +1,12 @@
 import * as vscode from 'vscode';
-import {CSS_CLASSES, DOM_IDS, ERROR_MESSAGES, ERROR_NAMES, VIEWS} from './constants';
-import {WEBVIEW_IN_MSG, WEBVIEW_OUT_MSG} from './shared/messages';
+import type {HistoryEvent} from './api/ApiService';
+import {StreamService, type ChatContext} from './api/StreamService';
+import {CSS_CLASSES, DOM_IDS, SSE_EVENT_TYPES as E, ERROR_MESSAGES, ERROR_NAMES, VIEWS} from './constants';
 import {ConfigService} from './services/ConfigService';
 import {StreamEventHandlers} from './services/EventHandlers';
 import {HistoryService} from './services/HistoryService';
+import {WEBVIEW_IN_MSG, WEBVIEW_OUT_MSG} from './shared/messages';
 import {getErrorMessage} from './utils/typeGuards';
-import type {HistoryEvent} from './api/ApiService';
-import {StreamService, type ChatContext} from './api/StreamService';
-import {SSE_EVENT_TYPES as E} from './constants';
 
 // Messages sent from the webview to the extension
 type WebviewInMessage =
@@ -208,6 +207,8 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
       const dialogId = await this._historyService.resolveCurrentDialogId();
       if (dialogId) {
         await this._loadLatestHistoryPage(dialogId, true);
+        // Scroll to bottom after initial history load
+        this._postMessage({type: WEBVIEW_OUT_MSG.SCROLL_TO_BOTTOM});
       }
     } catch {
       // noop
