@@ -1,12 +1,12 @@
 import * as vscode from 'vscode';
-import type {HistoryEvent} from './api/ApiService';
-import {StreamService, type ChatContext} from './api/StreamService';
-import {CSS_CLASSES, DOM_IDS, SSE_EVENT_TYPES as E, ERROR_MESSAGES, ERROR_NAMES, VIEWS} from './constants';
-import {ConfigService} from './services/ConfigService';
-import {StreamEventHandlers} from './services/EventHandlers';
-import {HistoryService} from './services/HistoryService';
-import {WEBVIEW_IN_MSG, WEBVIEW_OUT_MSG} from './shared/messages';
-import {getErrorMessage} from './utils/typeGuards';
+import type { HistoryEvent } from './api/ApiService';
+import { StreamService, type ChatContext } from './api/StreamService';
+import { CSS_CLASSES, DOM_IDS, SSE_EVENT_TYPES as E, ERROR_MESSAGES, ERROR_NAMES, VIEWS } from './constants';
+import { ConfigService } from './services/ConfigService';
+import { StreamEventHandlers } from './services/EventHandlers';
+import { HistoryService } from './services/HistoryService';
+import { WEBVIEW_IN_MSG, WEBVIEW_OUT_MSG } from './shared/messages';
+import { getErrorMessage } from './utils/typeGuards';
 
 // Messages sent from the webview to the extension
 type WebviewInMessage =
@@ -60,22 +60,6 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
 
   private _postMessage(msg: WebviewOutMessage): void {
     this._view?.webview.postMessage(msg);
-  }
-
-  /**
-   * Read the first visible idx (topmost user/chat) from the webview DOM via eval
-   * and feed it back to HistoryService so pruning cannot regress the cursor.
-   */
-  private async _syncVisibleFirstIdx(): Promise<void> {
-    if (!this._view) {
-      return;
-    }
-    try {
-      await this._view.webview.postMessage({type: WEBVIEW_OUT_MSG.GET_VISIBLE_FIRST_IDX});
-      // Note: postMessage is fire-and-forget; response handled via onDidReceiveMessage
-    } catch {
-      // noop
-    }
   }
 
   private async _loadLatestHistoryPage(dialogId: string, replace = false): Promise<void> {

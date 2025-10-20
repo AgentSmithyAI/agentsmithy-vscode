@@ -38,8 +38,8 @@ export type WebviewOutMessage =
   | {type: typeof WEBVIEW_OUT_MSG.END_STREAM}
   | {type: typeof WEBVIEW_OUT_MSG.HISTORY_SET_LOAD_MORE_VISIBLE; visible: boolean}
   | {type: typeof WEBVIEW_OUT_MSG.HISTORY_SET_LOAD_MORE_ENABLED; enabled: boolean}
-  | {type: typeof WEBVIEW_OUT_MSG.HISTORY_PREPEND_EVENTS; events: unknown[]}
-  | {type: typeof WEBVIEW_OUT_MSG.HISTORY_REPLACE_ALL; events: unknown[]}
+  | {type: typeof WEBVIEW_OUT_MSG.HISTORY_PREPEND_EVENTS; events: HistoryEvent[]}
+  | {type: typeof WEBVIEW_OUT_MSG.HISTORY_REPLACE_ALL; events: HistoryEvent[]}
   | {type: typeof WEBVIEW_OUT_MSG.SCROLL_TO_BOTTOM}
   | {type: typeof WEBVIEW_OUT_MSG.GET_VISIBLE_FIRST_IDX};
 

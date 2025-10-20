@@ -1,11 +1,11 @@
-import { WEBVIEW_IN_MSG, WEBVIEW_OUT_MSG } from '../../shared/messages';
-import { MessageHandler } from './MessageHandler';
-import { MessageRenderer } from './renderer';
-import { ScrollManager } from './ScrollManager';
-import { StreamingStateManager } from './StreamingStateManager';
-import { VSCodeAPI, WebviewOutMessage } from './types';
-import { UIController } from './UIController';
-import { escapeHtml } from './utils';
+import {WEBVIEW_IN_MSG, WEBVIEW_OUT_MSG} from '../../shared/messages';
+import {MessageHandler} from './MessageHandler';
+import {MessageRenderer} from './renderer';
+import {ScrollManager} from './ScrollManager';
+import {StreamingStateManager} from './StreamingStateManager';
+import {VSCodeAPI, WebviewOutMessage} from './types';
+import {UIController} from './UIController';
+import {escapeHtml} from './utils';
 
 declare const acquireVsCodeApi: () => VSCodeAPI;
 declare const marked: {

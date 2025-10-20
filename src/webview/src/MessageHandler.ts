@@ -157,7 +157,7 @@ export class MessageHandler {
     this.streamingState.endReasoning();
   }
 
-  private handleHistoryPrepend(events: unknown[]): void {
+  private handleHistoryPrepend(events: HistoryEvent[]): void {
     if (!Array.isArray(events)) {
       return;
     }
@@ -175,7 +175,7 @@ export class MessageHandler {
       for (let i = events.length - 1; i >= 0; i--) {
         const evt = events[i];
         try {
-          this.renderer.renderHistoryEvent(evt as HistoryEvent);
+          this.renderer.renderHistoryEvent(evt);
         } catch {
           // Suppress render errors
         }
@@ -197,7 +197,7 @@ export class MessageHandler {
     this.renderer.pruneByIdx(PRUNE_TAIL_COUNT);
   }
 
-  private handleHistoryReplaceAll(events: unknown[]): void {
+  private handleHistoryReplaceAll(events: HistoryEvent[]): void {
     this.streamingState.resetAll();
     this.renderer.clearMessages();
 
@@ -208,7 +208,7 @@ export class MessageHandler {
       try {
         for (const evt of events) {
           try {
-            this.renderer.renderHistoryEvent(evt as HistoryEvent);
+            this.renderer.renderHistoryEvent(evt);
           } catch {
             // Suppress render errors
           }
