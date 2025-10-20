@@ -1,11 +1,11 @@
-import {WEBVIEW_IN_MSG, WEBVIEW_OUT_MSG} from '../../shared/messages';
-import {MessageHandler} from './MessageHandler';
-import {MessageRenderer} from './renderer';
-import {ScrollManager} from './ScrollManager';
-import {StreamingStateManager} from './StreamingStateManager';
-import {VSCodeAPI, WebviewOutMessage} from './types';
-import {UIController} from './UIController';
-import {escapeHtml} from './utils';
+import { WEBVIEW_IN_MSG, WEBVIEW_OUT_MSG } from '../../shared/messages';
+import { MessageHandler } from './MessageHandler';
+import { MessageRenderer } from './renderer';
+import { ScrollManager } from './ScrollManager';
+import { StreamingStateManager } from './StreamingStateManager';
+import { VSCodeAPI, WebviewOutMessage } from './types';
+import { UIController } from './UIController';
+import { escapeHtml } from './utils';
 
 declare const acquireVsCodeApi: () => VSCodeAPI;
 declare const marked: {
@@ -107,15 +107,14 @@ class ChatWebview {
 
     // Message handler
     window.addEventListener('message', (event) => {
-      this.handleMessage(event.data as WebviewOutMessage);
-    });
+      const message = event.data as WebviewOutMessage;
 
-    // Respond to provider's query for the first visible idx
-    window.addEventListener('message', (event) => {
-      const data = event.data as WebviewOutMessage;
-      if (data?.type === WEBVIEW_OUT_MSG.GET_VISIBLE_FIRST_IDX) {
+      if (message.type === WEBVIEW_OUT_MSG.GET_VISIBLE_FIRST_IDX) {
         this.scrollManager.requestFirstVisibleIdx();
+        return;
       }
+
+      this.handleMessage(message);
     });
   }
 
