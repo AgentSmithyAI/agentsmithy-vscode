@@ -1,3 +1,10 @@
+# [1.1.0](https://github.com/AgentSmithyAI/agentsmithy-vscode/compare/v1.0.0...v1.1.0) (2025-10-20)
+
+
+### Features
+
+* Smart scrolling behavior with autoload/unload history blocks ([#12](https://github.com/AgentSmithyAI/agentsmithy-vscode/issues/12)) ([a1e44f2](https://github.com/AgentSmithyAI/agentsmithy-vscode/commit/a1e44f2a7140754c1ab7a65997a8637807f853cd))
+
 # 1.0.0 (2025-10-19)
 
 
