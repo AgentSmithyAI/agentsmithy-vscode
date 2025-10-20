@@ -1,17 +1,23 @@
 /**
  * @vitest-environment jsdom
  */
-import {beforeEach, describe, expect, it, vi} from 'vitest';
+import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {MessageRenderer} from '../renderer';
 
 // Mock marked library
+interface MarkedMock {
+  parse: (text: string, options?: {breaks?: boolean; gfm?: boolean}) => string;
+  Renderer: new () => unknown;
+  setOptions: (options: unknown) => void;
+}
+
 global.marked = {
   parse: (text: string) => `<p>${text}</p>`,
   Renderer: function () {
     return {};
   },
   setOptions: vi.fn(),
-} as unknown as typeof marked;
+} as unknown as MarkedMock;
 
 describe('MessageRenderer with smart auto-scroll', () => {
   let messagesContainer: HTMLElement;
