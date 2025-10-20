@@ -1,6 +1,7 @@
 /**
  * Shared VSCode API mocks for testing
  */
+import {vi} from 'vitest';
 
 /**
  * Mock implementation of VSCode EventEmitter
