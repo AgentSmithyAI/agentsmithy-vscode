@@ -71,8 +71,8 @@ export class ScrollManager {
   }
 
   private pruneOldMessages(): void {
-    // Cache current first visible idx so provider can keep cursor forward-only
-    this.cachedFirstVisibleIdx = this.getFirstVisibleIdx();
+    // Cache first loaded idx (first in DOM) so provider can keep cursor forward-only
+    this.cachedFirstVisibleIdx = this.getFirstLoadedIdx();
     this.vscode.postMessage({
       type: WEBVIEW_IN_MSG.VISIBLE_FIRST_IDX,
       idx: this.cachedFirstVisibleIdx,
@@ -88,7 +88,11 @@ export class ScrollManager {
     this.vscode.postMessage({type: WEBVIEW_IN_MSG.LOAD_MORE_HISTORY});
   }
 
-  private getFirstVisibleIdx(): number | undefined {
+  /**
+   * Get the first indexed message in DOM (not necessarily visible on screen)
+   * This represents the oldest loaded message, used for pagination cursor tracking
+   */
+  private getFirstLoadedIdx(): number | undefined {
     for (const child of Array.from(this.messagesContainer.children)) {
       if (child instanceof HTMLElement && child.dataset?.idx) {
         const value = Number(child.dataset.idx);
@@ -132,10 +136,10 @@ export class ScrollManager {
   }
 
   /**
-   * Manually request the first visible index
+   * Manually request the first loaded index (first in DOM)
    */
   requestFirstVisibleIdx(): void {
-    const idx = this.getFirstVisibleIdx();
+    const idx = this.getFirstLoadedIdx();
     this.vscode.postMessage({
       type: WEBVIEW_IN_MSG.VISIBLE_FIRST_IDX,
       idx,
