@@ -151,10 +151,10 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     webviewView.webview.onDidReceiveMessage(async (message: WebviewInMessage) => {
       switch (message.type) {
         case WEBVIEW_IN_MSG.SEND_MESSAGE:
-          await this._handleSendMessage((message as WebviewInMessage & {type: 'sendMessage'}).text ?? '');
+          await this._handleSendMessage(message.text ?? '');
           break;
         case WEBVIEW_IN_MSG.OPEN_FILE:
-          await this._handleOpenFile((message as WebviewInMessage & {type: 'openFile'}).file);
+          await this._handleOpenFile(message.file);
           break;
         case WEBVIEW_IN_MSG.STOP_PROCESSING:
           this._stream.abort();
