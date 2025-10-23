@@ -210,16 +210,69 @@ export class DialogsUI {
       return;
     }
 
-    const currentTitle = dialog.title || '';
-    const newTitle = prompt('Enter new title:', currentTitle);
-
-    if (newTitle !== null && newTitle.trim() !== currentTitle) {
-      this.vscode.postMessage({
-        type: WEBVIEW_IN_MSG.RENAME_DIALOG,
-        dialogId,
-        title: newTitle.trim(),
-      });
+    // Find the dialog item and title element
+    const dialogItem = this.dialogsList.querySelector(`[data-dialog-id="${dialogId}"]`) as HTMLElement;
+    if (!dialogItem) {
+      return;
     }
+
+    const titleElement = dialogItem.querySelector('.dialog-item-title') as HTMLElement;
+    if (!titleElement) {
+      return;
+    }
+
+    const currentTitle = dialog.title || '';
+
+    // Create input field
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = currentTitle;
+    input.className = 'dialog-title-input';
+
+    // Replace title with input
+    const originalContent = titleElement.innerHTML;
+    titleElement.innerHTML = '';
+    titleElement.appendChild(input);
+    input.focus();
+    input.select();
+
+    const saveTitle = () => {
+      const newTitle = input.value.trim();
+      titleElement.innerHTML = originalContent;
+
+      if (newTitle && newTitle !== currentTitle) {
+        this.vscode.postMessage({
+          type: WEBVIEW_IN_MSG.RENAME_DIALOG,
+          dialogId,
+          title: newTitle,
+        });
+      }
+    };
+
+    const cancelEdit = () => {
+      titleElement.innerHTML = originalContent;
+    };
+
+    // Save on Enter
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        saveTitle();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        cancelEdit();
+      }
+    });
+
+    // Save on blur
+    input.addEventListener('blur', () => {
+      saveTitle();
+    });
+
+    // Prevent item click when editing
+    input.addEventListener('click', (e) => {
+      e.stopPropagation();
+    });
   }
 
   private handleDeleteDialog(dialogId: string): void {
