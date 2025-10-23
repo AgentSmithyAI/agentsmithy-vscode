@@ -50,10 +50,12 @@ This VSCode extension integrates AgentSmithy AI coding assistant into Visual Stu
 Build once, then install:
 
 ```bash
-npm ci
-npm run compile
-npx @vscode/vsce package
-code --install-extension ./agentsmithy-vscode-0.0.1.vsix --force
+npm run format && \
+npm run lint:fix && \
+npm ci && \
+npm run compile && \
+npx @vscode/vsce package && \
+code --install-extension $(ls -t agentsmithy-vscode-*.vsix | head -1) --force
 ```
 
 Or via UI: `Ctrl+Shift+P` → `Extensions: Install from VSIX...` → select the generated `.vsix`.

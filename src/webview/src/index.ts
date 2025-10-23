@@ -111,12 +111,6 @@ class ChatWebview {
     // Message handler
     window.addEventListener('message', (event) => {
       const message = event.data as WebviewOutMessage;
-
-      if (message.type === WEBVIEW_OUT_MSG.GET_VISIBLE_FIRST_IDX) {
-        this.scrollManager.requestFirstVisibleIdx();
-        return;
-      }
-
       this.handleMessage(message);
     });
   }
@@ -153,21 +147,31 @@ class ChatWebview {
   }
 
   private handleMessage(message: WebviewOutMessage): void {
-    // Handle dialogs-specific messages
-    if (message.type === WEBVIEW_OUT_MSG.DIALOGS_UPDATE) {
-      this.dialogsUI.updateDialogs(message.dialogs, message.currentDialogId);
-      return;
-    }
+    switch (message.type) {
+      case WEBVIEW_OUT_MSG.DIALOGS_UPDATE:
+        this.dialogsUI.updateDialogs(message.dialogs, message.currentDialogId);
+        break;
 
-    if (message.type === WEBVIEW_OUT_MSG.DIALOG_SWITCHED) {
-      this.dialogsUI.updateCurrentDialog(message.dialogId, message.title);
-      // Focus input field after dialog switch
-      this.messageInput.focus();
-      return;
-    }
+      case WEBVIEW_OUT_MSG.DIALOGS_LOADING:
+        this.dialogsUI.showLoading();
+        break;
 
-    // Delegate all other messages to message handler
-    this.messageHandler.handle(message);
+      case WEBVIEW_OUT_MSG.DIALOGS_ERROR:
+        this.dialogsUI.showError(message.error);
+        break;
+
+      case WEBVIEW_OUT_MSG.DIALOG_SWITCHED:
+        this.dialogsUI.updateCurrentDialog(message.dialogId, message.title);
+        this.messageInput.focus();
+        break;
+
+      case WEBVIEW_OUT_MSG.GET_VISIBLE_FIRST_IDX:
+        this.scrollManager.requestFirstVisibleIdx();
+        break;
+
+      default:
+        this.messageHandler.handle(message);
+    }
   }
 
   private initializeMarked(): void {

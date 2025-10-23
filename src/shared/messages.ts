@@ -34,6 +34,8 @@ export const WEBVIEW_OUT_MSG = {
   SCROLL_TO_BOTTOM: 'scrollToBottom',
   GET_VISIBLE_FIRST_IDX: 'getVisibleFirstIdx',
   DIALOGS_UPDATE: 'dialogsUpdate',
+  DIALOGS_LOADING: 'dialogsLoading',
+  DIALOGS_ERROR: 'dialogsError',
   DIALOG_SWITCHED: 'dialogSwitched',
 } as const;
 

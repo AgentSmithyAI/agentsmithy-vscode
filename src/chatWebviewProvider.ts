@@ -47,6 +47,8 @@ type WebviewOutMessage =
       dialogs: Array<{id: string; title: string | null; updated_at: string}>;
       currentDialogId: string | null;
     }
+  | {type: typeof WEBVIEW_OUT_MSG.DIALOGS_LOADING}
+  | {type: typeof WEBVIEW_OUT_MSG.DIALOGS_ERROR; error: string}
   | {type: typeof WEBVIEW_OUT_MSG.DIALOG_SWITCHED; dialogId: string | null; title: string};
 export class ChatWebviewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = VIEWS.CHAT;
@@ -389,6 +391,9 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
   };
 
   private _handleLoadDialogs = async (): Promise<void> => {
+    // Show loading state
+    this._postMessage({type: WEBVIEW_OUT_MSG.DIALOGS_LOADING});
+
     try {
       await this._dialogService.loadDialogs();
 
@@ -401,8 +406,9 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
         })),
         currentDialogId: this._dialogService.currentDialogId,
       });
-    } catch {
-      // Silently fail - dialogs list will show empty or cached data
+    } catch (error: unknown) {
+      const msg = getErrorMessage(error, 'Failed to load dialogs');
+      this._postMessage({type: WEBVIEW_OUT_MSG.DIALOGS_ERROR, error: msg});
     }
   };
 
@@ -438,9 +444,6 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
                     </svg>
                 </button>
                 <div class="dialog-dropdown" id="dialogDropdown" style="display:none;">
-                    <div class="dropdown-header">
-                        <span class="dropdown-title">Conversations</span>
-                    </div>
                     <div class="dialogs-list" id="dialogsList">
                         <div class="dialog-item loading">Loading...</div>
                     </div>

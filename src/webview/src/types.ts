@@ -57,6 +57,8 @@ export type WebviewOutMessage =
       dialogs: Array<{id: string; title: string | null; updated_at: string}>;
       currentDialogId: string | null;
     }
+  | {type: typeof WEBVIEW_OUT_MSG.DIALOGS_LOADING}
+  | {type: typeof WEBVIEW_OUT_MSG.DIALOGS_ERROR; error: string}
   | {type: typeof WEBVIEW_OUT_MSG.DIALOG_SWITCHED; dialogId: string | null; title: string};
 
 export interface HistoryEvent {

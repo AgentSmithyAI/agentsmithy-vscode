@@ -85,6 +85,27 @@ export class DialogsUI {
   }
 
   /**
+   * Show loading state
+   */
+  showLoading(): void {
+    this.dialogsList.innerHTML = `
+      <div class="dialog-item loading">
+        <div class="dialog-spinner"></div>
+        <span>Loading...</span>
+      </div>
+    `;
+  }
+
+  /**
+   * Show error state
+   */
+  showError(error: string): void {
+    this.dialogsList.innerHTML = `
+      <div class="dialog-item error">${this.escapeHtml(error)}</div>
+    `;
+  }
+
+  /**
    * Update current dialog display
    */
   updateCurrentDialog(dialogId: string | null, title: string): void {

@@ -475,21 +475,6 @@ body {
   z-index: 1000;
 }
 
-.dropdown-header {
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--vscode-widget-border);
-  background-color: var(--vscode-dropdown-background);
-  position: sticky;
-  top: 0;
-  z-index: 1;
-}
-
-.dropdown-title {
-  font-weight: 500;
-  color: var(--vscode-foreground);
-  font-size: 0.9em;
-}
-
 .dialogs-list {
   padding: 4px;
 }
@@ -516,8 +501,29 @@ body {
 
 .dialog-item.loading {
   opacity: 0.6;
-  font-style: italic;
   cursor: default;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  justify-content: center;
+}
+
+.dialog-item.error {
+  color: var(--vscode-errorForeground);
+  cursor: default;
+  padding: 12px;
+  text-align: center;
+  font-size: 0.85em;
+}
+
+.dialog-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--vscode-foreground);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
 }
 
 .dialog-item-content {
