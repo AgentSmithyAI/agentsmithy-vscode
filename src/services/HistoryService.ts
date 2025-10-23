@@ -154,8 +154,8 @@ export class HistoryService {
         return list.current_dialog_id;
       }
 
-      if (Array.isArray(list.items) && list.items.length > 0) {
-        const sorted = [...list.items].sort(
+      if (Array.isArray(list.dialogs) && list.dialogs.length > 0) {
+        const sorted = [...list.dialogs].sort(
           (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime(),
         );
         this._currentDialogId = sorted[0].id;

@@ -4,6 +4,7 @@ import {ChatWebviewProvider} from './chatWebviewProvider';
 import {registerCommands} from './commands';
 import {COMMANDS, ERROR_MESSAGES, STATE_KEYS, VIEWS, WELCOME_MESSAGE} from './constants';
 import {ConfigService} from './services/ConfigService';
+import {DialogService} from './services/DialogService';
 import {HistoryService} from './services/HistoryService';
 import {StreamService} from './api/StreamService';
 import {normalizeSSEEvent} from './shared/sseNormalizer';
@@ -16,13 +17,20 @@ export const activate = (context: vscode.ExtensionContext) => {
   const apiService = new ApiService(serverUrl);
   const streamService = new StreamService(serverUrl, normalizeSSEEvent);
   const historyService = new HistoryService(apiService);
+  const dialogService = new DialogService(apiService);
 
   // Note: When server URL changes, we recreate service instances,
   // but existing providers will continue using old instances.
   // This is acceptable as config changes are rare.
 
   // Register the webview provider
-  const provider = new ChatWebviewProvider(context.extensionUri, streamService, historyService, configService);
+  const provider = new ChatWebviewProvider(
+    context.extensionUri,
+    streamService,
+    historyService,
+    dialogService,
+    configService,
+  );
 
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(VIEWS.CHAT, provider, {

@@ -10,8 +10,14 @@ export type PostMessage = (msg: unknown) => void;
 export class StreamEventHandlers {
   private chatBuffer = '';
   private readonly openedFiles = new Set<string>();
+  private dialogId?: string;
 
-  constructor(private readonly postMessage: PostMessage) {}
+  constructor(
+    private readonly postMessage: PostMessage,
+    dialogId?: string,
+  ) {
+    this.dialogId = dialogId;
+  }
 
   async handleEvent(event: SSEEvent): Promise<void> {
     switch (event.type) {
@@ -50,7 +56,7 @@ export class StreamEventHandlers {
 
   private handleChatStart(): void {
     this.chatBuffer = '';
-    this.postMessage({type: 'startAssistantMessage'});
+    this.postMessage({type: 'startAssistantMessage', dialogId: this.dialogId});
   }
 
   private handleChat(event: SSEEvent): void {
@@ -59,16 +65,17 @@ export class StreamEventHandlers {
       this.postMessage({
         type: 'appendToAssistant',
         content: String(event.content),
+        dialogId: this.dialogId,
       });
     }
   }
 
   private handleChatEnd(): void {
-    this.postMessage({type: 'endAssistantMessage'});
+    this.postMessage({type: 'endAssistantMessage', dialogId: this.dialogId});
   }
 
   private handleReasoningStart(): void {
-    this.postMessage({type: 'startReasoning'});
+    this.postMessage({type: 'startReasoning', dialogId: this.dialogId});
   }
 
   private handleReasoning(event: SSEEvent): void {
@@ -76,12 +83,13 @@ export class StreamEventHandlers {
       this.postMessage({
         type: 'appendToReasoning',
         content: String(event.content),
+        dialogId: this.dialogId,
       });
     }
   }
 
   private handleReasoningEnd(): void {
-    this.postMessage({type: 'endReasoning'});
+    this.postMessage({type: 'endReasoning', dialogId: this.dialogId});
   }
 
   private handleToolCall(event: SSEEvent): void {
@@ -89,6 +97,7 @@ export class StreamEventHandlers {
       type: 'showToolCall',
       tool: event.name,
       args: event.args,
+      dialogId: this.dialogId,
     });
   }
 
@@ -98,6 +107,7 @@ export class StreamEventHandlers {
         type: 'showFileEdit',
         file: event.file,
         diff: typeof event.diff === 'string' ? event.diff : undefined,
+        dialogId: this.dialogId,
       });
 
       // Auto-open edited file
@@ -118,6 +128,7 @@ export class StreamEventHandlers {
     this.postMessage({
       type: 'showError',
       error: String(event.error ?? 'Unknown error'),
+      dialogId: this.dialogId,
     });
   }
 
@@ -125,9 +136,11 @@ export class StreamEventHandlers {
     this.postMessage({
       type: 'showError',
       error: ERROR_MESSAGES.NO_RESPONSE,
+      dialogId: this.dialogId,
     });
     this.postMessage({
       type: 'endAssistantMessage',
+      dialogId: this.dialogId,
     });
   }
 
@@ -135,6 +148,7 @@ export class StreamEventHandlers {
     this.postMessage({
       type: 'showInfo',
       message: ERROR_MESSAGES.REQUEST_CANCELLED,
+      dialogId: this.dialogId,
     });
   }
 
@@ -142,15 +156,18 @@ export class StreamEventHandlers {
     this.postMessage({
       type: 'showError',
       error: String(error.message),
+      dialogId: this.dialogId,
     });
     this.postMessage({
       type: 'endAssistantMessage',
+      dialogId: this.dialogId,
     });
   }
 
   finalize(): void {
     this.postMessage({
       type: 'endStream',
+      dialogId: this.dialogId,
     });
   }
 
