@@ -1,4 +1,5 @@
 import {WEBVIEW_IN_MSG, WEBVIEW_OUT_MSG} from '../../shared/messages';
+import {DialogsUI} from './DialogsUI';
 import {MessageHandler} from './MessageHandler';
 import {MessageRenderer} from './renderer';
 import {ScrollManager} from './ScrollManager';
@@ -33,6 +34,7 @@ class ChatWebview {
   private streamingState: StreamingStateManager;
   private uiController: UIController;
   private messageHandler: MessageHandler;
+  private dialogsUI: DialogsUI;
 
   private messagesContainer: HTMLElement;
   private messageInput: HTMLTextAreaElement;
@@ -54,6 +56,7 @@ class ChatWebview {
     this.streamingState = new StreamingStateManager();
     this.uiController = new UIController(this.messageInput, this.sendButton);
     this.scrollManager = new ScrollManager(this.messagesContainer, this.vscode, this.renderer);
+    this.dialogsUI = new DialogsUI(this.vscode);
     // Connect renderer to scroll manager for smart auto-scroll
     this.renderer.setScrollManager(this.scrollManager);
     this.messageHandler = new MessageHandler(
@@ -150,6 +153,20 @@ class ChatWebview {
   }
 
   private handleMessage(message: WebviewOutMessage): void {
+    // Handle dialogs-specific messages
+    if (message.type === WEBVIEW_OUT_MSG.DIALOGS_UPDATE) {
+      this.dialogsUI.updateDialogs(message.dialogs, message.currentDialogId);
+      return;
+    }
+
+    if (message.type === WEBVIEW_OUT_MSG.DIALOG_SWITCHED) {
+      this.dialogsUI.updateCurrentDialog(message.dialogId, message.title);
+      // Focus input field after dialog switch
+      this.messageInput.focus();
+      return;
+    }
+
+    // Delegate all other messages to message handler
     this.messageHandler.handle(message);
   }
 

@@ -3,6 +3,7 @@ import type {HistoryEvent} from './api/ApiService';
 import {StreamService, type ChatContext} from './api/StreamService';
 import {CSS_CLASSES, DOM_IDS, SSE_EVENT_TYPES as E, ERROR_MESSAGES, ERROR_NAMES, VIEWS} from './constants';
 import {ConfigService} from './services/ConfigService';
+import {DialogService} from './services/DialogService';
 import {StreamEventHandlers} from './services/EventHandlers';
 import {HistoryService} from './services/HistoryService';
 import {WEBVIEW_IN_MSG, WEBVIEW_OUT_MSG} from './shared/messages';
@@ -15,7 +16,12 @@ type WebviewInMessage =
   | {type: typeof WEBVIEW_IN_MSG.STOP_PROCESSING}
   | {type: typeof WEBVIEW_IN_MSG.READY}
   | {type: typeof WEBVIEW_IN_MSG.LOAD_MORE_HISTORY}
-  | {type: typeof WEBVIEW_IN_MSG.VISIBLE_FIRST_IDX; idx?: number};
+  | {type: typeof WEBVIEW_IN_MSG.VISIBLE_FIRST_IDX; idx?: number}
+  | {type: typeof WEBVIEW_IN_MSG.CREATE_DIALOG}
+  | {type: typeof WEBVIEW_IN_MSG.SWITCH_DIALOG; dialogId: string}
+  | {type: typeof WEBVIEW_IN_MSG.RENAME_DIALOG; dialogId: string; title: string}
+  | {type: typeof WEBVIEW_IN_MSG.DELETE_DIALOG; dialogId: string}
+  | {type: typeof WEBVIEW_IN_MSG.LOAD_DIALOGS};
 // Messages sent from the extension to the webview
 type WebviewOutMessage =
   | {type: typeof WEBVIEW_OUT_MSG.ADD_MESSAGE; message: {role: 'user' | 'assistant'; content: string}}
@@ -35,7 +41,13 @@ type WebviewOutMessage =
   | {type: typeof WEBVIEW_OUT_MSG.HISTORY_PREPEND_EVENTS; events: HistoryEvent[]}
   | {type: typeof WEBVIEW_OUT_MSG.HISTORY_REPLACE_ALL; events: HistoryEvent[]}
   | {type: typeof WEBVIEW_OUT_MSG.SCROLL_TO_BOTTOM}
-  | {type: typeof WEBVIEW_OUT_MSG.GET_VISIBLE_FIRST_IDX};
+  | {type: typeof WEBVIEW_OUT_MSG.GET_VISIBLE_FIRST_IDX}
+  | {
+      type: typeof WEBVIEW_OUT_MSG.DIALOGS_UPDATE;
+      dialogs: Array<{id: string; title: string | null; updated_at: string}>;
+      currentDialogId: string | null;
+    }
+  | {type: typeof WEBVIEW_OUT_MSG.DIALOG_SWITCHED; dialogId: string | null; title: string};
 export class ChatWebviewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = VIEWS.CHAT;
 
@@ -45,6 +57,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     private readonly _extensionUri: vscode.Uri,
     private readonly _stream: StreamService,
     private readonly _historyService: HistoryService,
+    private readonly _dialogService: DialogService,
     private readonly _configService: ConfigService,
   ) {
     // Listen to history state changes
@@ -168,6 +181,21 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
         case WEBVIEW_IN_MSG.VISIBLE_FIRST_IDX:
           this._historyService.setVisibleFirstIdx(message.idx);
           break;
+        case WEBVIEW_IN_MSG.CREATE_DIALOG:
+          await this._handleCreateDialog();
+          break;
+        case WEBVIEW_IN_MSG.SWITCH_DIALOG:
+          await this._handleSwitchDialog(message.dialogId);
+          break;
+        case WEBVIEW_IN_MSG.RENAME_DIALOG:
+          await this._handleRenameDialog(message.dialogId, message.title);
+          break;
+        case WEBVIEW_IN_MSG.DELETE_DIALOG:
+          await this._handleDeleteDialog(message.dialogId);
+          break;
+        case WEBVIEW_IN_MSG.LOAD_DIALOGS:
+          await this._handleLoadDialogs();
+          break;
       }
     });
   }
@@ -257,6 +285,127 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     }
   };
 
+  private _handleCreateDialog = async (): Promise<void> => {
+    try {
+      const dialog = await this._dialogService.createDialog();
+
+      // Switch to the new dialog
+      await this._dialogService.switchDialog(dialog.id);
+      this._historyService.currentDialogId = dialog.id;
+
+      // Clear chat and load history for new dialog
+      this._postMessage({type: WEBVIEW_OUT_MSG.HISTORY_REPLACE_ALL, events: []});
+
+      // Notify UI about dialog switch
+      const title = this._dialogService.getDialogDisplayTitle(dialog);
+      this._postMessage({
+        type: WEBVIEW_OUT_MSG.DIALOG_SWITCHED,
+        dialogId: dialog.id,
+        title,
+      });
+
+      // Reload dialogs list
+      await this._handleLoadDialogs();
+    } catch (error: unknown) {
+      const msg = getErrorMessage(error, 'Failed to create dialog');
+      this._postMessage({type: WEBVIEW_OUT_MSG.SHOW_ERROR, error: msg});
+    }
+  };
+
+  private _handleSwitchDialog = async (dialogId: string): Promise<void> => {
+    try {
+      await this._dialogService.switchDialog(dialogId);
+      this._historyService.currentDialogId = dialogId;
+
+      // Load history for the switched dialog
+      await this._loadLatestHistoryPage(dialogId, true);
+
+      // Update UI
+      const dialog = this._dialogService.currentDialog;
+      const title = this._dialogService.getDialogDisplayTitle(dialog);
+      this._postMessage({
+        type: WEBVIEW_OUT_MSG.DIALOG_SWITCHED,
+        dialogId,
+        title,
+      });
+
+      // Scroll to bottom after switching
+      this._postMessage({type: WEBVIEW_OUT_MSG.SCROLL_TO_BOTTOM});
+
+      // Reload dialogs list to update active state
+      await this._handleLoadDialogs();
+    } catch (error: unknown) {
+      const msg = getErrorMessage(error, 'Failed to switch dialog');
+      this._postMessage({type: WEBVIEW_OUT_MSG.SHOW_ERROR, error: msg});
+    }
+  };
+
+  private _handleRenameDialog = async (dialogId: string, title: string): Promise<void> => {
+    try {
+      await this._dialogService.updateDialog(dialogId, {title});
+
+      // Update current dialog title if it's the one being renamed
+      if (dialogId === this._dialogService.currentDialogId) {
+        const dialog = this._dialogService.currentDialog;
+        const displayTitle = this._dialogService.getDialogDisplayTitle(dialog);
+        this._postMessage({
+          type: WEBVIEW_OUT_MSG.DIALOG_SWITCHED,
+          dialogId,
+          title: displayTitle,
+        });
+      }
+
+      // Reload dialogs list
+      await this._handleLoadDialogs();
+    } catch (error: unknown) {
+      const msg = getErrorMessage(error, 'Failed to rename dialog');
+      this._postMessage({type: WEBVIEW_OUT_MSG.SHOW_ERROR, error: msg});
+    }
+  };
+
+  private _handleDeleteDialog = async (dialogId: string): Promise<void> => {
+    try {
+      await this._dialogService.deleteDialog(dialogId);
+
+      // If deleted dialog was current, clear the chat
+      if (dialogId === this._historyService.currentDialogId) {
+        this._historyService.currentDialogId = undefined;
+        this._postMessage({type: WEBVIEW_OUT_MSG.HISTORY_REPLACE_ALL, events: []});
+
+        // Update header to show "New dialog"
+        this._postMessage({
+          type: WEBVIEW_OUT_MSG.DIALOG_SWITCHED,
+          dialogId: null,
+          title: 'New dialog',
+        });
+      }
+
+      // Reload dialogs list
+      await this._handleLoadDialogs();
+    } catch (error: unknown) {
+      const msg = getErrorMessage(error, 'Failed to delete dialog');
+      this._postMessage({type: WEBVIEW_OUT_MSG.SHOW_ERROR, error: msg});
+    }
+  };
+
+  private _handleLoadDialogs = async (): Promise<void> => {
+    try {
+      await this._dialogService.loadDialogs();
+
+      this._postMessage({
+        type: WEBVIEW_OUT_MSG.DIALOGS_UPDATE,
+        dialogs: this._dialogService.dialogs.map((d) => ({
+          id: d.id,
+          title: d.title,
+          updated_at: d.updated_at,
+        })),
+        currentDialogId: this._dialogService.currentDialogId,
+      });
+    } catch {
+      // Silently fail - dialogs list will show empty or cached data
+    }
+  };
+
   private _getHtmlForWebview = (webview: vscode.Webview): string => {
     const nonce: string = getNonce();
 
@@ -280,6 +429,29 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
 </head>
 <body>
     <div class="${CSS_CLASSES.CHAT_CONTAINER}">
+        <div class="chat-header" id="chatHeader">
+            <div class="dialog-selector">
+                <button class="dialog-title-btn" id="dialogTitleBtn" aria-label="Select dialog">
+                    <span class="dialog-title-text" id="dialogTitleText">New dialog</span>
+                    <svg class="dropdown-icon" viewBox="0 0 16 16" aria-hidden="true">
+                        <path d="M8 11L3 6h10z"/>
+                    </svg>
+                </button>
+                <div class="dialog-dropdown" id="dialogDropdown" style="display:none;">
+                    <div class="dropdown-header">
+                        <span class="dropdown-title">Conversations</span>
+                    </div>
+                    <div class="dialogs-list" id="dialogsList">
+                        <div class="dialog-item loading">Loading...</div>
+                    </div>
+                </div>
+            </div>
+            <button class="new-dialog-btn" id="newDialogBtn" title="New conversation" aria-label="New conversation">
+                <svg viewBox="0 0 16 16" aria-hidden="true">
+                    <path d="M14 7h-5V2H9v5H4v1h5v5h1V8h5z"/>
+                </svg>
+            </button>
+        </div>
         <div class="${CSS_CLASSES.MESSAGES}" id="${DOM_IDS.MESSAGES}">
             <button id="${DOM_IDS.LOAD_MORE_BTN}" class="${CSS_CLASSES.LOAD_MORE}" style="display:none;">Load previous</button>
             <div class="${CSS_CLASSES.WELCOME_PLACEHOLDER}" id="${DOM_IDS.WELCOME_PLACEHOLDER}">

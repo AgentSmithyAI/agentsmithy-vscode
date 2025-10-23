@@ -4,9 +4,29 @@ interface CurrentDialogResponse {
   id: string | null;
 }
 
+export interface Dialog {
+  id: string;
+  title: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 interface ListDialogsResponse {
-  items: Array<{id: string; updated_at: string}>;
+  items: Dialog[];
   current_dialog_id?: string;
+}
+
+interface CreateDialogResponse {
+  id: string;
+  title: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+interface UpdateDialogResponse {
+  id: string;
+  title: string | null;
+  updated_at: string;
 }
 
 import {SSE_EVENT_TYPES as E} from '../constants';
@@ -40,6 +60,7 @@ export class ApiService {
   private readonly endpoints = {
     currentDialog: '/api/dialogs/current',
     dialogs: '/api/dialogs',
+    dialog: (dialogId: string) => `/api/dialogs/${encodeURIComponent(dialogId)}`,
     history: (dialogId: string) => `/api/dialogs/${encodeURIComponent(dialogId)}/history`,
   };
 
@@ -77,12 +98,14 @@ export class ApiService {
     }
     const data: unknown = await resp.json();
 
-    if (isRecord(data) && 'items' in data && Array.isArray(data.items)) {
-      const items = data.items as unknown[];
-      const normalizedItems: Array<{id: string; updated_at: string}> = items
+    if (isRecord(data) && 'dialogs' in data && Array.isArray(data.dialogs)) {
+      const dialogs = data.dialogs as unknown[];
+      const normalizedItems: Dialog[] = dialogs
         .filter((x): x is Record<string, unknown> => isRecord(x))
         .map((x) => ({
           id: typeof x.id === 'string' ? x.id : '',
+          title: typeof x.title === 'string' ? x.title : null,
+          created_at: typeof x.created_at === 'string' ? x.created_at : '',
           updated_at: typeof x.updated_at === 'string' ? x.updated_at : '',
         }));
       const current_dialog_id = isRecord(data) && 'current_dialog_id' in data ? data.current_dialog_id : undefined;
@@ -151,5 +174,121 @@ export class ApiService {
     const last_idx = obj.last_idx === null || typeof obj.last_idx === 'number' ? obj.last_idx : null;
 
     return {dialog_id, events, total_events, has_more, first_idx, last_idx};
+  }
+
+  /**
+   * Create a new dialog
+   */
+  async createDialog(title?: string): Promise<CreateDialogResponse> {
+    const url = `${this.baseUrl}${this.endpoints.dialogs}`;
+    const body = title ? {title} : {};
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!resp.ok) {
+      throw new Error(`HTTP error! status: ${resp.status}`);
+    }
+
+    const data: unknown = await resp.json();
+    if (!isRecord(data)) {
+      throw new Error('Malformed create dialog response');
+    }
+
+    return {
+      id: typeof data.id === 'string' ? data.id : '',
+      title: typeof data.title === 'string' ? data.title : null,
+      created_at: typeof data.created_at === 'string' ? data.created_at : '',
+      updated_at: typeof data.updated_at === 'string' ? data.updated_at : '',
+    };
+  }
+
+  /**
+   * Set current active dialog
+   */
+  async setCurrentDialog(dialogId: string): Promise<void> {
+    const url = `${this.baseUrl}${this.endpoints.currentDialog}?id=${encodeURIComponent(dialogId)}`;
+    const resp = await fetch(url, {
+      method: 'PATCH',
+      headers: {Accept: 'application/json'},
+    });
+
+    if (!resp.ok) {
+      throw new Error(`HTTP error! status: ${resp.status}`);
+    }
+  }
+
+  /**
+   * Get dialog metadata
+   */
+  async getDialog(dialogId: string): Promise<Dialog> {
+    const url = `${this.baseUrl}${this.endpoints.dialog(dialogId)}`;
+    const resp = await fetch(url, {headers: {Accept: 'application/json'}});
+
+    if (!resp.ok) {
+      throw new Error(`HTTP error! status: ${resp.status}`);
+    }
+
+    const data: unknown = await resp.json();
+    if (!isRecord(data)) {
+      throw new Error('Malformed dialog response');
+    }
+
+    return {
+      id: typeof data.id === 'string' ? data.id : '',
+      title: typeof data.title === 'string' ? data.title : null,
+      created_at: typeof data.created_at === 'string' ? data.created_at : '',
+      updated_at: typeof data.updated_at === 'string' ? data.updated_at : '',
+    };
+  }
+
+  /**
+   * Update dialog (e.g., change title)
+   */
+  async updateDialog(dialogId: string, updates: {title?: string}): Promise<UpdateDialogResponse> {
+    const url = `${this.baseUrl}${this.endpoints.dialog(dialogId)}`;
+    const resp = await fetch(url, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify(updates),
+    });
+
+    if (!resp.ok) {
+      throw new Error(`HTTP error! status: ${resp.status}`);
+    }
+
+    const data: unknown = await resp.json();
+    if (!isRecord(data)) {
+      throw new Error('Malformed update dialog response');
+    }
+
+    return {
+      id: typeof data.id === 'string' ? data.id : '',
+      title: typeof data.title === 'string' ? data.title : null,
+      updated_at: typeof data.updated_at === 'string' ? data.updated_at : '',
+    };
+  }
+
+  /**
+   * Delete a dialog
+   */
+  async deleteDialog(dialogId: string): Promise<void> {
+    const url = `${this.baseUrl}${this.endpoints.dialog(dialogId)}`;
+    const resp = await fetch(url, {
+      method: 'DELETE',
+      headers: {Accept: 'application/json'},
+    });
+
+    if (!resp.ok) {
+      throw new Error(`HTTP error! status: ${resp.status}`);
+    }
   }
 }

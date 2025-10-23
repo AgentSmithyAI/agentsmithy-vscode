@@ -23,7 +23,12 @@ export type WebviewInMessage =
   | {type: typeof WEBVIEW_IN_MSG.STOP_PROCESSING}
   | {type: typeof WEBVIEW_IN_MSG.READY}
   | {type: typeof WEBVIEW_IN_MSG.LOAD_MORE_HISTORY}
-  | {type: typeof WEBVIEW_IN_MSG.VISIBLE_FIRST_IDX; idx?: number};
+  | {type: typeof WEBVIEW_IN_MSG.VISIBLE_FIRST_IDX; idx?: number}
+  | {type: typeof WEBVIEW_IN_MSG.CREATE_DIALOG}
+  | {type: typeof WEBVIEW_IN_MSG.SWITCH_DIALOG; dialogId: string}
+  | {type: typeof WEBVIEW_IN_MSG.RENAME_DIALOG; dialogId: string; title: string}
+  | {type: typeof WEBVIEW_IN_MSG.DELETE_DIALOG; dialogId: string}
+  | {type: typeof WEBVIEW_IN_MSG.LOAD_DIALOGS};
 
 /**
  * Messages sent from extension to webview
@@ -46,7 +51,13 @@ export type WebviewOutMessage =
   | {type: typeof WEBVIEW_OUT_MSG.HISTORY_PREPEND_EVENTS; events: HistoryEvent[]}
   | {type: typeof WEBVIEW_OUT_MSG.HISTORY_REPLACE_ALL; events: HistoryEvent[]}
   | {type: typeof WEBVIEW_OUT_MSG.SCROLL_TO_BOTTOM}
-  | {type: typeof WEBVIEW_OUT_MSG.GET_VISIBLE_FIRST_IDX};
+  | {type: typeof WEBVIEW_OUT_MSG.GET_VISIBLE_FIRST_IDX}
+  | {
+      type: typeof WEBVIEW_OUT_MSG.DIALOGS_UPDATE;
+      dialogs: Array<{id: string; title: string | null; updated_at: string}>;
+      currentDialogId: string | null;
+    }
+  | {type: typeof WEBVIEW_OUT_MSG.DIALOG_SWITCHED; dialogId: string | null; title: string};
 
 export interface HistoryEvent {
   type: 'user' | 'chat' | 'reasoning' | 'tool_call' | 'file_edit';

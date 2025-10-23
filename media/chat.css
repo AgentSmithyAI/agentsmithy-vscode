@@ -378,3 +378,197 @@ body {
   padding: 0 3px;
   border-radius: 3px;
 }
+
+/* Chat header with dialogs dropdown */
+.chat-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px;
+  border-bottom: 1px solid var(--vscode-widget-border);
+  background-color: var(--vscode-sideBar-background);
+  gap: 8px;
+  min-height: 40px;
+  position: relative;
+  z-index: 100;
+}
+
+.dialog-selector {
+  flex: 1;
+  position: relative;
+  min-width: 0; /* Allow text truncation */
+}
+
+.dialog-title-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background: transparent;
+  border: 1px solid var(--vscode-input-border);
+  border-radius: 4px;
+  color: var(--vscode-foreground);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: inherit;
+  width: 100%;
+  text-align: left;
+  min-width: 0;
+}
+
+.dialog-title-btn:hover {
+  background-color: var(--vscode-list-hoverBackground);
+}
+
+.dialog-title-text {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dropdown-icon {
+  width: 12px;
+  height: 12px;
+  fill: currentColor;
+  flex-shrink: 0;
+}
+
+.new-dialog-btn {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  color: var(--vscode-icon-foreground);
+  border: 1px solid var(--vscode-input-border);
+  border-radius: 4px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.new-dialog-btn:hover {
+  background-color: var(--vscode-toolbar-hoverBackground);
+}
+
+.new-dialog-btn svg {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
+}
+
+/* Dropdown menu */
+.dialog-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 4px;
+  background-color: var(--vscode-dropdown-background);
+  border: 1px solid var(--vscode-dropdown-border);
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  max-height: 400px;
+  overflow-y: auto;
+  z-index: 1000;
+}
+
+.dropdown-header {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--vscode-widget-border);
+  background-color: var(--vscode-dropdown-background);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.dropdown-title {
+  font-weight: 500;
+  color: var(--vscode-foreground);
+  font-size: 0.9em;
+}
+
+.dialogs-list {
+  padding: 4px;
+}
+
+.dialog-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background-color 0.15s;
+  gap: 8px;
+}
+
+.dialog-item:hover {
+  background-color: var(--vscode-list-hoverBackground);
+}
+
+.dialog-item.active {
+  background-color: var(--vscode-list-activeSelectionBackground);
+  color: var(--vscode-list-activeSelectionForeground);
+}
+
+.dialog-item.loading {
+  opacity: 0.6;
+  font-style: italic;
+  cursor: default;
+}
+
+.dialog-item-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.dialog-item-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.9em;
+}
+
+.dialog-item-meta {
+  font-size: 0.75em;
+  opacity: 0.7;
+  margin-top: 2px;
+}
+
+.dialog-item-actions {
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.dialog-item:hover .dialog-item-actions {
+  opacity: 1;
+}
+
+.dialog-action-btn {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  color: var(--vscode-icon-foreground);
+}
+
+.dialog-action-btn:hover {
+  background-color: var(--vscode-toolbar-hoverBackground);
+}
+
+.dialog-action-btn svg {
+  width: 12px;
+  height: 12px;
+  fill: currentColor;
+}
