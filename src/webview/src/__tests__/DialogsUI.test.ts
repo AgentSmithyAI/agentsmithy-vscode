@@ -213,6 +213,52 @@ describe('DialogsUI', () => {
     });
   });
 
+  describe('dropdown opening', () => {
+    it('opens dropdown when clicking title button', () => {
+      const titleBtn = document.getElementById('dialogTitleBtn')!;
+      const dropdown = document.getElementById('dialogDropdown')!;
+
+      expect(dropdown.style.display).toBe('none');
+
+      titleBtn.click();
+
+      expect(dropdown.style.display).toBe('block');
+      expect(vscode.postMessage).toHaveBeenCalledWith({type: WEBVIEW_IN_MSG.LOAD_DIALOGS});
+    });
+
+    it('closes dropdown when clicking title button again', () => {
+      const titleBtn = document.getElementById('dialogTitleBtn')!;
+      const dropdown = document.getElementById('dialogDropdown')!;
+
+      titleBtn.click(); // Open
+      expect(dropdown.style.display).toBe('block');
+
+      titleBtn.click(); // Close
+      expect(dropdown.style.display).toBe('none');
+    });
+
+    it('closes dropdown when clicking outside', () => {
+      const titleBtn = document.getElementById('dialogTitleBtn')!;
+      const dropdown = document.getElementById('dialogDropdown')!;
+
+      titleBtn.click(); // Open
+      expect(dropdown.style.display).toBe('block');
+
+      document.body.click(); // Click outside
+      expect(dropdown.style.display).toBe('none');
+    });
+
+    it('does not close when clicking inside dropdown', () => {
+      const titleBtn = document.getElementById('dialogTitleBtn')!;
+      const dropdown = document.getElementById('dialogDropdown')!;
+
+      titleBtn.click(); // Open
+      dropdown.click(); // Click inside
+
+      expect(dropdown.style.display).toBe('block');
+    });
+  });
+
   describe('inline editing', () => {
     beforeEach(() => {
       const dialogs = [mkDialog('dlg1', 'Original Title', '2025-01-01T12:00:00Z')];
@@ -365,6 +411,159 @@ describe('DialogsUI', () => {
       saveBtn.click();
 
       expect(vscode.postMessage).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('UI layout', () => {
+    it('renders left and right sections', () => {
+      const dialogs = [mkDialog('dlg1', 'Test', '2025-01-01T12:00:00Z')];
+      dialogsUI.updateDialogs(dialogs, null);
+
+      const left = container.querySelector('.dialog-item-left');
+      const right = container.querySelector('.dialog-item-right');
+
+      expect(left).toBeTruthy();
+      expect(right).toBeTruthy();
+    });
+
+    it('shows meta in right section by default', () => {
+      const dialogs = [mkDialog('dlg1', 'Test', '2025-01-01T12:00:00Z')];
+      dialogsUI.updateDialogs(dialogs, null);
+
+      const right = container.querySelector('.dialog-item-right');
+      const meta = right?.querySelector('.dialog-item-meta');
+      const actions = right?.querySelector('.dialog-item-actions');
+
+      expect(meta).toBeTruthy();
+      expect(actions).toBeTruthy();
+    });
+
+    it('replaces both left and right sections when editing', () => {
+      const dialogs = [mkDialog('dlg1', 'Test', '2025-01-01T12:00:00Z')];
+      dialogsUI.updateDialogs(dialogs, null);
+
+      const renameBtn = container.querySelector('.rename-btn') as HTMLButtonElement;
+      renameBtn.click();
+
+      // Left should have input
+      const left = container.querySelector('.dialog-item-left');
+      const input = left?.querySelector('.dialog-title-input');
+      expect(input).toBeTruthy();
+
+      // Right should have save/cancel buttons
+      const right = container.querySelector('.dialog-item-right');
+      const saveBtn = right?.querySelector('.save-btn');
+      const cancelBtn = right?.querySelector('.cancel-btn');
+      expect(saveBtn).toBeTruthy();
+      expect(cancelBtn).toBeTruthy();
+
+      // Meta and old actions should be gone
+      expect(right?.querySelector('.dialog-item-meta')).toBeNull();
+      expect(right?.querySelector('.rename-btn')).toBeNull();
+    });
+  });
+
+  describe('hover behavior', () => {
+    it('meta and actions are in same location', () => {
+      const dialogs = [mkDialog('dlg1', 'Test', '2025-01-01T12:00:00Z')];
+      dialogsUI.updateDialogs(dialogs, null);
+
+      const meta = container.querySelector('.dialog-item-meta') as HTMLElement;
+      const actions = container.querySelector('.dialog-item-actions') as HTMLElement;
+
+      // Both should be in the right section
+      const right = container.querySelector('.dialog-item-right');
+      expect(right?.contains(meta)).toBe(true);
+      expect(right?.contains(actions)).toBe(true);
+    });
+  });
+
+  describe('responsive design', () => {
+    it('dialog items render with short and long titles', () => {
+      const shortDialog = mkDialog('s', 'A', '2025-01-01T12:00:00Z');
+      const longDialog = mkDialog('l', 'Very long dialog title that exceeds normal width', '2025-01-01T12:00:00Z');
+
+      dialogsUI.updateDialogs([shortDialog, longDialog], null);
+
+      const items = container.querySelectorAll('.dialog-item');
+      expect(items).toHaveLength(2);
+
+      // Both should render properly
+      const titles = container.querySelectorAll('.dialog-item-title');
+      expect(titles[0].textContent).toBe('A');
+      expect(titles[1].textContent).toContain('Very long');
+    });
+
+    it('very long dialog titles have truncation class', () => {
+      const veryLongTitle = 'A'.repeat(200);
+      const dialogs = [mkDialog('dlg1', veryLongTitle, '2025-01-01T12:00:00Z')];
+
+      dialogsUI.updateDialogs(dialogs, null);
+
+      const title = container.querySelector('.dialog-item-title') as HTMLElement;
+
+      // Should have class that applies overflow and ellipsis
+      expect(title.classList.contains('dialog-item-title')).toBe(true);
+      expect(title.textContent).toBe(veryLongTitle);
+    });
+
+    it('header updates with current dialog title', () => {
+      const dialogs = [mkDialog('dlg1', 'Active Dialog', '2025-01-01T12:00:00Z')];
+
+      dialogsUI.updateDialogs(dialogs, 'dlg1');
+
+      const headerTitle = document.getElementById('dialogTitleText')!;
+      expect(headerTitle.textContent).toBe('Active Dialog');
+    });
+
+    it('header shows fallback for dialog without title', () => {
+      const dialogs = [mkDialog('dlg1', null, '2025-01-01T12:00:00Z')];
+
+      dialogsUI.updateDialogs(dialogs, 'dlg1');
+
+      const headerTitle = document.getElementById('dialogTitleText')!;
+      expect(headerTitle.textContent).toBe('New dialog');
+    });
+  });
+
+  describe('overflow detection', () => {
+    it('adds overflowing class when text is too long', () => {
+      const headerTitle = document.getElementById('dialogTitleText')!;
+
+      // Mock scrollWidth > clientWidth
+      Object.defineProperty(headerTitle, 'scrollWidth', {value: 500, configurable: true});
+      Object.defineProperty(headerTitle, 'clientWidth', {value: 200, configurable: true});
+
+      dialogsUI.updateCurrentDialog('dlg1', 'Very long title that overflows');
+
+      expect(headerTitle.classList.contains('overflowing')).toBe(true);
+    });
+
+    it('does not add overflowing class when text fits', () => {
+      const headerTitle = document.getElementById('dialogTitleText')!;
+
+      // Mock scrollWidth <= clientWidth
+      Object.defineProperty(headerTitle, 'scrollWidth', {value: 100, configurable: true});
+      Object.defineProperty(headerTitle, 'clientWidth', {value: 200, configurable: true});
+
+      dialogsUI.updateCurrentDialog('dlg1', 'Short');
+
+      expect(headerTitle.classList.contains('overflowing')).toBe(false);
+    });
+
+    it('removes overflowing class when switching to shorter title', () => {
+      const headerTitle = document.getElementById('dialogTitleText')!;
+
+      // First: long title
+      Object.defineProperty(headerTitle, 'scrollWidth', {value: 500, configurable: true});
+      Object.defineProperty(headerTitle, 'clientWidth', {value: 200, configurable: true});
+      dialogsUI.updateCurrentDialog('dlg1', 'Very long title');
+      expect(headerTitle.classList.contains('overflowing')).toBe(true);
+
+      // Then: short title
+      Object.defineProperty(headerTitle, 'scrollWidth', {value: 50, configurable: true});
+      dialogsUI.updateCurrentDialog('dlg2', 'Short');
+      expect(headerTitle.classList.contains('overflowing')).toBe(false);
     });
   });
 });

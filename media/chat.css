@@ -383,41 +383,43 @@ body {
 .chat-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   padding: 8px;
   border-bottom: 1px solid var(--vscode-widget-border);
   background-color: var(--vscode-sideBar-background);
-  gap: 8px;
+  gap: 2px;
   min-height: 40px;
   position: relative;
   z-index: 100;
 }
 
 .dialog-selector {
-  flex: 1;
   position: relative;
-  min-width: 0; /* Allow text truncation */
+  flex: 0 1 auto;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  max-width: calc(100% - 28px);
 }
 
 .dialog-title-btn {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px 8px;
-  background: var(--vscode-dropdown-background);
-  border: 1px solid var(--vscode-dropdown-border, var(--vscode-widget-border));
+  gap: 2px;
+  padding: 2px 4px;
+  background: transparent;
+  border: none;
   border-radius: 2px;
-  color: var(--vscode-dropdown-foreground, var(--vscode-foreground));
+  color: var(--vscode-foreground);
   cursor: pointer;
   font-family: inherit;
   font-size: inherit;
-  width: 100%;
-  text-align: left;
+  flex: 1;
   min-width: 0;
+  transition: background-color 0.1s;
 }
 
 .dialog-title-btn:hover {
-  background-color: var(--vscode-dropdown-listBackground, var(--vscode-list-hoverBackground));
+  background-color: var(--vscode-toolbar-hoverBackground);
 }
 
 .dialog-title-btn:focus {
@@ -426,22 +428,33 @@ body {
 }
 
 .dialog-title-text {
-  flex: 1;
   overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.dialog-title-text.overflowing {
+  mask-image: linear-gradient(to right, black calc(100% - 1.5em), transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, black calc(100% - 1.5em), transparent 100%);
 }
 
 .dropdown-icon {
-  width: 12px;
-  height: 12px;
+  width: 10px;
+  height: 10px;
   fill: currentColor;
+  opacity: 0.6;
   flex-shrink: 0;
+  transition: opacity 0.1s;
+}
+
+.dialog-title-btn:hover .dropdown-icon {
+  opacity: 1;
 }
 
 .new-dialog-btn {
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   padding: 0;
   display: inline-flex;
   align-items: center;
@@ -452,6 +465,7 @@ body {
   border-radius: 2px;
   cursor: pointer;
   flex-shrink: 0;
+  transition: background-color 0.1s;
 }
 
 .new-dialog-btn:hover {
@@ -464,23 +478,22 @@ body {
 }
 
 .new-dialog-btn svg {
-  width: 14px;
-  height: 14px;
+  width: 12px;
+  height: 12px;
   fill: currentColor;
 }
 
 /* Dropdown menu */
 .dialog-dropdown {
   position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
-  margin-top: 4px;
+  top: calc(100% + 4px);
+  left: -8px; /* Align with header left padding */
+  width: calc(100vw - 16px); /* Full viewport width minus sidebar padding */
   background-color: var(--vscode-dropdown-background);
   border: 2px solid var(--vscode-dropdown-border, var(--vscode-widget-border));
   border-radius: 3px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-  max-height: 400px;
+  max-height: 60vh; /* Responsive max height */
   overflow-y: auto;
   z-index: 1000;
 }

@@ -112,12 +112,24 @@ export class DialogsUI {
   updateCurrentDialog(dialogId: string | null, title: string): void {
     this.currentDialogId = dialogId;
     this.dialogTitleText.textContent = title || 'New dialog';
+    this.checkTitleOverflow();
     this.renderDialogsList();
   }
 
   private updateCurrentDialogTitle(): void {
     const currentDialog = this.dialogs.find((d) => d.id === this.currentDialogId);
     this.dialogTitleText.textContent = currentDialog?.title || 'New dialog';
+    this.checkTitleOverflow();
+  }
+
+  private checkTitleOverflow(): void {
+    // Check if text is overflowing and apply gradient mask only when needed
+    const isOverflowing = this.dialogTitleText.scrollWidth > this.dialogTitleText.clientWidth;
+    if (isOverflowing) {
+      this.dialogTitleText.classList.add('overflowing');
+    } else {
+      this.dialogTitleText.classList.remove('overflowing');
+    }
   }
 
   private renderDialogsList(): void {
