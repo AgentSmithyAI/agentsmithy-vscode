@@ -490,13 +490,18 @@ body {
   gap: 8px;
 }
 
-.dialog-item:hover {
+.dialog-item:hover:not(.active):not(.loading):not(.error) {
   background-color: var(--vscode-list-hoverBackground);
 }
 
 .dialog-item.active {
   background-color: var(--vscode-list-activeSelectionBackground);
   color: var(--vscode-list-activeSelectionForeground);
+}
+
+.dialog-item.active:hover {
+  background-color: var(--vscode-list-activeSelectionBackground);
+  filter: brightness(1.1);
 }
 
 .dialog-item.loading {
