@@ -2,7 +2,7 @@
 
 [![GitHub release](https://img.shields.io/github/v/release/AgentSmithyAI/agentsmithy-vscode)](https://github.com/AgentSmithyAI/agentsmithy-vscode/releases)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
-[![CI](https://github.com/AgentSmithyAI/agentsmithy-vscode/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/AgentSmithyAI/agentsmithy-vscode/actions/workflows/ci.yml)
+[![CI](https://github.com/AgentSmithyAI/agentsmithy-vscode/actions/workflows/workflow.yaml/badge.svg?branch=master)](https://github.com/AgentSmithyAI/agentsmithy-vscode/actions/workflows/workflow.yaml)
 [![codecov](https://codecov.io/gh/AgentSmithyAI/agentsmithy-vscode/branch/master/graph/badge.svg)](https://codecov.io/gh/AgentSmithyAI/agentsmithy-vscode)
 [![VSCode Version](https://img.shields.io/badge/VSCode-1.100.0%2B-blue)](https://code.visualstudio.com/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue)](https://www.typescriptlang.org/)
