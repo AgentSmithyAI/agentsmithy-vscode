@@ -480,11 +480,14 @@ body {
 }
 
 .dialog-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 8px;
   padding: 6px 8px;
   cursor: pointer;
   border-radius: 4px;
   transition: background-color 0.15s;
-  position: relative;
 }
 
 .dialog-item:hover:not(.active):not(.loading):not(.error) {
@@ -528,30 +531,29 @@ body {
   animation: spin 1s linear infinite;
 }
 
-.dialog-item-content {
+.dialog-item-left {
+  min-width: 0; /* Allow text truncation */
+}
+
+.dialog-item-right {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 8px;
-  position: relative;
-  padding-right: 60px; /* Reserve space for meta/actions */
+  justify-content: flex-end;
+  min-width: 60px;
 }
 
 .dialog-item-title {
-  flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 0.9em;
-  min-width: 0;
 }
 
 .dialog-item-meta {
-  position: absolute;
-  right: 0;
   font-size: 0.75em;
   opacity: 0.7;
   white-space: nowrap;
-  pointer-events: none;
   transition: opacity 0.15s;
 }
 
@@ -599,6 +601,14 @@ body {
   fill: currentColor;
 }
 
+.dialog-action-btn.save-btn {
+  color: var(--vscode-gitDecoration-addedResourceForeground, #4caf50);
+}
+
+.dialog-action-btn.cancel-btn {
+  color: var(--vscode-errorForeground, #f44336);
+}
+
 .dialog-title-input {
   width: 100%;
   background: var(--vscode-input-background);
@@ -606,7 +616,7 @@ body {
   border: 1px solid var(--vscode-focusBorder);
   padding: 2px 4px;
   font-family: inherit;
-  font-size: inherit;
+  font-size: 0.9em;
   border-radius: 2px;
   outline: none;
 }

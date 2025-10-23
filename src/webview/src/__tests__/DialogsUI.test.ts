@@ -74,20 +74,20 @@ describe('DialogsUI', () => {
 
     it('updates dialog title in header', () => {
       const dialogs = [mkDialog('dlg1', 'Active Dialog', '2025-01-01T12:00:00Z')];
-      const titleElement = document.getElementById('dialogTitleText')!;
+      const headerTitleElement = document.getElementById('dialogTitleText')!;
 
       dialogsUI.updateDialogs(dialogs, 'dlg1');
 
-      expect(titleElement.textContent).toBe('Active Dialog');
+      expect(headerTitleElement.textContent).toBe('Active Dialog');
     });
 
     it('shows "New dialog" in header when no title', () => {
       const dialogs = [mkDialog('dlg1', null, '2025-01-01T12:00:00Z')];
-      const titleElement = document.getElementById('dialogTitleText')!;
+      const headerTitleElement = document.getElementById('dialogTitleText')!;
 
       dialogsUI.updateDialogs(dialogs, 'dlg1');
 
-      expect(titleElement.textContent).toBe('New dialog');
+      expect(headerTitleElement.textContent).toBe('New dialog');
     });
   });
 
@@ -210,6 +210,161 @@ describe('DialogsUI', () => {
 
       const meta = container.querySelector('.dialog-item-meta')!;
       expect(meta.textContent).toContain('just now');
+    });
+  });
+
+  describe('inline editing', () => {
+    beforeEach(() => {
+      const dialogs = [mkDialog('dlg1', 'Original Title', '2025-01-01T12:00:00Z')];
+      dialogsUI.updateDialogs(dialogs, null);
+    });
+
+    it('replaces title with input when clicking rename button', () => {
+      const renameBtn = container.querySelector('.rename-btn') as HTMLButtonElement;
+      renameBtn.click();
+
+      const input = container.querySelector('.dialog-title-input') as HTMLInputElement;
+      expect(input).toBeTruthy();
+      expect(input.value).toBe('Original Title');
+    });
+
+    it('shows save and cancel buttons when editing', () => {
+      const renameBtn = container.querySelector('.rename-btn') as HTMLButtonElement;
+      renameBtn.click();
+
+      const saveBtn = container.querySelector('.save-btn');
+      const cancelBtn = container.querySelector('.cancel-btn');
+
+      expect(saveBtn).toBeTruthy();
+      expect(cancelBtn).toBeTruthy();
+    });
+
+    it('sends RENAME_DIALOG message when clicking save with new title', () => {
+      const renameBtn = container.querySelector('.rename-btn') as HTMLButtonElement;
+      renameBtn.click();
+
+      const input = container.querySelector('.dialog-title-input') as HTMLInputElement;
+      input.value = 'New Title';
+
+      const saveBtn = container.querySelector('.save-btn') as HTMLButtonElement;
+      saveBtn.click();
+
+      expect(vscode.postMessage).toHaveBeenCalledWith({
+        type: WEBVIEW_IN_MSG.RENAME_DIALOG,
+        dialogId: 'dlg1',
+        title: 'New Title',
+      });
+    });
+
+    it('does not send message when saving without changes', () => {
+      const renameBtn = container.querySelector('.rename-btn') as HTMLButtonElement;
+      renameBtn.click();
+
+      const saveBtn = container.querySelector('.save-btn') as HTMLButtonElement;
+      saveBtn.click();
+
+      expect(vscode.postMessage).not.toHaveBeenCalled();
+    });
+
+    it('restores original content when clicking cancel', () => {
+      const renameBtn = container.querySelector('.rename-btn') as HTMLButtonElement;
+      renameBtn.click();
+
+      const input = container.querySelector('.dialog-title-input') as HTMLInputElement;
+      input.value = 'Changed';
+
+      const cancelBtn = container.querySelector('.cancel-btn') as HTMLButtonElement;
+      cancelBtn.click();
+
+      // Should restore original title
+      const title = container.querySelector('.dialog-item-title');
+      expect(title?.textContent).toBe('Original Title');
+      expect(container.querySelector('.dialog-title-input')).toBeNull();
+    });
+
+    it('saves on Enter key', () => {
+      const renameBtn = container.querySelector('.rename-btn') as HTMLButtonElement;
+      renameBtn.click();
+
+      const input = container.querySelector('.dialog-title-input') as HTMLInputElement;
+      input.value = 'Enter Title';
+
+      const enterEvent = new KeyboardEvent('keydown', {key: 'Enter', bubbles: true});
+      input.dispatchEvent(enterEvent);
+
+      expect(vscode.postMessage).toHaveBeenCalledWith({
+        type: WEBVIEW_IN_MSG.RENAME_DIALOG,
+        dialogId: 'dlg1',
+        title: 'Enter Title',
+      });
+    });
+
+    it('cancels on Escape key', () => {
+      const renameBtn = container.querySelector('.rename-btn') as HTMLButtonElement;
+      renameBtn.click();
+
+      const input = container.querySelector('.dialog-title-input') as HTMLInputElement;
+      input.value = 'Changed';
+
+      const escapeEvent = new KeyboardEvent('keydown', {key: 'Escape', bubbles: true});
+      input.dispatchEvent(escapeEvent);
+
+      // Should restore original title without sending message
+      expect(vscode.postMessage).not.toHaveBeenCalled();
+      const title = container.querySelector('.dialog-item-title');
+      expect(title?.textContent).toBe('Original Title');
+    });
+
+    it('restores event listeners after editing', () => {
+      const renameBtn = container.querySelector('.rename-btn') as HTMLButtonElement;
+      renameBtn.click();
+
+      const saveBtn = container.querySelector('.save-btn') as HTMLButtonElement;
+      saveBtn.click();
+
+      // After save, rename button should be clickable again
+      const newRenameBtn = container.querySelector('.rename-btn') as HTMLButtonElement;
+      expect(newRenameBtn).toBeTruthy();
+
+      // Verify it's a fresh element by clicking it
+      (vscode.postMessage as ReturnType<typeof vi.fn>).mockClear();
+      newRenameBtn.click();
+
+      const input = container.querySelector('.dialog-title-input');
+      expect(input).toBeTruthy(); // Should enter edit mode again
+    });
+
+    it('uses grid layout for left and right sections', () => {
+      const leftElement = container.querySelector('.dialog-item-left');
+      const rightElement = container.querySelector('.dialog-item-right');
+
+      expect(leftElement).toBeTruthy();
+      expect(rightElement).toBeTruthy();
+    });
+
+    it('handles special characters in title', () => {
+      const dialogs = [mkDialog('dlg1', 'Title with "quotes" & <tags>', '2025-01-01T12:00:00Z')];
+      dialogsUI.updateDialogs(dialogs, null);
+
+      const renameBtn = container.querySelector('.rename-btn') as HTMLButtonElement;
+      renameBtn.click();
+
+      const input = container.querySelector('.dialog-title-input') as HTMLInputElement;
+      // escapeHtml should properly escape the value
+      expect(input.value).toBe('Title with "quotes" & <tags>');
+    });
+
+    it('does not send rename message with empty title', () => {
+      const renameBtn = container.querySelector('.rename-btn') as HTMLButtonElement;
+      renameBtn.click();
+
+      const input = container.querySelector('.dialog-title-input') as HTMLInputElement;
+      input.value = '   '; // Only whitespace
+
+      const saveBtn = container.querySelector('.save-btn') as HTMLButtonElement;
+      saveBtn.click();
+
+      expect(vscode.postMessage).not.toHaveBeenCalled();
     });
   });
 });

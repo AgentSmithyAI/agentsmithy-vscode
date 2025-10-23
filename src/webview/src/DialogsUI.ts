@@ -1,5 +1,6 @@
 import {WEBVIEW_IN_MSG} from '../../shared/messages';
 import type {VSCodeAPI} from './types';
+import {escapeHtml} from './utils';
 
 interface Dialog {
   id: string;
@@ -101,7 +102,7 @@ export class DialogsUI {
    */
   showError(error: string): void {
     this.dialogsList.innerHTML = `
-      <div class="dialog-item error">${this.escapeHtml(error)}</div>
+      <div class="dialog-item error">${escapeHtml(error)}</div>
     `;
   }
 
@@ -128,13 +129,15 @@ export class DialogsUI {
     const html = this.dialogs
       .map((dialog) => {
         const isActive = dialog.id === this.currentDialogId;
-        const title = this.escapeHtml(dialog.title || 'New dialog');
+        const title = escapeHtml(dialog.title || 'New dialog');
         const updatedAt = this.formatDate(dialog.updated_at);
 
         return `
         <div class="dialog-item ${isActive ? 'active' : ''}" data-dialog-id="${dialog.id}">
-          <div class="dialog-item-content">
+          <div class="dialog-item-left">
             <div class="dialog-item-title">${title}</div>
+          </div>
+          <div class="dialog-item-right">
             <div class="dialog-item-meta">${updatedAt}</div>
             <div class="dialog-item-actions">
               <button class="dialog-action-btn rename-btn" data-dialog-id="${dialog.id}" title="Rename">
@@ -210,35 +213,57 @@ export class DialogsUI {
       return;
     }
 
-    // Find the dialog item and title element
+    // Find elements
     const dialogItem = this.dialogsList.querySelector(`[data-dialog-id="${dialogId}"]`) as HTMLElement;
     if (!dialogItem) {
       return;
     }
 
-    const titleElement = dialogItem.querySelector('.dialog-item-title') as HTMLElement;
-    if (!titleElement) {
+    const leftElement = dialogItem.querySelector('.dialog-item-left') as HTMLElement;
+    const rightElement = dialogItem.querySelector('.dialog-item-right') as HTMLElement;
+
+    if (!leftElement || !rightElement) {
       return;
     }
 
     const currentTitle = dialog.title || '';
 
-    // Create input field
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.value = currentTitle;
-    input.className = 'dialog-title-input';
+    // Save original HTML
+    const originalLeftHTML = leftElement.innerHTML;
+    const originalRightHTML = rightElement.innerHTML;
 
-    // Replace title with input
-    const originalContent = titleElement.innerHTML;
-    titleElement.innerHTML = '';
-    titleElement.appendChild(input);
+    // Replace with input and edit buttons
+    leftElement.innerHTML = `<input type="text" class="dialog-title-input" value="${escapeHtml(currentTitle)}" />`;
+
+    rightElement.innerHTML = `
+      <button class="dialog-action-btn save-btn" title="Save">
+        <svg viewBox="0 0 16 16" aria-hidden="true">
+          <path d="M14 3L5 12 2 9l1-1 2 2 8-8z"/>
+        </svg>
+      </button>
+      <button class="dialog-action-btn cancel-btn" title="Cancel">
+        <svg viewBox="0 0 16 16" aria-hidden="true">
+          <path d="M8 8.707l3.646 3.647.708-.707L8.707 8l3.647-3.646-.707-.708L8 7.293 4.354 3.646l-.708.708L7.293 8l-3.647 3.646.708.708L8 8.707z"/>
+        </svg>
+      </button>
+    `;
+
+    const input = leftElement.querySelector('input') as HTMLInputElement;
+    const saveBtn = rightElement.querySelector('.save-btn') as HTMLButtonElement;
+    const cancelBtn = rightElement.querySelector('.cancel-btn') as HTMLButtonElement;
+
     input.focus();
     input.select();
 
+    const finishEdit = () => {
+      leftElement.innerHTML = originalLeftHTML;
+      rightElement.innerHTML = originalRightHTML;
+      // Re-render to restore event listeners
+      this.renderDialogsList();
+    };
+
     const saveTitle = () => {
       const newTitle = input.value.trim();
-      titleElement.innerHTML = originalContent;
 
       if (newTitle && newTitle !== currentTitle) {
         this.vscode.postMessage({
@@ -247,13 +272,27 @@ export class DialogsUI {
           title: newTitle,
         });
       }
+
+      finishEdit();
     };
 
     const cancelEdit = () => {
-      titleElement.innerHTML = originalContent;
+      finishEdit();
     };
 
-    // Save on Enter
+    // Save button
+    saveBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      saveTitle();
+    });
+
+    // Cancel button
+    cancelBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      cancelEdit();
+    });
+
+    // Save on Enter, cancel on Escape
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         e.preventDefault();
@@ -262,11 +301,6 @@ export class DialogsUI {
         e.preventDefault();
         cancelEdit();
       }
-    });
-
-    // Save on blur
-    input.addEventListener('blur', () => {
-      saveTitle();
     });
 
     // Prevent item click when editing
@@ -320,11 +354,5 @@ export class DialogsUI {
 
     // Format as date
     return date.toLocaleDateString();
-  }
-
-  private escapeHtml(text: string): string {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
   }
 }
