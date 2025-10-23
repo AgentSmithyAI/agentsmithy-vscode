@@ -473,6 +473,8 @@ body {
   white-space: nowrap;
   flex: 1;
   min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .dialog-title-text.overflowing {

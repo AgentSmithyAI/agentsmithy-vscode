@@ -212,6 +212,14 @@ class ChatWebview {
         break;
       }
 
+      case WEBVIEW_OUT_MSG.SHOW_TOOL_CALL:
+        // Check if it's set_dialog_title and reload dialogs list
+        if (message.tool === 'set_dialog_title') {
+          this.vscode.postMessage({type: WEBVIEW_IN_MSG.LOAD_DIALOGS});
+        }
+        this.messageHandler.handle(message);
+        break;
+
       default:
         this.messageHandler.handle(message);
     }
