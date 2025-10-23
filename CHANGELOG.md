@@ -1,3 +1,10 @@
+# [1.2.0](https://github.com/AgentSmithyAI/agentsmithy-vscode/compare/v1.1.0...v1.2.0) (2025-10-23)
+
+
+### Features
+
+* Dialog switches ([#13](https://github.com/AgentSmithyAI/agentsmithy-vscode/issues/13)) ([bad6833](https://github.com/AgentSmithyAI/agentsmithy-vscode/commit/bad683390d2cafbee677613d3260d4b668852ded))
+
 # [1.1.0](https://github.com/AgentSmithyAI/agentsmithy-vscode/compare/v1.0.0...v1.1.0) (2025-10-20)
 
 
