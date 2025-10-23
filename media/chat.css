@@ -404,10 +404,10 @@ body {
   align-items: center;
   gap: 4px;
   padding: 4px 8px;
-  background: transparent;
-  border: 1px solid var(--vscode-input-border);
-  border-radius: 4px;
-  color: var(--vscode-foreground);
+  background: var(--vscode-dropdown-background);
+  border: 1px solid var(--vscode-dropdown-border, var(--vscode-widget-border));
+  border-radius: 2px;
+  color: var(--vscode-dropdown-foreground, var(--vscode-foreground));
   cursor: pointer;
   font-family: inherit;
   font-size: inherit;
@@ -417,7 +417,12 @@ body {
 }
 
 .dialog-title-btn:hover {
-  background-color: var(--vscode-list-hoverBackground);
+  background-color: var(--vscode-dropdown-listBackground, var(--vscode-list-hoverBackground));
+}
+
+.dialog-title-btn:focus {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
 }
 
 .dialog-title-text {
@@ -443,14 +448,19 @@ body {
   justify-content: center;
   background: transparent;
   color: var(--vscode-icon-foreground);
-  border: 1px solid var(--vscode-input-border);
-  border-radius: 4px;
+  border: none;
+  border-radius: 2px;
   cursor: pointer;
   flex-shrink: 0;
 }
 
 .new-dialog-btn:hover {
   background-color: var(--vscode-toolbar-hoverBackground);
+}
+
+.new-dialog-btn:focus {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
 }
 
 .new-dialog-btn svg {
@@ -467,16 +477,16 @@ body {
   right: 0;
   margin-top: 4px;
   background-color: var(--vscode-dropdown-background);
-  border: 1px solid var(--vscode-dropdown-border);
-  border-radius: 4px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  border: 2px solid var(--vscode-dropdown-border, var(--vscode-widget-border));
+  border-radius: 3px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
   max-height: 400px;
   overflow-y: auto;
   z-index: 1000;
 }
 
 .dialogs-list {
-  padding: 4px;
+  padding: 2px;
 }
 
 .dialog-item {
@@ -484,10 +494,10 @@ body {
   grid-template-columns: 1fr auto;
   align-items: center;
   gap: 8px;
-  padding: 6px 8px;
+  padding: 4px 8px;
   cursor: pointer;
-  border-radius: 4px;
-  transition: background-color 0.15s;
+  border-radius: 2px;
+  transition: background-color 0.1s;
 }
 
 .dialog-item:hover:not(.active):not(.loading):not(.error) {
@@ -501,7 +511,7 @@ body {
 
 .dialog-item.active:hover {
   background-color: var(--vscode-list-activeSelectionBackground);
-  filter: brightness(1.1);
+  opacity: 0.95;
 }
 
 .dialog-item.loading {
@@ -552,9 +562,9 @@ body {
 
 .dialog-item-meta {
   font-size: 0.75em;
-  opacity: 0.7;
+  opacity: 0.6;
   white-space: nowrap;
-  transition: opacity 0.15s;
+  transition: opacity 0.1s ease-out;
 }
 
 .dialog-item:hover .dialog-item-meta {
@@ -568,7 +578,7 @@ body {
   gap: 4px;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.15s;
+  transition: opacity 0.1s ease-out;
 }
 
 .dialog-item:hover .dialog-item-actions {
@@ -585,7 +595,7 @@ body {
   justify-content: center;
   background: transparent;
   border: none;
-  border-radius: 3px;
+  border-radius: 2px;
   cursor: pointer;
   color: var(--vscode-icon-foreground);
   pointer-events: auto;
@@ -595,6 +605,11 @@ body {
   background-color: var(--vscode-toolbar-hoverBackground);
 }
 
+.dialog-action-btn:focus {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+}
+
 .dialog-action-btn svg {
   width: 12px;
   height: 12px;
@@ -602,11 +617,11 @@ body {
 }
 
 .dialog-action-btn.save-btn {
-  color: var(--vscode-gitDecoration-addedResourceForeground, #4caf50);
+  color: var(--vscode-debugIcon-startForeground, var(--vscode-gitDecoration-addedResourceForeground));
 }
 
 .dialog-action-btn.cancel-btn {
-  color: var(--vscode-errorForeground, #f44336);
+  color: var(--vscode-debugIcon-stopForeground, var(--vscode-errorForeground));
 }
 
 .dialog-title-input {
