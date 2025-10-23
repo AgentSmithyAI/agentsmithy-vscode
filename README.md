@@ -22,12 +22,14 @@ Requires [AgentSmithy server](https://github.com/AgentSmithyAI/agentsmithy-agent
 
 ### Setting up AgentSmithy server
 
-1. Install the server:
+1. Download binary from [releases page](https://github.com/AgentSmithyAI/agentsmithy-agent/releases)
+
+2. Make it executable:
    ```bash
-   pip install agentsmithy
+   chmod +x agentsmithy
    ```
 
-2. Configure OpenAI API key:
+3. Configure OpenAI API key:
    
    Via environment variable:
    ```bash
@@ -45,9 +47,9 @@ Requires [AgentSmithy server](https://github.com/AgentSmithyAI/agentsmithy-agent
    }
    ```
 
-3. Start the server:
+4. Start the server:
    ```bash
-   agentsmithy --workdir /path/to/your/project --ide vscode
+   ./agentsmithy --workdir /path/to/your/project --ide vscode
    ```
 
 Server will start on `http://localhost:8765`. All project data (conversation history, code index, config) is stored in `<your-project>/.agentsmithy/`.
@@ -73,6 +75,12 @@ Or install manually: `Ctrl+Shift+P` → `Extensions: Install from VSIX...`
 
 ## Usage
 
+First, start the agent server:
+```bash
+./agentsmithy --workdir /path/to/your/project --ide vscode
+```
+
+Then in VSCode:
 - Click AgentSmithy icon in Activity Bar
 - Or: `Ctrl+Shift+P` → `AgentSmithy: Open Chat`
 - Send selected code: Right-click → `Send Selection to AgentSmithy`
