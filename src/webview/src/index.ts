@@ -120,9 +120,13 @@ class ChatWebview {
         const fileAttr = target.getAttribute('data-file') || '';
         const file = decodeURIComponent(fileAttr);
         this.vscode.postMessage({type: WEBVIEW_IN_MSG.OPEN_FILE, file});
-      } else if (target?.matches?.('.restore-checkpoint-btn')) {
+      }
+
+      // Handle restore checkpoint button (including clicks on SVG inside)
+      const restoreBtn = target?.closest?.('.restore-checkpoint-btn') as HTMLElement | null;
+      if (restoreBtn) {
         e.preventDefault();
-        const checkpointId = target.getAttribute('data-checkpoint');
+        const checkpointId = restoreBtn.getAttribute('data-checkpoint');
         const dialogId = this.dialogViewManager.getActiveDialogId();
         if (checkpointId && dialogId) {
           this.vscode.postMessage({
