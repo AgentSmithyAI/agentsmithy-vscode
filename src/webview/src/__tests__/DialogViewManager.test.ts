@@ -17,6 +17,9 @@ describe('DialogViewManager', () => {
   let manager: DialogViewManager;
 
   beforeEach(() => {
+    // Mock scrollIntoView
+    HTMLElement.prototype.scrollIntoView = vi.fn();
+
     vscode = createMockVSCodeAPI();
     parentContainer = document.createElement('div');
     document.body.appendChild(parentContainer);
@@ -179,6 +182,53 @@ describe('DialogViewManager', () => {
 
       expect(manager.getLoadedDialogIds()).toEqual([]);
       expect(manager.getActiveDialogId()).toBeNull();
+    });
+  });
+
+  describe('integration scenarios', () => {
+    it('handles dialog switching during active stream', () => {
+      // Start stream in dialog-1
+      const view1 = manager.switchToDialog('dialog-1');
+      view1.getStreamingState().setProcessing(true, 'dialog-1');
+      expect(view1.getIsActive()).toBe(true);
+      expect(view1.hasActiveStream()).toBe(true);
+
+      // Switch to dialog-2 while dialog-1 is streaming
+      const view2 = manager.switchToDialog('dialog-2');
+      expect(view1.getIsActive()).toBe(false);
+      expect(view2.getIsActive()).toBe(true);
+      expect(view1.hasActiveStream()).toBe(true); // Stream continues in background
+
+      // Switch back to dialog-1
+      manager.switchToDialog('dialog-1');
+      expect(view1.getIsActive()).toBe(true);
+      expect(view1.hasActiveStream()).toBe(true);
+    });
+
+    it('preserves dialog state when switching away and back', () => {
+      const view1 = manager.switchToDialog('dialog-1');
+      const renderer1 = view1.getRenderer();
+
+      // Add a message
+      renderer1.addMessage('user', 'Test message');
+
+      // Switch to another dialog
+      manager.switchToDialog('dialog-2');
+
+      // Switch back
+      manager.switchToDialog('dialog-1');
+
+      // Check that message is still there
+      const messagesContainer = view1.container.querySelector('.messages');
+      expect(messagesContainer?.textContent).toContain('Test message');
+    });
+
+    it('creates view on first access even without switch', () => {
+      const view = manager.getOrCreateView('dialog-1');
+      expect(view).toBeTruthy();
+      expect(view.dialogId).toBe('dialog-1');
+      expect(view.getIsActive()).toBe(false); // Not shown until switched
+      expect(manager.isDialogLoaded('dialog-1')).toBe(true);
     });
   });
 });
