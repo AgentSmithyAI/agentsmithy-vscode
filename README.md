@@ -7,103 +7,84 @@
 [![VSCode Version](https://img.shields.io/badge/VSCode-1.100.0%2B-blue)](https://code.visualstudio.com/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue)](https://www.typescriptlang.org/)
 
-## Formatting, Linting & Tests
+VSCode interface for [AgentSmithy](https://github.com/AgentSmithyAI/agentsmithy-agent) - AI coding assistant that writes code for you.
 
-- ESLint autofix: npm run lint:fix
-- Prettier write: npm run format
-- Prettier check (CI): npm run format:check
-- Unit tests (Vitest):
-  - Run once: npm test
-  - Watch mode: npm run test:watch
-  - Coverage: npm run test:coverage
+Ask it to implement features, refactor code, fix bugs, or explain how something works. It understands your codebase and makes changes directly in your files.
 
-Prettier ignores build/test output via .prettierignore.
+Supports Code-OSS, VSCodium, and any VSCode fork.
 
-This VSCode extension integrates AgentSmithy AI coding assistant into Visual Studio Code through a native WebView chat interface. Works with any VSCode version, including open source builds (Code-OSS, VSCodium).
-
-## Features
-
-- **Native Chat Interface**: Built-in chat panel in VSCode sidebar
-- **AI-powered code assistance**: Get help with coding tasks directly in VSCode
-- **File context awareness**: AgentSmithy understands your current file and selection
-- **Real-time streaming**: Responses stream in real-time using Server-Sent Events (SSE)
-- **Tool usage visibility**: See when AgentSmithy uses tools to read/edit files
-- **Diff display**: View file changes as unified diffs in the chat
-- **Selection support**: Right-click to send selected code to AgentSmithy
+Requires [AgentSmithy server](https://github.com/AgentSmithyAI/agentsmithy-agent) running locally.
 
 ## Prerequisites
 
-- AgentSmithy server running locally (default: http://localhost:8765)
+- [AgentSmithy server](https://github.com/AgentSmithyAI/agentsmithy-agent) running locally (default: http://localhost:8765)
 - Any version of Visual Studio Code (including Code-OSS, VSCodium)
+
+### Setting up AgentSmithy server
+
+1. Install the server:
+   ```bash
+   pip install agentsmithy
+   ```
+
+2. Configure OpenAI API key:
+   
+   Via environment variable:
+   ```bash
+   export OPENAI_API_KEY=your_key_here
+   ```
+   
+   Or directly in `<your-project>/.agentsmithy/config.json` providers section:
+   ```json
+   "providers": {
+     "gpt5": {
+       "type": "openai",
+       "model": "gpt-4o",
+       "api_key": "your_key_here"
+     }
+   }
+   ```
+
+3. Start the server:
+   ```bash
+   agentsmithy --workdir /path/to/your/project --ide vscode
+   ```
+
+Server will start on `http://localhost:8765`. All project data (conversation history, code index, config) is stored in `<your-project>/.agentsmithy/`.
+
+See [server documentation](https://github.com/AgentSmithyAI/agentsmithy-agent#readme) for details.
 
 ## Installation
 
-### Development Mode (Recommended for testing)
-
-1. Clone this repository
-2. Run `npm install` to install dependencies
-3. Press `F5` in VSCode to launch extension in debug mode
-4. Look for AgentSmithy icon in the activity bar (left sidebar)
-
-### Install from VSIX
-
-Build once, then install:
+### From VSIX
 
 ```bash
-npm run format && \
-npm run lint:fix && \
-npm ci && \
-npm run compile && \
-npx @vscode/vsce package && \
+npm run format && npm run lint:fix && npm ci && npm run compile && npx @vscode/vsce package
 code --install-extension $(ls -t agentsmithy-vscode-*.vsix | head -1) --force
 ```
 
-Or via UI: `Ctrl+Shift+P` → `Extensions: Install from VSIX...` → select the generated `.vsix`.
+Or install manually: `Ctrl+Shift+P` → `Extensions: Install from VSIX...`
+
+### Development
+
+1. Clone the repository
+2. Run `npm install`
+3. Press `F5` to launch in debug mode
 
 ## Usage
 
-### Open Chat
-
-- Click the AgentSmithy icon in the activity bar (left sidebar)
-- Or use Command Palette: `Ctrl+Shift+P` → `AgentSmithy: Open Chat`
-
-### Move to Secondary Sidebar (Recommended)
-
-Two options:
-
-- Right‑click the AgentSmithy icon in the Activity Bar → "Move to Secondary Side Bar"
-- Or `Ctrl+Shift+P` → "Toggle Secondary Side Bar", then drag the "AgentSmithy Chat" view to the right pane
-
-After installing/updating, reload the window: `Ctrl+Shift+P` → "Developer: Reload Window".
-
-### Send Selected Code
-
-1. Select code in the editor
-2. Right-click → `Send Selection to AgentSmithy`
-3. Or use Command Palette: `Ctrl+Shift+P` → `AgentSmithy: Send Selection`
-
-### Chat Interface
-
-- Type your message in the input field
-- Press Enter to send (Shift+Enter for new line)
-- View responses with syntax highlighting and formatting
-- See tool usage and file edits in real-time
+- Click AgentSmithy icon in Activity Bar
+- Or: `Ctrl+Shift+P` → `AgentSmithy: Open Chat`
+- Send selected code: Right-click → `Send Selection to AgentSmithy`
 
 ## Configuration
 
 Access settings via `File → Preferences → Settings` → search for "AgentSmithy":
 
-- `agentsmithy.serverUrl`: AgentSmithy server URL (default: "http://localhost:8765")
-- `agentsmithy.showReasoning`: Show AI reasoning/thinking process in chat (default: false)
-
-## Troubleshooting
-
-1. **Chat not responding**: Ensure AgentSmithy server is running at configured URL
-2. **Connection errors**: Check server URL in settings
-3. **No AgentSmithy icon**: Reload VSCode window (`Developer: Reload Window`)
+- `agentsmithy.serverUrl`: Local server URL (default: "http://localhost:8765")
 
 ## License
 
-This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
+Apache License 2.0 - see [LICENSE](LICENSE) file.
 
 Copyright 2025 Alexander Morozov
