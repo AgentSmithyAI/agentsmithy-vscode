@@ -225,6 +225,17 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
       const dialogId = await this._historyService.resolveCurrentDialogId();
       if (dialogId) {
         await this._loadLatestHistoryPage(dialogId, true);
+
+        // Update header with current dialog title
+        await this._dialogService.loadDialogs();
+        const currentDialog = this._dialogService.currentDialog;
+        const title = this._dialogService.getDialogDisplayTitle(currentDialog);
+        this._postMessage({
+          type: WEBVIEW_OUT_MSG.DIALOG_SWITCHED,
+          dialogId,
+          title,
+        });
+
         // Scroll to bottom after initial history load
         this._postMessage({type: WEBVIEW_OUT_MSG.SCROLL_TO_BOTTOM});
       }
@@ -291,27 +302,38 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     }
   };
 
+  /**
+   * Switch to a dialog - common logic used across multiple operations
+   */
+  private _switchToDialog = async (dialogId: string, scrollToBottom = true): Promise<void> => {
+    await this._dialogService.switchDialog(dialogId);
+    this._historyService.currentDialogId = dialogId;
+
+    // Load history for the dialog
+    await this._loadLatestHistoryPage(dialogId, true);
+
+    // Update UI
+    const dialog = this._dialogService.currentDialog;
+    const title = this._dialogService.getDialogDisplayTitle(dialog);
+    this._postMessage({
+      type: WEBVIEW_OUT_MSG.DIALOG_SWITCHED,
+      dialogId,
+      title,
+    });
+
+    // Scroll to bottom if requested
+    if (scrollToBottom) {
+      this._postMessage({type: WEBVIEW_OUT_MSG.SCROLL_TO_BOTTOM});
+    }
+
+    // Reload dialogs list to update active state
+    await this._handleLoadDialogs();
+  };
+
   private _handleCreateDialog = async (): Promise<void> => {
     try {
       const dialog = await this._dialogService.createDialog();
-
-      // Switch to the new dialog
-      await this._dialogService.switchDialog(dialog.id);
-      this._historyService.currentDialogId = dialog.id;
-
-      // Clear chat and load history for new dialog
-      this._postMessage({type: WEBVIEW_OUT_MSG.HISTORY_REPLACE_ALL, events: []});
-
-      // Notify UI about dialog switch
-      const title = this._dialogService.getDialogDisplayTitle(dialog);
-      this._postMessage({
-        type: WEBVIEW_OUT_MSG.DIALOG_SWITCHED,
-        dialogId: dialog.id,
-        title,
-      });
-
-      // Reload dialogs list
-      await this._handleLoadDialogs();
+      await this._switchToDialog(dialog.id);
     } catch (error: unknown) {
       const msg = getErrorMessage(error, 'Failed to create dialog');
       this._postMessage({type: WEBVIEW_OUT_MSG.SHOW_ERROR, error: msg});
@@ -320,26 +342,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
 
   private _handleSwitchDialog = async (dialogId: string): Promise<void> => {
     try {
-      await this._dialogService.switchDialog(dialogId);
-      this._historyService.currentDialogId = dialogId;
-
-      // Load history for the switched dialog
-      await this._loadLatestHistoryPage(dialogId, true);
-
-      // Update UI
-      const dialog = this._dialogService.currentDialog;
-      const title = this._dialogService.getDialogDisplayTitle(dialog);
-      this._postMessage({
-        type: WEBVIEW_OUT_MSG.DIALOG_SWITCHED,
-        dialogId,
-        title,
-      });
-
-      // Scroll to bottom after switching
-      this._postMessage({type: WEBVIEW_OUT_MSG.SCROLL_TO_BOTTOM});
-
-      // Reload dialogs list to update active state
-      await this._handleLoadDialogs();
+      await this._switchToDialog(dialogId);
     } catch (error: unknown) {
       const msg = getErrorMessage(error, 'Failed to switch dialog');
       this._postMessage({type: WEBVIEW_OUT_MSG.SHOW_ERROR, error: msg});
@@ -392,26 +395,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
 
         if (dialogs.length > 0) {
           // Switch to the first (most recent) dialog
-          const newDialog = dialogs[0];
-          await this._dialogService.switchDialog(newDialog.id);
-          this._historyService.currentDialogId = newDialog.id;
-
-          // Load history for the new dialog
-          await this._loadLatestHistoryPage(newDialog.id, true);
-
-          // Update UI
-          const title = this._dialogService.getDialogDisplayTitle(newDialog);
-          this._postMessage({
-            type: WEBVIEW_OUT_MSG.DIALOG_SWITCHED,
-            dialogId: newDialog.id,
-            title,
-          });
-
-          // Scroll to bottom
-          this._postMessage({type: WEBVIEW_OUT_MSG.SCROLL_TO_BOTTOM});
-
-          // Reload dialogs list again to update active state
-          await this._handleLoadDialogs();
+          await this._switchToDialog(dialogs[0].id);
         } else {
           // No dialogs left, clear everything
           this._historyService.currentDialogId = undefined;
