@@ -25,18 +25,21 @@ Requires [AgentSmithy server](https://github.com/AgentSmithyAI/agentsmithy-agent
 1. Download binary from [releases page](https://github.com/AgentSmithyAI/agentsmithy-agent/releases)
 
 2. Make it executable:
+
    ```bash
    chmod +x agentsmithy
    ```
 
 3. Configure OpenAI API key:
-   
+
    Via environment variable:
+
    ```bash
    export OPENAI_API_KEY=your_key_here
    ```
-   
+
    Or directly in `<your-project>/.agentsmithy/config.json` providers section:
+
    ```json
    "providers": {
      "gpt5": {
@@ -76,11 +79,13 @@ Or install manually: `Ctrl+Shift+P` → `Extensions: Install from VSIX...`
 ## Usage
 
 First, start the agent server:
+
 ```bash
 ./agentsmithy --workdir /path/to/your/project --ide vscode
 ```
 
 Then in VSCode:
+
 - Click AgentSmithy icon in Activity Bar
 - Or: `Ctrl+Shift+P` → `AgentSmithy: Open Chat`
 - Send selected code: Right-click → `Send Selection to AgentSmithy`
