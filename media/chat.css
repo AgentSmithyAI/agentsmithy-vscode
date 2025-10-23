@@ -480,14 +480,11 @@ body {
 }
 
 .dialog-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
   padding: 6px 8px;
   cursor: pointer;
   border-radius: 4px;
   transition: background-color 0.15s;
-  gap: 8px;
+  position: relative;
 }
 
 .dialog-item:hover:not(.active):not(.loading):not(.error) {
@@ -532,24 +529,39 @@ body {
 }
 
 .dialog-item-content {
-  flex: 1;
-  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+  padding-right: 60px; /* Reserve space for meta/actions */
 }
 
 .dialog-item-title {
+  flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 0.9em;
+  min-width: 0;
 }
 
 .dialog-item-meta {
+  position: absolute;
+  right: 0;
   font-size: 0.75em;
   opacity: 0.7;
-  margin-top: 2px;
+  white-space: nowrap;
+  pointer-events: none;
+  transition: opacity 0.15s;
+}
+
+.dialog-item:hover .dialog-item-meta {
+  opacity: 0;
 }
 
 .dialog-item-actions {
+  position: absolute;
+  right: 0;
   display: flex;
   gap: 4px;
   opacity: 0;
