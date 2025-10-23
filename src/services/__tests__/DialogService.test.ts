@@ -58,7 +58,7 @@ describe('DialogService', () => {
   describe('loadDialogs', () => {
     it('loads and caches dialogs from API', async () => {
       const dialogs = [mkDialog({id: 'dlg1'}), mkDialog({id: 'dlg2', title: null})];
-      api.listDialogs.mockResolvedValue({items: dialogs, current_dialog_id: 'dlg1'});
+      api.listDialogs.mockResolvedValue({dialogs: dialogs, current_dialog_id: 'dlg1'});
 
       await svc.loadDialogs();
 
@@ -70,7 +70,7 @@ describe('DialogService', () => {
       const listener = vi.fn();
       svc.onDidChangeDialogs(listener);
 
-      api.listDialogs.mockResolvedValue({items: [], current_dialog_id: undefined});
+      api.listDialogs.mockResolvedValue({dialogs: [], current_dialog_id: undefined});
       await svc.loadDialogs();
 
       expect(listener).toHaveBeenCalledTimes(1);
@@ -122,7 +122,7 @@ describe('DialogService', () => {
   describe('updateDialog', () => {
     it('updates dialog in cache', async () => {
       const dialogs = [mkDialog({id: 'dlg1', title: 'Old'}), mkDialog({id: 'dlg2'})];
-      api.listDialogs.mockResolvedValue({items: dialogs});
+      api.listDialogs.mockResolvedValue({dialogs: dialogs});
       await svc.loadDialogs();
 
       api.updateDialog.mockResolvedValue({
@@ -161,7 +161,7 @@ describe('DialogService', () => {
   describe('deleteDialog', () => {
     it('deletes dialog from cache', async () => {
       const dialogs = [mkDialog({id: 'dlg1'}), mkDialog({id: 'dlg2'})];
-      api.listDialogs.mockResolvedValue({items: dialogs});
+      api.listDialogs.mockResolvedValue({dialogs: dialogs});
       await svc.loadDialogs();
 
       api.deleteDialog.mockResolvedValue(undefined);
@@ -179,7 +179,7 @@ describe('DialogService', () => {
 
     it('clears currentDialogId if deleted dialog was current', async () => {
       const dialogs = [mkDialog({id: 'dlg1'})];
-      api.listDialogs.mockResolvedValue({items: dialogs, current_dialog_id: 'dlg1'});
+      api.listDialogs.mockResolvedValue({dialogs: dialogs, current_dialog_id: 'dlg1'});
       await svc.loadDialogs();
 
       api.deleteDialog.mockResolvedValue(undefined);
@@ -197,7 +197,7 @@ describe('DialogService', () => {
 
     it('returns current dialog from cache', async () => {
       const dialogs = [mkDialog({id: 'dlg1'}), mkDialog({id: 'dlg2'})];
-      api.listDialogs.mockResolvedValue({items: dialogs, current_dialog_id: 'dlg2'});
+      api.listDialogs.mockResolvedValue({dialogs: dialogs, current_dialog_id: 'dlg2'});
       await svc.loadDialogs();
 
       expect(svc.currentDialog?.id).toBe('dlg2');
@@ -205,7 +205,7 @@ describe('DialogService', () => {
 
     it('returns null if current dialog not in cache', async () => {
       const dialogs = [mkDialog({id: 'dlg1'})];
-      api.listDialogs.mockResolvedValue({items: dialogs, current_dialog_id: 'non-existent'});
+      api.listDialogs.mockResolvedValue({dialogs: dialogs, current_dialog_id: 'non-existent'});
       await svc.loadDialogs();
 
       expect(svc.currentDialog).toBeNull();

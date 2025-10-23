@@ -52,7 +52,7 @@ export class DialogService {
    */
   async loadDialogs(): Promise<void> {
     const response = await this.apiService.listDialogs();
-    this._dialogs = response.items;
+    this._dialogs = response.dialogs;
     this._currentDialogId = response.current_dialog_id ?? null;
     this._onDidChangeDialogs.fire();
   }

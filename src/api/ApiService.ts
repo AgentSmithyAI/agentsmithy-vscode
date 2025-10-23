@@ -12,7 +12,7 @@ export interface Dialog {
 }
 
 interface ListDialogsResponse {
-  items: Dialog[];
+  dialogs: Dialog[];
   current_dialog_id?: string;
 }
 
@@ -110,11 +110,11 @@ export class ApiService {
         }));
       const current_dialog_id = isRecord(data) && 'current_dialog_id' in data ? data.current_dialog_id : undefined;
       return {
-        items: normalizedItems,
+        dialogs: normalizedItems,
         current_dialog_id: typeof current_dialog_id === 'string' ? current_dialog_id : undefined,
       };
     }
-    return {items: []};
+    return {dialogs: []};
   }
 
   /**

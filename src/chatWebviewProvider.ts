@@ -454,8 +454,6 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     const markedPath = vscode.Uri.joinPath(this._extensionUri, 'node_modules', 'marked', 'lib', 'marked.umd.js');
     const markedUri = webview.asWebviewUri(markedPath);
 
-    // Add cache-busting timestamp
-    const timestamp = Date.now();
     const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'dist', 'webview.js'));
     const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'media', 'chat.css'));
 
@@ -517,7 +515,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     <script nonce="${nonce}">
         window.WORKSPACE_ROOT = ${JSON.stringify(workspaceRoot)};
     </script>
-    <script nonce="${nonce}" src="${scriptUri.toString()}?v=${timestamp}"></script>
+    <script nonce="${nonce}" src="${scriptUri.toString()}"></script>
 </body>
 </html>`;
   };
