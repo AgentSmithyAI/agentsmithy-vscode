@@ -475,7 +475,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
             </div>
             <button class="new-dialog-btn" id="newDialogBtn" title="New conversation" aria-label="New conversation">
                 <svg viewBox="0 0 16 16" aria-hidden="true">
-                    <path d="M14 7h-5V2H9v5H4v1h5v5h1V8h5z"/>
+                    <path d="M8 3.5v4.5h4.5v1H8v4.5H7V9H2.5V8H7V3.5h1z"/>
                 </svg>
             </button>
         </div>

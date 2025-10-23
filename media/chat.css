@@ -398,7 +398,7 @@ body {
   display: flex;
   align-items: center;
   min-width: 0;
-  max-width: calc(100% - 28px);
+  max-width: calc(100% - 30px);
 }
 
 .dialog-title-btn {
@@ -453,8 +453,8 @@ body {
 }
 
 .new-dialog-btn {
-  width: 24px;
-  height: 24px;
+  width: 26px;
+  height: 26px;
   padding: 0;
   display: inline-flex;
   align-items: center;
@@ -478,8 +478,8 @@ body {
 }
 
 .new-dialog-btn svg {
-  width: 12px;
-  height: 12px;
+  width: 14px;
+  height: 14px;
   fill: currentColor;
 }
 
