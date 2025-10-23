@@ -1,5 +1,6 @@
 import {WEBVIEW_IN_MSG, WEBVIEW_OUT_MSG} from '../../shared/messages';
 import {DialogsUI} from './DialogsUI';
+import {DialogViewManager} from './DialogViewManager';
 import {MessageHandler} from './MessageHandler';
 import {MessageRenderer} from './renderer';
 import {ScrollManager} from './ScrollManager';
@@ -35,8 +36,11 @@ class ChatWebview {
   private uiController: UIController;
   private messageHandler: MessageHandler;
   private dialogsUI: DialogsUI;
+  private dialogViewManager: DialogViewManager;
+  private currentDialogId: string | null = null;
 
   private messagesContainer: HTMLElement;
+  private dialogViewsContainer: HTMLElement;
   private messageInput: HTMLTextAreaElement;
   private sendButton: HTMLButtonElement;
   private loadMoreBtn: HTMLElement | null;
@@ -46,12 +50,16 @@ class ChatWebview {
 
     // Get DOM elements
     this.messagesContainer = document.getElementById('messages') as HTMLElement;
+    this.dialogViewsContainer = document.getElementById('dialogViews') as HTMLElement;
     this.messageInput = document.getElementById('messageInput') as HTMLTextAreaElement;
     this.sendButton = document.getElementById('sendButton') as HTMLButtonElement;
     this.loadMoreBtn = document.getElementById('loadMoreBtn');
     const welcomePlaceholder = document.getElementById('welcomePlaceholder');
 
-    // Initialize specialized managers
+    // Initialize dialog view manager
+    this.dialogViewManager = new DialogViewManager(workspaceRoot, this.vscode, this.dialogViewsContainer);
+
+    // Initialize specialized managers (for legacy/fallback support)
     this.renderer = new MessageRenderer(this.messagesContainer, this.loadMoreBtn, welcomePlaceholder, workspaceRoot);
     this.streamingState = new StreamingStateManager();
     this.uiController = new UIController(this.messageInput, this.sendButton);
@@ -65,6 +73,7 @@ class ChatWebview {
       this.scrollManager,
       this.uiController,
       this.messagesContainer,
+      this.dialogViewManager,
     );
 
     this.setupEventListeners();
@@ -85,7 +94,13 @@ class ChatWebview {
 
     // Send/Stop button
     this.sendButton.addEventListener('click', () => {
-      if (this.streamingState.isCurrentlyProcessing()) {
+      // Check if any dialog is processing
+      const activeView = this.dialogViewManager.getActiveView();
+      const isProcessing = activeView
+        ? activeView.getStreamingState().isCurrentlyProcessing()
+        : this.streamingState.isCurrentlyProcessing();
+
+      if (isProcessing) {
         this.vscode.postMessage({type: WEBVIEW_IN_MSG.STOP_PROCESSING});
       } else {
         this.sendMessage();
@@ -117,24 +132,48 @@ class ChatWebview {
 
   private sendMessage(): void {
     const text = this.uiController.getAndClearInput();
-    if (!text || this.streamingState.isCurrentlyProcessing()) {
+
+    const activeView = this.dialogViewManager.getActiveView();
+    const isProcessing = activeView
+      ? activeView.getStreamingState().isCurrentlyProcessing()
+      : this.streamingState.isCurrentlyProcessing();
+
+    if (!text || isProcessing) {
       return;
     }
 
-    // Check if user was at bottom BEFORE adding the message
-    // If they were scrolled up reading history, don't auto-scroll
-    const wasAtBottom = this.scrollManager.isAtBottom();
+    // Use active view if available
+    if (activeView) {
+      const renderer = activeView.getRenderer();
+      const scrollManager = activeView.getScrollManager();
+      const wasAtBottom = scrollManager.isAtBottom();
 
-    // Temporarily suppress auto-scroll if user was scrolled up
-    if (!wasAtBottom) {
-      this.renderer.setSuppressAutoScroll(true);
-    }
+      if (!wasAtBottom) {
+        renderer.setSuppressAutoScroll(true);
+      }
 
-    this.renderer.addMessage('user', text);
+      renderer.addMessage('user', text);
 
-    // Restore auto-scroll behavior
-    if (!wasAtBottom) {
-      this.renderer.setSuppressAutoScroll(false);
+      if (!wasAtBottom) {
+        renderer.setSuppressAutoScroll(false);
+      }
+
+      activeView.getStreamingState().setProcessing(true, this.currentDialogId || undefined);
+    } else {
+      // Fallback to legacy behavior
+      const wasAtBottom = this.scrollManager.isAtBottom();
+
+      if (!wasAtBottom) {
+        this.renderer.setSuppressAutoScroll(true);
+      }
+
+      this.renderer.addMessage('user', text);
+
+      if (!wasAtBottom) {
+        this.renderer.setSuppressAutoScroll(false);
+      }
+
+      this.streamingState.setProcessing(true);
     }
 
     this.vscode.postMessage({
@@ -142,7 +181,6 @@ class ChatWebview {
       text,
     });
 
-    this.streamingState.setProcessing(true);
     this.uiController.setProcessing(true);
   }
 
@@ -161,17 +199,44 @@ class ChatWebview {
         break;
 
       case WEBVIEW_OUT_MSG.DIALOG_SWITCHED:
-        this.dialogsUI.updateCurrentDialog(message.dialogId, message.title);
-        this.messageInput.focus();
+        this.handleDialogSwitch(message.dialogId, message.title);
         break;
 
-      case WEBVIEW_OUT_MSG.GET_VISIBLE_FIRST_IDX:
-        this.scrollManager.requestFirstVisibleIdx();
+      case WEBVIEW_OUT_MSG.GET_VISIBLE_FIRST_IDX: {
+        const activeView = this.dialogViewManager.getActiveView();
+        if (activeView) {
+          activeView.getScrollManager().requestFirstVisibleIdx();
+        } else {
+          this.scrollManager.requestFirstVisibleIdx();
+        }
         break;
+      }
 
       default:
         this.messageHandler.handle(message);
     }
+  }
+
+  private handleDialogSwitch(dialogId: string | null, title: string): void {
+    this.currentDialogId = dialogId;
+    this.dialogsUI.updateCurrentDialog(dialogId, title);
+
+    if (dialogId) {
+      // Switch to the dialog view
+      const view = this.dialogViewManager.switchToDialog(dialogId);
+
+      // Update UI controller based on the dialog's streaming state
+      const isProcessing = view.getStreamingState().isCurrentlyProcessing();
+      this.uiController.setProcessing(isProcessing);
+
+      // Hide legacy messages container
+      this.messagesContainer.style.display = 'none';
+    } else {
+      // Show legacy messages container
+      this.messagesContainer.style.display = 'block';
+    }
+
+    this.messageInput.focus();
   }
 
   private initializeMarked(): void {

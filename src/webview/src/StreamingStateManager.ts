@@ -9,6 +9,7 @@ export class StreamingStateManager {
   private currentReasoningBlock: ReasoningBlock | null = null;
   private currentReasoningText = '';
   private isProcessing = false;
+  private currentStreamDialogId: string | null = null;
 
   /**
    * Start a new assistant message stream
@@ -115,8 +116,13 @@ export class StreamingStateManager {
   /**
    * Set processing state
    */
-  setProcessing(processing: boolean): void {
+  setProcessing(processing: boolean, dialogId?: string): void {
     this.isProcessing = processing;
+    if (processing && dialogId) {
+      this.currentStreamDialogId = dialogId;
+    } else if (!processing) {
+      this.currentStreamDialogId = null;
+    }
   }
 
   /**
@@ -124,5 +130,12 @@ export class StreamingStateManager {
    */
   isCurrentlyProcessing(): boolean {
     return this.isProcessing;
+  }
+
+  /**
+   * Get the dialog ID of the current stream (if any)
+   */
+  getCurrentStreamDialogId(): string | null {
+    return this.currentStreamDialogId;
   }
 }

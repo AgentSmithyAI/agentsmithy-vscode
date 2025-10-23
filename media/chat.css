@@ -13,6 +13,47 @@ body {
   height: 100vh;
 }
 
+/* Dialog views container - holds multiple dialog views */
+.dialog-views-container {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden; /* Prevent container itself from scrolling */
+  position: relative;
+}
+
+/* Individual dialog view - each dialog gets its own container */
+.dialog-view-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Messages container inside dialog view */
+.dialog-view-container .messages {
+  flex: 1 1 auto;
+  min-height: 0; /* Required for flex child to enable scrolling */
+  max-height: 100%; /* Ensure it doesn't exceed parent */
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 8px;
+  background-color: var(--vscode-sideBar-background);
+}
+
+/* Messages should flow vertically with gaps */
+.dialog-view-container .messages > * {
+  margin-bottom: 6px;
+}
+
+.dialog-view-container .messages > *:last-child {
+  margin-bottom: 0;
+}
+
 .messages {
   flex: 1;
   overflow-y: auto;

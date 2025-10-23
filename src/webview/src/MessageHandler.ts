@@ -1,4 +1,5 @@
 import {WEBVIEW_OUT_MSG} from '../../shared/messages';
+import {DialogViewManager} from './DialogViewManager';
 import {MessageRenderer} from './renderer';
 import {ScrollManager} from './ScrollManager';
 import {StreamingStateManager} from './StreamingStateManager';
@@ -16,12 +17,20 @@ export class MessageHandler {
     private scrollManager: ScrollManager,
     private uiController: UIController,
     private messagesContainer: HTMLElement,
+    private dialogViewManager?: DialogViewManager,
   ) {}
 
   /**
    * Main message dispatcher
    */
   handle(message: WebviewOutMessage): void {
+    // Route to the correct dialog view if dialogViewManager is available
+    if (this.dialogViewManager && 'dialogId' in message && message.dialogId) {
+      this.handleForDialog(message.dialogId, message);
+      return;
+    }
+
+    // Fallback to legacy handling (for backward compatibility or active dialog)
     switch (message.type) {
       case WEBVIEW_OUT_MSG.ADD_MESSAGE:
         this.handleAddMessage(message.message.role, message.message.content);
@@ -90,6 +99,194 @@ export class MessageHandler {
       case WEBVIEW_OUT_MSG.HISTORY_REPLACE_ALL:
         this.handleHistoryReplaceAll(message.events);
         break;
+    }
+  }
+
+  /**
+   * Handle a message for a specific dialog
+   */
+  private handleForDialog(dialogId: string, message: WebviewOutMessage): void {
+    if (!this.dialogViewManager) {
+      return;
+    }
+
+    // Get or create the dialog view
+    const view = this.dialogViewManager.getOrCreateView(dialogId);
+    const renderer = view.getRenderer();
+    const streamingState = view.getStreamingState();
+    const scrollManager = view.getScrollManager();
+    const isActive = view.getIsActive();
+
+    // Process the message for this specific dialog
+    switch (message.type) {
+      case WEBVIEW_OUT_MSG.ADD_MESSAGE:
+        renderer.addMessage(message.message.role, message.message.content);
+        renderer.pruneByIdx(MAX_MESSAGES_IN_DOM);
+        break;
+
+      case WEBVIEW_OUT_MSG.START_ASSISTANT_MESSAGE: {
+        const messageElement = renderer.addMessage('assistant', '');
+        if (messageElement) {
+          streamingState.startAssistantMessage(messageElement);
+          streamingState.setProcessing(true, dialogId);
+        }
+        // Update UI controller only if this is the active dialog
+        if (isActive) {
+          this.uiController.setProcessing(true);
+        }
+        break;
+      }
+
+      case WEBVIEW_OUT_MSG.APPEND_TO_ASSISTANT: {
+        let messageElement = streamingState.getCurrentAssistantMessage();
+        if (!messageElement) {
+          messageElement = renderer.addMessage('assistant', '');
+          if (messageElement) {
+            streamingState.startAssistantMessage(messageElement);
+          }
+        }
+        if (message.content && messageElement) {
+          streamingState.appendToAssistant(message.content);
+          // Only scroll if this is the active dialog
+          if (isActive) {
+            scrollManager.scrollIntoViewIfAtBottom(messageElement);
+          }
+        }
+        break;
+      }
+
+      case WEBVIEW_OUT_MSG.END_ASSISTANT_MESSAGE: {
+        const messageElement = streamingState.getCurrentAssistantMessage();
+        if (messageElement && streamingState.getCurrentAssistantText()) {
+          streamingState.endAssistantMessage((text) => renderer.renderMarkdown(text));
+        }
+        renderer.pruneByIdx(MAX_MESSAGES_IN_DOM);
+        break;
+      }
+
+      case WEBVIEW_OUT_MSG.SHOW_TOOL_CALL:
+        renderer.addToolCall(message.tool, message.args);
+        break;
+
+      case WEBVIEW_OUT_MSG.SHOW_FILE_EDIT:
+        renderer.addFileEdit(message.file, message.diff);
+        break;
+
+      case WEBVIEW_OUT_MSG.SHOW_ERROR:
+        renderer.showError(message.error);
+        break;
+
+      case WEBVIEW_OUT_MSG.SHOW_INFO:
+        renderer.showInfo(message.message);
+        break;
+
+      case WEBVIEW_OUT_MSG.END_STREAM:
+        streamingState.setProcessing(false);
+        // Update UI controller only if this is the active dialog
+        if (isActive) {
+          this.uiController.setProcessing(false);
+        }
+        break;
+
+      case WEBVIEW_OUT_MSG.START_REASONING: {
+        const reasoningBlock = renderer.createReasoningBlock();
+        streamingState.startReasoning(reasoningBlock);
+        break;
+      }
+
+      case WEBVIEW_OUT_MSG.APPEND_TO_REASONING: {
+        let reasoningBlock = streamingState.getCurrentReasoningBlock();
+        if (!reasoningBlock) {
+          reasoningBlock = renderer.createReasoningBlock();
+          streamingState.startReasoning(reasoningBlock);
+        }
+        if (reasoningBlock?.content && message.content) {
+          streamingState.appendToReasoning(message.content, (text) => renderer.renderMarkdown(text));
+          // Only scroll if this is the active dialog
+          if (isActive) {
+            scrollManager.scrollIntoViewIfAtBottom(reasoningBlock.block);
+          }
+        }
+        break;
+      }
+
+      case WEBVIEW_OUT_MSG.END_REASONING:
+        streamingState.endReasoning();
+        break;
+
+      case WEBVIEW_OUT_MSG.HISTORY_REPLACE_ALL: {
+        const histMessage = message as WebviewOutMessage & {events: HistoryEvent[]};
+        streamingState.resetAll();
+        renderer.clearMessages();
+
+        if (Array.isArray(histMessage.events)) {
+          renderer.setPrepending(false);
+          renderer.setSuppressAutoScroll(true);
+
+          try {
+            for (const evt of histMessage.events) {
+              try {
+                renderer.renderHistoryEvent(evt);
+              } catch {
+                // Suppress render errors
+              }
+            }
+          } finally {
+            renderer.setSuppressAutoScroll(false);
+          }
+        }
+        break;
+      }
+
+      case WEBVIEW_OUT_MSG.HISTORY_PREPEND_EVENTS: {
+        const histMessage = message as WebviewOutMessage & {events: HistoryEvent[]};
+        if (!Array.isArray(histMessage.events)) {
+          break;
+        }
+
+        const messagesContainer = view.container.querySelector('.messages') as HTMLElement;
+        if (!messagesContainer) {
+          break;
+        }
+
+        streamingState.resetAll();
+
+        const prevTop = messagesContainer.scrollTop;
+        const prevHeight = messagesContainer.scrollHeight;
+
+        renderer.setPrepending(true);
+        renderer.setSuppressAutoScroll(true);
+
+        try {
+          for (let i = histMessage.events.length - 1; i >= 0; i--) {
+            const evt = histMessage.events[i];
+            try {
+              renderer.renderHistoryEvent(evt);
+            } catch {
+              // Suppress render errors
+            }
+          }
+        } finally {
+          renderer.setPrepending(false);
+          renderer.setSuppressAutoScroll(false);
+        }
+
+        const newHeight = messagesContainer.scrollHeight;
+        messagesContainer.scrollTop = prevTop + (newHeight - prevHeight);
+
+        scrollManager.finishHistoryLoad();
+        break;
+      }
+
+      case WEBVIEW_OUT_MSG.SCROLL_TO_BOTTOM:
+        renderer.scrollToBottom();
+        break;
+
+      case WEBVIEW_OUT_MSG.HISTORY_SET_LOAD_MORE_ENABLED: {
+        const enabledMessage = message as WebviewOutMessage & {enabled: boolean};
+        scrollManager.setCanLoadMore(enabledMessage.enabled !== false);
+        break;
+      }
     }
   }
 
