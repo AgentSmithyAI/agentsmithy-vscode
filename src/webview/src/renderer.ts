@@ -97,17 +97,28 @@ export class MessageRenderer {
     return escapeHtml(t).replace(/\n/g, '<br>');
   }
 
-  addMessage(role: 'user' | 'assistant', content: string): HTMLElement {
+  addMessage(role: 'user' | 'assistant', content: string, checkpoint?: string): HTMLElement {
     this.hideWelcome();
 
     const messageDiv = document.createElement('div');
     messageDiv.className = 'message ' + (role === 'user' ? 'user-message' : 'assistant-message');
+
     if (content) {
       if (role === 'assistant') {
         messageDiv.innerHTML = this.renderMarkdown(content);
       } else {
         const escapedContent = escapeHtml(content);
         messageDiv.innerHTML = linkifyUrls(escapedContent);
+
+        // Add restore checkpoint button for user messages if checkpoint is present
+        if (checkpoint) {
+          const restoreBtn = document.createElement('button');
+          restoreBtn.className = 'restore-checkpoint-btn user-message-restore';
+          restoreBtn.setAttribute('data-checkpoint', checkpoint);
+          restoreBtn.textContent = '↺ Restore to here';
+          restoreBtn.title = `Restore to checkpoint ${checkpoint.substring(0, 8)}`;
+          messageDiv.appendChild(restoreBtn);
+        }
       }
     }
     this.insertNode(messageDiv);
@@ -169,6 +180,7 @@ export class MessageRenderer {
     openLink.textContent = 'Open';
     openLink.style.marginLeft = '8px';
     header.appendChild(openLink);
+
     editDiv.appendChild(header);
 
     if (diff) {
@@ -238,7 +250,11 @@ export class MessageRenderer {
   renderHistoryEvent(evt: HistoryEvent): void {
     switch (evt.type) {
       case 'user': {
-        const el = this.addMessage('user', evt && typeof evt.content !== 'undefined' ? evt.content : '');
+        const el = this.addMessage(
+          'user',
+          evt && typeof evt.content !== 'undefined' ? evt.content : '',
+          evt && typeof evt.checkpoint === 'string' ? evt.checkpoint : undefined,
+        );
         if (el && evt && typeof evt.idx === 'number') {
           (el as HTMLElement).dataset.idx = String(evt.idx);
         }

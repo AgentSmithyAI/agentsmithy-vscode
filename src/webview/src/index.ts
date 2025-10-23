@@ -112,7 +112,7 @@ class ChatWebview {
       this.loadMoreBtn.style.display = 'none';
     }
 
-    // File link clicks
+    // File link clicks and checkpoint restore button clicks
     window.addEventListener('click', (e) => {
       const target = e.target as HTMLElement;
       if (target?.matches?.('.file-link')) {
@@ -120,6 +120,17 @@ class ChatWebview {
         const fileAttr = target.getAttribute('data-file') || '';
         const file = decodeURIComponent(fileAttr);
         this.vscode.postMessage({type: WEBVIEW_IN_MSG.OPEN_FILE, file});
+      } else if (target?.matches?.('.restore-checkpoint-btn')) {
+        e.preventDefault();
+        const checkpointId = target.getAttribute('data-checkpoint');
+        const dialogId = this.dialogViewManager.getActiveDialogId();
+        if (checkpointId && dialogId) {
+          this.vscode.postMessage({
+            type: WEBVIEW_IN_MSG.RESTORE_CHECKPOINT,
+            dialogId,
+            checkpointId,
+          });
+        }
       }
     });
 
@@ -144,35 +155,9 @@ class ChatWebview {
 
     // Use active view if available
     if (activeView) {
-      const renderer = activeView.getRenderer();
-      const scrollManager = activeView.getScrollManager();
-      const wasAtBottom = scrollManager.isAtBottom();
-
-      if (!wasAtBottom) {
-        renderer.setSuppressAutoScroll(true);
-      }
-
-      renderer.addMessage('user', text);
-
-      if (!wasAtBottom) {
-        renderer.setSuppressAutoScroll(false);
-      }
-
       activeView.getStreamingState().setProcessing(true, this.currentDialogId || undefined);
     } else {
       // Fallback to legacy behavior
-      const wasAtBottom = this.scrollManager.isAtBottom();
-
-      if (!wasAtBottom) {
-        this.renderer.setSuppressAutoScroll(true);
-      }
-
-      this.renderer.addMessage('user', text);
-
-      if (!wasAtBottom) {
-        this.renderer.setSuppressAutoScroll(false);
-      }
-
       this.streamingState.setProcessing(true);
     }
 

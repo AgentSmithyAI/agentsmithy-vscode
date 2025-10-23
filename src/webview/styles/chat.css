@@ -13,6 +13,47 @@ body {
   height: 100vh;
 }
 
+/* Dialog views container - holds multiple dialog views */
+.dialog-views-container {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden; /* Prevent container itself from scrolling */
+  position: relative;
+}
+
+/* Individual dialog view - each dialog gets its own container */
+.dialog-view-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Messages container inside dialog view */
+.dialog-view-container .messages {
+  flex: 1 1 auto;
+  min-height: 0; /* Required for flex child to enable scrolling */
+  max-height: 100%; /* Ensure it doesn't exceed parent */
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 8px;
+  background-color: var(--vscode-sideBar-background);
+}
+
+/* Messages should flow vertically with gaps */
+.dialog-view-container .messages > * {
+  margin-bottom: 6px;
+}
+
+.dialog-view-container .messages > *:last-child {
+  margin-bottom: 0;
+}
+
 .messages {
   flex: 1;
   overflow-y: auto;
@@ -53,6 +94,9 @@ body {
   background-color: var(--vscode-input-background);
   color: var(--vscode-editor-foreground);
   border: 1px solid var(--vscode-input-border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .assistant-message {
@@ -377,4 +421,302 @@ body {
   background: var(--vscode-textBlockQuote-background);
   padding: 0 3px;
   border-radius: 3px;
+}
+
+/* Chat header with dialogs dropdown */
+.chat-header {
+  display: flex;
+  align-items: center;
+  padding: 8px;
+  border-bottom: 1px solid var(--vscode-widget-border);
+  background-color: var(--vscode-sideBar-background);
+  gap: 2px;
+  min-height: 40px;
+  position: relative;
+  z-index: 100;
+}
+
+.dialog-selector {
+  position: relative;
+  flex: 0 1 auto;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  max-width: calc(100% - 30px);
+}
+
+.dialog-title-btn {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 4px;
+  background: transparent;
+  border: none;
+  border-radius: 2px;
+  color: var(--vscode-foreground);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: inherit;
+  flex: 1;
+  min-width: 0;
+  transition: background-color 0.1s;
+}
+
+.dialog-title-btn:hover {
+  background-color: var(--vscode-toolbar-hoverBackground);
+}
+
+.dialog-title-btn:focus {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+}
+
+.dialog-title-text {
+  overflow: hidden;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.dialog-title-text.overflowing {
+  mask-image: linear-gradient(to right, black calc(100% - 1.5em), transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, black calc(100% - 1.5em), transparent 100%);
+}
+
+.dropdown-icon {
+  width: 10px;
+  height: 10px;
+  fill: currentColor;
+  opacity: 0.6;
+  flex-shrink: 0;
+  transition: opacity 0.1s;
+}
+
+.dialog-title-btn:hover .dropdown-icon {
+  opacity: 1;
+}
+
+.new-dialog-btn {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  color: var(--vscode-icon-foreground);
+  border: none;
+  border-radius: 2px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background-color 0.1s;
+}
+
+.new-dialog-btn:hover {
+  background-color: var(--vscode-toolbar-hoverBackground);
+}
+
+.new-dialog-btn:focus {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+}
+
+.new-dialog-btn svg {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
+}
+
+/* Dropdown menu */
+.dialog-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: -8px; /* Align with header left padding */
+  width: calc(100vw - 16px); /* Full viewport width minus sidebar padding */
+  background-color: var(--vscode-dropdown-background);
+  border: 2px solid var(--vscode-dropdown-border, var(--vscode-widget-border));
+  border-radius: 3px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  max-height: 60vh; /* Responsive max height */
+  overflow-y: auto;
+  z-index: 1000;
+}
+
+.dialogs-list {
+  padding: 2px;
+}
+
+.dialog-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  cursor: pointer;
+  border-radius: 2px;
+  transition: background-color 0.1s;
+}
+
+.dialog-item:hover:not(.active):not(.loading):not(.error) {
+  background-color: var(--vscode-list-hoverBackground);
+}
+
+.dialog-item.active {
+  background-color: var(--vscode-list-activeSelectionBackground);
+  color: var(--vscode-list-activeSelectionForeground);
+}
+
+.dialog-item.active:hover {
+  background-color: var(--vscode-list-activeSelectionBackground);
+  opacity: 0.95;
+}
+
+.dialog-item.loading {
+  opacity: 0.6;
+  cursor: default;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  justify-content: center;
+}
+
+.dialog-item.error {
+  color: var(--vscode-errorForeground);
+  cursor: default;
+  padding: 12px;
+  text-align: center;
+  font-size: 0.85em;
+}
+
+.dialog-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--vscode-foreground);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+.dialog-item-left {
+  min-width: 0; /* Allow text truncation */
+}
+
+.dialog-item-right {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 60px;
+}
+
+.dialog-item-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.9em;
+}
+
+.dialog-item-meta {
+  font-size: 0.75em;
+  opacity: 0.6;
+  white-space: nowrap;
+  transition: opacity 0.1s ease-out;
+}
+
+.dialog-item:hover .dialog-item-meta {
+  opacity: 0;
+}
+
+.dialog-item-actions {
+  position: absolute;
+  right: 0;
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.1s ease-out;
+}
+
+.dialog-item:hover .dialog-item-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.dialog-action-btn {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 2px;
+  cursor: pointer;
+  color: var(--vscode-icon-foreground);
+  pointer-events: auto;
+}
+
+.dialog-action-btn:hover {
+  background-color: var(--vscode-toolbar-hoverBackground);
+}
+
+.dialog-action-btn:focus {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+}
+
+.dialog-action-btn svg {
+  width: 12px;
+  height: 12px;
+  fill: currentColor;
+}
+
+.dialog-action-btn.save-btn {
+  color: var(--vscode-debugIcon-startForeground, var(--vscode-gitDecoration-addedResourceForeground));
+}
+
+.dialog-action-btn.cancel-btn {
+  color: var(--vscode-debugIcon-stopForeground, var(--vscode-errorForeground));
+}
+
+.dialog-title-input {
+  width: 100%;
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  border: 1px solid var(--vscode-focusBorder);
+  padding: 2px 4px;
+  font-family: inherit;
+  font-size: 0.9em;
+  border-radius: 2px;
+  outline: none;
+}
+
+.dialog-title-input:focus {
+  border-color: var(--vscode-focusBorder);
+  box-shadow: 0 0 0 1px var(--vscode-focusBorder);
+}
+
+/* User message restore button */
+.user-message-restore {
+  align-self: flex-end;
+  margin-top: 4px;
+}
+
+/* Restore Checkpoint Button */
+.restore-checkpoint-btn {
+  background: var(--vscode-button-secondaryBackground);
+  border: 1px solid var(--vscode-button-secondaryBorder, var(--vscode-editorWidget-border));
+  color: var(--vscode-button-secondaryForeground, var(--vscode-foreground));
+  padding: 2px 8px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 0.85em;
+}
+
+.restore-checkpoint-btn:hover {
+  background: var(--vscode-button-secondaryHoverBackground);
 }

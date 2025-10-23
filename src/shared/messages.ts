@@ -11,6 +11,7 @@ export const WEBVIEW_IN_MSG = {
   DELETE_DIALOG: 'deleteDialog',
   DELETE_DIALOG_CONFIRM: 'deleteDialogConfirm',
   LOAD_DIALOGS: 'loadDialogs',
+  RESTORE_CHECKPOINT: 'restoreCheckpoint',
 } as const;
 
 export type WebviewInMessageType = (typeof WEBVIEW_IN_MSG)[keyof typeof WEBVIEW_IN_MSG];

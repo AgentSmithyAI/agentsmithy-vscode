@@ -24,6 +24,7 @@ export interface ChatRequest {
 
 export interface SSEEvent {
   type:
+    | typeof E.USER
     | typeof E.CHAT_START
     | typeof E.CHAT
     | typeof E.CHAT_END

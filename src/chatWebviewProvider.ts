@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import type {HistoryEvent} from './api/ApiService';
+import {ApiService} from './api/ApiService';
 import {StreamService, type ChatContext} from './api/StreamService';
 import {CSS_CLASSES, DOM_IDS, SSE_EVENT_TYPES as E, ERROR_MESSAGES, ERROR_NAMES, VIEWS} from './constants';
 import {ConfigService} from './services/ConfigService';
@@ -22,12 +23,14 @@ type WebviewInMessage =
   | {type: typeof WEBVIEW_IN_MSG.RENAME_DIALOG; dialogId: string; title: string}
   | {type: typeof WEBVIEW_IN_MSG.DELETE_DIALOG; dialogId: string}
   | {type: typeof WEBVIEW_IN_MSG.DELETE_DIALOG_CONFIRM; dialogId: string; title: string}
-  | {type: typeof WEBVIEW_IN_MSG.LOAD_DIALOGS};
+  | {type: typeof WEBVIEW_IN_MSG.LOAD_DIALOGS}
+  | {type: typeof WEBVIEW_IN_MSG.RESTORE_CHECKPOINT; dialogId: string; checkpointId: string};
 // Messages sent from the extension to the webview
 type WebviewOutMessage =
   | {
       type: typeof WEBVIEW_OUT_MSG.ADD_MESSAGE;
       message: {role: 'user' | 'assistant'; content: string};
+      checkpoint?: string;
       dialogId?: string;
     }
   | {type: typeof WEBVIEW_OUT_MSG.START_ASSISTANT_MESSAGE; dialogId?: string}
@@ -37,7 +40,7 @@ type WebviewOutMessage =
   | {type: typeof WEBVIEW_OUT_MSG.APPEND_TO_REASONING; content: string; dialogId?: string}
   | {type: typeof WEBVIEW_OUT_MSG.END_REASONING; dialogId?: string}
   | {type: typeof WEBVIEW_OUT_MSG.SHOW_TOOL_CALL; tool?: string; args?: unknown; dialogId?: string}
-  | {type: typeof WEBVIEW_OUT_MSG.SHOW_FILE_EDIT; file: string; diff?: string; dialogId?: string}
+  | {type: typeof WEBVIEW_OUT_MSG.SHOW_FILE_EDIT; file: string; diff?: string; checkpoint?: string; dialogId?: string}
   | {type: typeof WEBVIEW_OUT_MSG.SHOW_ERROR; error: string; dialogId?: string}
   | {type: typeof WEBVIEW_OUT_MSG.SHOW_INFO; message: string; dialogId?: string}
   | {type: typeof WEBVIEW_OUT_MSG.END_STREAM; dialogId?: string}
@@ -66,6 +69,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     private readonly _historyService: HistoryService,
     private readonly _dialogService: DialogService,
     private readonly _configService: ConfigService,
+    private readonly _apiService: ApiService,
   ) {
     // Listen to history state changes
     this._historyService.onDidChangeState(() => {
@@ -146,14 +150,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
 
   public sendMessage(content: string): void {
     if (this._view) {
-      this._postMessage({
-        type: WEBVIEW_OUT_MSG.ADD_MESSAGE,
-        message: {
-          role: 'user',
-          content: String(content),
-        },
-      });
-
+      // Don't show user message immediately - wait for SSE event with checkpoint
       this._handleSendMessage(content);
     }
   }
@@ -210,6 +207,9 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
           break;
         case WEBVIEW_IN_MSG.LOAD_DIALOGS:
           await this._handleLoadDialogs();
+          break;
+        case WEBVIEW_IN_MSG.RESTORE_CHECKPOINT:
+          await this._handleRestoreCheckpoint(message.dialogId, message.checkpointId);
           break;
       }
     });
@@ -445,6 +445,36 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     } catch (error: unknown) {
       const msg = getErrorMessage(error, 'Failed to load dialogs');
       this._postMessage({type: WEBVIEW_OUT_MSG.DIALOGS_ERROR, error: msg});
+    }
+  };
+
+  private _handleRestoreCheckpoint = async (dialogId: string, checkpointId: string): Promise<void> => {
+    try {
+      // Show confirmation dialog
+      const result = await vscode.window.showWarningMessage(
+        `Restore to checkpoint ${checkpointId.substring(0, 8)}...?\n\nThis will restore all files to their state at this checkpoint.`,
+        {modal: true},
+        'Restore',
+      );
+
+      if (result !== 'Restore') {
+        return;
+      }
+
+      // Perform restore
+      await this._apiService.restoreCheckpoint(dialogId, checkpointId);
+
+      // Show success message
+      this._postMessage({
+        type: WEBVIEW_OUT_MSG.SHOW_INFO,
+        message: `Restored to checkpoint ${checkpointId.substring(0, 8)}`,
+      });
+
+      // Reload history to show the new state
+      await this._loadLatestHistoryPage(dialogId, true);
+    } catch (error: unknown) {
+      const msg = getErrorMessage(error, 'Failed to restore checkpoint');
+      this._postMessage({type: WEBVIEW_OUT_MSG.SHOW_ERROR, error: msg});
     }
   };
 

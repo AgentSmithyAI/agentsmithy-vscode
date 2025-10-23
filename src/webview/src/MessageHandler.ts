@@ -33,7 +33,7 @@ export class MessageHandler {
     // Fallback to legacy handling (for backward compatibility or active dialog)
     switch (message.type) {
       case WEBVIEW_OUT_MSG.ADD_MESSAGE:
-        this.handleAddMessage(message.message.role, message.message.content);
+        this.handleAddMessage(message.message.role, message.message.content, message.checkpoint);
         break;
 
       case WEBVIEW_OUT_MSG.START_ASSISTANT_MESSAGE:
@@ -53,7 +53,7 @@ export class MessageHandler {
         break;
 
       case WEBVIEW_OUT_MSG.SHOW_FILE_EDIT:
-        this.renderer.addFileEdit(message.file, message.diff);
+        this.renderer.addFileEdit(message.file, message.diff, message.checkpoint);
         break;
 
       case WEBVIEW_OUT_MSG.SHOW_ERROR:
@@ -120,7 +120,7 @@ export class MessageHandler {
     // Process the message for this specific dialog
     switch (message.type) {
       case WEBVIEW_OUT_MSG.ADD_MESSAGE:
-        renderer.addMessage(message.message.role, message.message.content);
+        renderer.addMessage(message.message.role, message.message.content, message.checkpoint);
         renderer.pruneByIdx(MAX_MESSAGES_IN_DOM);
         break;
 
@@ -290,8 +290,8 @@ export class MessageHandler {
     }
   }
 
-  private handleAddMessage(role: 'user' | 'assistant', content: string): void {
-    this.renderer.addMessage(role, content);
+  private handleAddMessage(role: 'user' | 'assistant', content: string, checkpoint?: string): void {
+    this.renderer.addMessage(role, content, checkpoint);
     // User message means new tail content → prune older
     this.renderer.pruneByIdx(MAX_MESSAGES_IN_DOM);
   }

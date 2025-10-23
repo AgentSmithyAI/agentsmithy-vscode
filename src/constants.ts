@@ -72,6 +72,7 @@ export const CSS_CLASSES = {
 
 // SSE event types
 export const SSE_EVENT_TYPES = {
+  USER: 'user',
   CHAT_START: 'chat_start',
   CHAT: 'chat',
   CHAT_END: 'chat_end',
