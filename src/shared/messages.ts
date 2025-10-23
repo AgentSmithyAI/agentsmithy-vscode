@@ -9,6 +9,7 @@ export const WEBVIEW_IN_MSG = {
   SWITCH_DIALOG: 'switchDialog',
   RENAME_DIALOG: 'renameDialog',
   DELETE_DIALOG: 'deleteDialog',
+  DELETE_DIALOG_CONFIRM: 'deleteDialogConfirm',
   LOAD_DIALOGS: 'loadDialogs',
 } as const;
 

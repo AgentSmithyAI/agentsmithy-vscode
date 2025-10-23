@@ -28,6 +28,7 @@ export type WebviewInMessage =
   | {type: typeof WEBVIEW_IN_MSG.SWITCH_DIALOG; dialogId: string}
   | {type: typeof WEBVIEW_IN_MSG.RENAME_DIALOG; dialogId: string; title: string}
   | {type: typeof WEBVIEW_IN_MSG.DELETE_DIALOG; dialogId: string}
+  | {type: typeof WEBVIEW_IN_MSG.DELETE_DIALOG_CONFIRM; dialogId: string; title: string}
   | {type: typeof WEBVIEW_IN_MSG.LOAD_DIALOGS};
 
 /**

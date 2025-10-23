@@ -281,15 +281,13 @@ export class DialogsUI {
       return;
     }
 
-    const title = dialog.title || 'New dialog';
-    const confirmed = confirm(`Delete conversation "${title}"?`);
-
-    if (confirmed) {
-      this.vscode.postMessage({
-        type: WEBVIEW_IN_MSG.DELETE_DIALOG,
-        dialogId,
-      });
-    }
+    // Send request to extension to show confirmation dialog
+    this.vscode.postMessage({
+      type: WEBVIEW_IN_MSG.DELETE_DIALOG_CONFIRM,
+      dialogId,
+      title: dialog.title || 'New dialog',
+    });
+    this.closeDropdown();
   }
 
   private formatDate(isoString: string): string {

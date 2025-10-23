@@ -21,6 +21,7 @@ type WebviewInMessage =
   | {type: typeof WEBVIEW_IN_MSG.SWITCH_DIALOG; dialogId: string}
   | {type: typeof WEBVIEW_IN_MSG.RENAME_DIALOG; dialogId: string; title: string}
   | {type: typeof WEBVIEW_IN_MSG.DELETE_DIALOG; dialogId: string}
+  | {type: typeof WEBVIEW_IN_MSG.DELETE_DIALOG_CONFIRM; dialogId: string; title: string}
   | {type: typeof WEBVIEW_IN_MSG.LOAD_DIALOGS};
 // Messages sent from the extension to the webview
 type WebviewOutMessage =
@@ -195,6 +196,9 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
         case WEBVIEW_IN_MSG.DELETE_DIALOG:
           await this._handleDeleteDialog(message.dialogId);
           break;
+        case WEBVIEW_IN_MSG.DELETE_DIALOG_CONFIRM:
+          await this._handleDeleteDialogConfirm(message.dialogId, message.title);
+          break;
         case WEBVIEW_IN_MSG.LOAD_DIALOGS:
           await this._handleLoadDialogs();
           break;
@@ -365,25 +369,61 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     }
   };
 
+  private _handleDeleteDialogConfirm = async (dialogId: string, title: string): Promise<void> => {
+    const result = await vscode.window.showWarningMessage(`Delete conversation "${title}"?`, {modal: true}, 'Delete');
+
+    if (result === 'Delete') {
+      await this._handleDeleteDialog(dialogId);
+    }
+  };
+
   private _handleDeleteDialog = async (dialogId: string): Promise<void> => {
     try {
+      const wasCurrentDialog = dialogId === this._historyService.currentDialogId;
+
       await this._dialogService.deleteDialog(dialogId);
 
-      // If deleted dialog was current, clear the chat
-      if (dialogId === this._historyService.currentDialogId) {
-        this._historyService.currentDialogId = undefined;
-        this._postMessage({type: WEBVIEW_OUT_MSG.HISTORY_REPLACE_ALL, events: []});
-
-        // Update header to show "New dialog"
-        this._postMessage({
-          type: WEBVIEW_OUT_MSG.DIALOG_SWITCHED,
-          dialogId: null,
-          title: 'New dialog',
-        });
-      }
-
-      // Reload dialogs list
+      // Reload dialogs list first to get updated list
       await this._handleLoadDialogs();
+
+      // If deleted dialog was current, switch to the most recent one
+      if (wasCurrentDialog) {
+        const dialogs = this._dialogService.dialogs;
+
+        if (dialogs.length > 0) {
+          // Switch to the first (most recent) dialog
+          const newDialog = dialogs[0];
+          await this._dialogService.switchDialog(newDialog.id);
+          this._historyService.currentDialogId = newDialog.id;
+
+          // Load history for the new dialog
+          await this._loadLatestHistoryPage(newDialog.id, true);
+
+          // Update UI
+          const title = this._dialogService.getDialogDisplayTitle(newDialog);
+          this._postMessage({
+            type: WEBVIEW_OUT_MSG.DIALOG_SWITCHED,
+            dialogId: newDialog.id,
+            title,
+          });
+
+          // Scroll to bottom
+          this._postMessage({type: WEBVIEW_OUT_MSG.SCROLL_TO_BOTTOM});
+
+          // Reload dialogs list again to update active state
+          await this._handleLoadDialogs();
+        } else {
+          // No dialogs left, clear everything
+          this._historyService.currentDialogId = undefined;
+          this._postMessage({type: WEBVIEW_OUT_MSG.HISTORY_REPLACE_ALL, events: []});
+
+          this._postMessage({
+            type: WEBVIEW_OUT_MSG.DIALOG_SWITCHED,
+            dialogId: null,
+            title: 'New dialog',
+          });
+        }
+      }
     } catch (error: unknown) {
       const msg = getErrorMessage(error, 'Failed to delete dialog');
       this._postMessage({type: WEBVIEW_OUT_MSG.SHOW_ERROR, error: msg});
