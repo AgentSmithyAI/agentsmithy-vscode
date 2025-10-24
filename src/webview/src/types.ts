@@ -30,7 +30,9 @@ export type WebviewInMessage =
   | {type: typeof WEBVIEW_IN_MSG.DELETE_DIALOG; dialogId: string}
   | {type: typeof WEBVIEW_IN_MSG.DELETE_DIALOG_CONFIRM; dialogId: string; title: string}
   | {type: typeof WEBVIEW_IN_MSG.LOAD_DIALOGS}
-  | {type: typeof WEBVIEW_IN_MSG.RESTORE_CHECKPOINT; dialogId: string; checkpointId: string};
+  | {type: typeof WEBVIEW_IN_MSG.RESTORE_CHECKPOINT; dialogId: string; checkpointId: string}
+  | {type: typeof WEBVIEW_IN_MSG.APPROVE_SESSION; dialogId: string}
+  | {type: typeof WEBVIEW_IN_MSG.RESET_TO_APPROVED; dialogId: string};
 
 /**
  * Messages sent from extension to webview
@@ -66,7 +68,8 @@ export type WebviewOutMessage =
     }
   | {type: typeof WEBVIEW_OUT_MSG.DIALOGS_LOADING}
   | {type: typeof WEBVIEW_OUT_MSG.DIALOGS_ERROR; error: string}
-  | {type: typeof WEBVIEW_OUT_MSG.DIALOG_SWITCHED; dialogId: string | null; title: string};
+  | {type: typeof WEBVIEW_OUT_MSG.DIALOG_SWITCHED; dialogId: string | null; title: string}
+  | {type: typeof WEBVIEW_OUT_MSG.SESSION_STATUS_UPDATE; hasUnapproved: boolean};
 
 export interface HistoryEvent {
   type: 'user' | 'chat' | 'reasoning' | 'tool_call' | 'file_edit';

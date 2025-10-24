@@ -45,6 +45,24 @@ interface RestoreCheckpointResponse {
   new_checkpoint: string;
 }
 
+export interface SessionStatus {
+  active_session: string | null;
+  session_ref: string | null;
+  has_unapproved: boolean;
+  last_approved_at: string | null;
+}
+
+interface ApproveSessionResponse {
+  approved_commit: string;
+  new_session: string;
+  commits_approved: number;
+}
+
+interface ResetToApprovedResponse {
+  reset_to: string;
+  new_session: string;
+}
+
 import {SSE_EVENT_TYPES as E} from '../constants';
 
 export interface HistoryEvent {
@@ -80,6 +98,8 @@ export class ApiService {
     history: (dialogId: string) => `/api/dialogs/${encodeURIComponent(dialogId)}/history`,
     checkpoints: (dialogId: string) => `/api/dialogs/${encodeURIComponent(dialogId)}/checkpoints`,
     restore: (dialogId: string) => `/api/dialogs/${encodeURIComponent(dialogId)}/restore`,
+    session: (dialogId: string) => `/api/dialogs/${encodeURIComponent(dialogId)}/session`,
+    approve: (dialogId: string) => `/api/dialogs/${encodeURIComponent(dialogId)}/approve`,
     reset: (dialogId: string) => `/api/dialogs/${encodeURIComponent(dialogId)}/reset`,
   };
 
@@ -372,9 +392,64 @@ export class ApiService {
   }
 
   /**
-   * Reset dialog to initial checkpoint
+   * Get session status for a dialog
    */
-  async resetDialog(dialogId: string): Promise<RestoreCheckpointResponse> {
+  async getSessionStatus(dialogId: string): Promise<SessionStatus> {
+    const url = `${this.baseUrl}${this.endpoints.session(dialogId)}`;
+    const resp = await fetch(url, {headers: {Accept: 'application/json'}});
+
+    if (!resp.ok) {
+      throw new Error(`HTTP error! status: ${resp.status}`);
+    }
+
+    const data: unknown = await resp.json();
+    if (!isRecord(data)) {
+      throw new Error('Malformed session status response');
+    }
+
+    return {
+      active_session: typeof data.active_session === 'string' ? data.active_session : null,
+      session_ref: typeof data.session_ref === 'string' ? data.session_ref : null,
+      has_unapproved: Boolean(data.has_unapproved),
+      last_approved_at: typeof data.last_approved_at === 'string' ? data.last_approved_at : null,
+    };
+  }
+
+  /**
+   * Approve current session
+   */
+  async approveSession(dialogId: string, message?: string): Promise<ApproveSessionResponse> {
+    const url = `${this.baseUrl}${this.endpoints.approve(dialogId)}`;
+    const body = message ? {message} : {};
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!resp.ok) {
+      throw new Error(`HTTP error! status: ${resp.status}`);
+    }
+
+    const data: unknown = await resp.json();
+    if (!isRecord(data)) {
+      throw new Error('Malformed approve response');
+    }
+
+    return {
+      approved_commit: typeof data.approved_commit === 'string' ? data.approved_commit : '',
+      new_session: typeof data.new_session === 'string' ? data.new_session : '',
+      commits_approved: typeof data.commits_approved === 'number' ? data.commits_approved : 0,
+    };
+  }
+
+  /**
+   * Reset to approved state (discard current session)
+   */
+  async resetToApproved(dialogId: string): Promise<ResetToApprovedResponse> {
     const url = `${this.baseUrl}${this.endpoints.reset(dialogId)}`;
     const resp = await fetch(url, {
       method: 'POST',
@@ -391,8 +466,8 @@ export class ApiService {
     }
 
     return {
-      restored_to: typeof data.restored_to === 'string' ? data.restored_to : '',
-      new_checkpoint: typeof data.new_checkpoint === 'string' ? data.new_checkpoint : '',
+      reset_to: typeof data.reset_to === 'string' ? data.reset_to : '',
+      new_session: typeof data.new_session === 'string' ? data.new_session : '',
     };
   }
 }

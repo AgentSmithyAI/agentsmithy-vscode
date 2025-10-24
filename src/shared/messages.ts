@@ -12,6 +12,8 @@ export const WEBVIEW_IN_MSG = {
   DELETE_DIALOG_CONFIRM: 'deleteDialogConfirm',
   LOAD_DIALOGS: 'loadDialogs',
   RESTORE_CHECKPOINT: 'restoreCheckpoint',
+  APPROVE_SESSION: 'approveSession',
+  RESET_TO_APPROVED: 'resetToApproved',
 } as const;
 
 export type WebviewInMessageType = (typeof WEBVIEW_IN_MSG)[keyof typeof WEBVIEW_IN_MSG];
@@ -39,6 +41,7 @@ export const WEBVIEW_OUT_MSG = {
   DIALOGS_LOADING: 'dialogsLoading',
   DIALOGS_ERROR: 'dialogsError',
   DIALOG_SWITCHED: 'dialogSwitched',
+  SESSION_STATUS_UPDATE: 'sessionStatusUpdate',
 } as const;
 
 export type WebviewOutMessageType = (typeof WEBVIEW_OUT_MSG)[keyof typeof WEBVIEW_OUT_MSG];

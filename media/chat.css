@@ -737,3 +737,57 @@ body {
   height: 14px;
   fill: currentColor;
 }
+
+/* Session Actions Panel */
+.session-actions {
+  display: none;
+  padding: 8px;
+  gap: 8px;
+  border-top: 1px solid var(--vscode-widget-border);
+  background-color: var(--vscode-sideBar-background);
+  justify-content: center;
+}
+
+.session-approve-btn,
+.session-reset-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9em;
+  transition: background-color 0.15s;
+}
+
+.session-approve-btn {
+  background: var(--vscode-button-background);
+  border: none;
+  color: var(--vscode-button-foreground);
+}
+
+.session-approve-btn:hover {
+  background: var(--vscode-button-hoverBackground);
+}
+
+.session-approve-btn svg {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
+}
+
+.session-reset-btn {
+  background: var(--vscode-button-secondaryBackground);
+  border: 1px solid var(--vscode-button-secondaryBorder, var(--vscode-editorWidget-border));
+  color: var(--vscode-button-secondaryForeground, var(--vscode-foreground));
+}
+
+.session-reset-btn:hover {
+  background: var(--vscode-button-secondaryHoverBackground);
+}
+
+.session-reset-btn svg {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
+}

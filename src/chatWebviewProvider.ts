@@ -24,7 +24,9 @@ type WebviewInMessage =
   | {type: typeof WEBVIEW_IN_MSG.DELETE_DIALOG; dialogId: string}
   | {type: typeof WEBVIEW_IN_MSG.DELETE_DIALOG_CONFIRM; dialogId: string; title: string}
   | {type: typeof WEBVIEW_IN_MSG.LOAD_DIALOGS}
-  | {type: typeof WEBVIEW_IN_MSG.RESTORE_CHECKPOINT; dialogId: string; checkpointId: string};
+  | {type: typeof WEBVIEW_IN_MSG.RESTORE_CHECKPOINT; dialogId: string; checkpointId: string}
+  | {type: typeof WEBVIEW_IN_MSG.APPROVE_SESSION; dialogId: string}
+  | {type: typeof WEBVIEW_IN_MSG.RESET_TO_APPROVED; dialogId: string};
 // Messages sent from the extension to the webview
 type WebviewOutMessage =
   | {
@@ -57,7 +59,8 @@ type WebviewOutMessage =
     }
   | {type: typeof WEBVIEW_OUT_MSG.DIALOGS_LOADING}
   | {type: typeof WEBVIEW_OUT_MSG.DIALOGS_ERROR; error: string}
-  | {type: typeof WEBVIEW_OUT_MSG.DIALOG_SWITCHED; dialogId: string | null; title: string};
+  | {type: typeof WEBVIEW_OUT_MSG.DIALOG_SWITCHED; dialogId: string | null; title: string}
+  | {type: typeof WEBVIEW_OUT_MSG.SESSION_STATUS_UPDATE; hasUnapproved: boolean};
 export class ChatWebviewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = VIEWS.CHAT;
 
@@ -211,6 +214,12 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
         case WEBVIEW_IN_MSG.RESTORE_CHECKPOINT:
           await this._handleRestoreCheckpoint(message.dialogId, message.checkpointId);
           break;
+        case WEBVIEW_IN_MSG.APPROVE_SESSION:
+          await this._handleApproveSession(message.dialogId);
+          break;
+        case WEBVIEW_IN_MSG.RESET_TO_APPROVED:
+          await this._handleResetToApproved(message.dialogId);
+          break;
       }
     });
   }
@@ -247,6 +256,9 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
 
         // Scroll to bottom after initial history load
         this._postMessage({type: WEBVIEW_OUT_MSG.SCROLL_TO_BOTTOM, dialogId});
+
+        // Update session status
+        await this._updateSessionStatus(dialogId);
       }
     } catch {
       // noop
@@ -283,10 +295,33 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
 
     try {
       let hasReceivedEvents = false;
+      let currentDialogId = this._historyService.currentDialogId;
 
       for await (const event of this._stream.streamChat(request)) {
         hasReceivedEvents = true;
         await eventHandlers.handleEvent(event);
+
+        // Update dialog ID if present in event
+        if (event.dialog_id) {
+          currentDialogId = event.dialog_id;
+        }
+
+        // Update session status after logical event blocks (not on every chunk)
+        const shouldUpdateSession =
+          event.type === E.USER ||
+          event.type === E.TOOL_CALL ||
+          event.type === E.FILE_EDIT ||
+          event.type === E.CHAT_END ||
+          event.type === E.REASONING_END ||
+          event.type === E.DONE;
+
+        if (shouldUpdateSession && currentDialogId) {
+          try {
+            await this._updateSessionStatus(currentDialogId);
+          } catch {
+            // non-blocking
+          }
+        }
 
         if (event.type === E.DONE && event.dialog_id) {
           this._historyService.currentDialogId = event.dialog_id;
@@ -340,6 +375,9 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
 
     // Reload dialogs list to update active state
     await this._handleLoadDialogs();
+
+    // Update session status for new dialog
+    await this._updateSessionStatus(dialogId);
   };
 
   private _handleCreateDialog = async (): Promise<void> => {
@@ -448,11 +486,23 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     }
   };
 
+  private _updateSessionStatus = async (dialogId: string): Promise<void> => {
+    try {
+      const status = await this._apiService.getSessionStatus(dialogId);
+      this._postMessage({
+        type: WEBVIEW_OUT_MSG.SESSION_STATUS_UPDATE,
+        hasUnapproved: status.has_unapproved,
+      });
+    } catch {
+      // Silent fail - session status is not critical
+    }
+  };
+
   private _handleRestoreCheckpoint = async (dialogId: string, checkpointId: string): Promise<void> => {
     try {
       // Show confirmation dialog
       const result = await vscode.window.showWarningMessage(
-        `Restore to checkpoint ${checkpointId.substring(0, 8)}...?\n\nThis will restore all files to their state at this checkpoint.`,
+        `Restore to this state?\n\nThis will restore all files to their state at this checkpoint.`,
         {modal: true},
         'Restore',
       );
@@ -467,13 +517,71 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
       // Show success message
       this._postMessage({
         type: WEBVIEW_OUT_MSG.SHOW_INFO,
-        message: `Restored to checkpoint ${checkpointId.substring(0, 8)}`,
+        message: 'Restored to checkpoint',
       });
 
       // Reload history to show the new state
       await this._loadLatestHistoryPage(dialogId, true);
+
+      // Update session status
+      await this._updateSessionStatus(dialogId);
     } catch (error: unknown) {
       const msg = getErrorMessage(error, 'Failed to restore checkpoint');
+      this._postMessage({type: WEBVIEW_OUT_MSG.SHOW_ERROR, error: msg});
+    }
+  };
+
+  private _handleApproveSession = async (dialogId: string): Promise<void> => {
+    try {
+      // Perform approve
+      const result = await this._apiService.approveSession(dialogId);
+
+      // Show success message
+      this._postMessage({
+        type: WEBVIEW_OUT_MSG.SHOW_INFO,
+        message: `Approved ${result.commits_approved} commits`,
+      });
+
+      // Reload history
+      await this._loadLatestHistoryPage(dialogId, true);
+
+      // Update session status
+      await this._updateSessionStatus(dialogId);
+    } catch (error: unknown) {
+      const msg = getErrorMessage(error, 'Failed to approve session');
+      this._postMessage({type: WEBVIEW_OUT_MSG.SHOW_ERROR, error: msg});
+    }
+  };
+
+  private _handleResetToApproved = async (dialogId: string): Promise<void> => {
+    try {
+      // Show confirmation dialog
+      const result = await vscode.window.showWarningMessage(
+        'Reset to approved state?\n\nThis will discard all unapproved changes in the current session.',
+        {modal: true},
+        'Reset',
+      );
+
+      if (result !== 'Reset') {
+        return;
+      }
+
+      // Perform reset
+      await this._apiService.resetToApproved(dialogId);
+
+      // Show success message
+      this._postMessage({
+        type: WEBVIEW_OUT_MSG.SHOW_INFO,
+        message: 'Reset to approved state',
+      });
+
+      // Reload history
+      await this._loadLatestHistoryPage(dialogId, true);
+
+      // Update session status
+      await this._updateSessionStatus(dialogId);
+    } catch (error: unknown) {
+      const msg = getErrorMessage(error, 'Failed to reset to approved');
       this._postMessage({type: WEBVIEW_OUT_MSG.SHOW_ERROR, error: msg});
     }
   };
@@ -527,6 +635,21 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
             <div class="${CSS_CLASSES.WELCOME_PLACEHOLDER}" id="${DOM_IDS.WELCOME_PLACEHOLDER}">
                 Type a message to start...
             </div>
+        </div>
+        <div class="session-actions" id="sessionActions" style="display:none;">
+            <button class="session-approve-btn" id="sessionApproveBtn" title="Approve all changes">
+                <svg viewBox="0 0 16 16" aria-hidden="true">
+                    <path d="M13.78 4.22a.75.75 0 010 1.06l-7.25 7.25a.75.75 0 01-1.06 0L2.22 9.28a.75.75 0 011.06-1.06L6 10.94l6.72-6.72a.75.75 0 011.06 0z"/>
+                </svg>
+                <span>Approve</span>
+            </button>
+            <button class="session-reset-btn" id="sessionResetBtn" title="Reset to approved state">
+                <svg viewBox="0 0 16 16" aria-hidden="true">
+                    <path d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z"/>
+                    <path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/>
+                </svg>
+                <span>Reset</span>
+            </button>
         </div>
         <div class="${CSS_CLASSES.INPUT_CONTAINER}">
             <textarea 

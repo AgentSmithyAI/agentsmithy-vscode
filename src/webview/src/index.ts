@@ -4,6 +4,7 @@ import {DialogViewManager} from './DialogViewManager';
 import {MessageHandler} from './MessageHandler';
 import {MessageRenderer} from './renderer';
 import {ScrollManager} from './ScrollManager';
+import {SessionActionsUI} from './SessionActionsUI';
 import {StreamingStateManager} from './StreamingStateManager';
 import {VSCodeAPI, WebviewOutMessage} from './types';
 import {UIController} from './UIController';
@@ -36,6 +37,7 @@ class ChatWebview {
   private uiController: UIController;
   private messageHandler: MessageHandler;
   private dialogsUI: DialogsUI;
+  private sessionActionsUI: SessionActionsUI;
   private dialogViewManager: DialogViewManager;
   private currentDialogId: string | null = null;
 
@@ -65,6 +67,7 @@ class ChatWebview {
     this.uiController = new UIController(this.messageInput, this.sendButton);
     this.scrollManager = new ScrollManager(this.messagesContainer, this.vscode, this.renderer);
     this.dialogsUI = new DialogsUI(this.vscode);
+    this.sessionActionsUI = new SessionActionsUI(this.vscode);
     // Connect renderer to scroll manager for smart auto-scroll
     this.renderer.setScrollManager(this.scrollManager);
     this.messageHandler = new MessageHandler(
@@ -74,6 +77,7 @@ class ChatWebview {
       this.uiController,
       this.messagesContainer,
       this.dialogViewManager,
+      this.sessionActionsUI,
     );
 
     this.setupEventListeners();

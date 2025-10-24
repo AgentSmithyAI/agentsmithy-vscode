@@ -2,6 +2,7 @@ import {WEBVIEW_OUT_MSG} from '../../shared/messages';
 import {DialogViewManager} from './DialogViewManager';
 import {MessageRenderer} from './renderer';
 import {ScrollManager} from './ScrollManager';
+import {SessionActionsUI} from './SessionActionsUI';
 import {StreamingStateManager} from './StreamingStateManager';
 import {HistoryEvent, MAX_MESSAGES_IN_DOM, WebviewOutMessage} from './types';
 import {UIController} from './UIController';
@@ -18,6 +19,7 @@ export class MessageHandler {
     private uiController: UIController,
     private messagesContainer: HTMLElement,
     private dialogViewManager?: DialogViewManager,
+    private sessionActionsUI?: SessionActionsUI,
   ) {}
 
   /**
@@ -98,6 +100,18 @@ export class MessageHandler {
 
       case WEBVIEW_OUT_MSG.HISTORY_REPLACE_ALL:
         this.handleHistoryReplaceAll(message.events);
+        break;
+
+      case WEBVIEW_OUT_MSG.SESSION_STATUS_UPDATE:
+        if (this.sessionActionsUI) {
+          this.sessionActionsUI.updateSessionStatus(message.hasUnapproved);
+        }
+        break;
+
+      case WEBVIEW_OUT_MSG.DIALOG_SWITCHED:
+        if (this.sessionActionsUI) {
+          this.sessionActionsUI.setCurrentDialogId(message.dialogId);
+        }
         break;
     }
   }
