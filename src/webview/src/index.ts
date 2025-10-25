@@ -106,24 +106,16 @@ class ChatWebview {
       return;
     }
 
-    // Toggle dropdown
+    let isModelDropdownOpen = false;
+
+    // Toggle dropdown on button click
     modelSelectorBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      const isVisible = modelDropdown.style.display !== 'none';
-      modelDropdown.style.display = isVisible ? 'none' : 'block';
+      isModelDropdownOpen = !isModelDropdownOpen;
+      modelDropdown.style.display = isModelDropdownOpen ? 'block' : 'none';
     });
 
-    // Close dropdown when clicking outside
-    document.addEventListener('click', () => {
-      modelDropdown.style.display = 'none';
-    });
-
-    // Prevent closing when clicking inside dropdown
-    modelDropdown.addEventListener('click', (e) => {
-      e.stopPropagation();
-    });
-
-    // Handle model selection (mock for now)
+    // Handle model selection
     modelDropdown.addEventListener('click', (e) => {
       const target = e.target as HTMLElement;
       const modelItem = target.closest('.model-item') as HTMLElement;
@@ -131,18 +123,20 @@ class ChatWebview {
         const modelName = modelItem.getAttribute('data-model');
         const displayName = modelItem.querySelector('.model-name')?.textContent;
         if (modelName && displayName) {
-          // Update displayed model name
+          // Update displayed model name in selector button
           modelSelectorText.textContent = displayName;
 
-          // Remove active class from all items
+          // Update active state
           modelDropdown.querySelectorAll('.model-item').forEach((item) => {
             item.classList.remove('active');
           });
-          // Add active class to selected item
           modelItem.classList.add('active');
+
           // Close dropdown
+          isModelDropdownOpen = false;
           modelDropdown.style.display = 'none';
-          // TODO: Send model selection to extension
+
+          // TODO: Send model selection to extension when backend support is ready
         }
       }
     });
@@ -152,6 +146,40 @@ class ChatWebview {
     if (defaultModel) {
       defaultModel.classList.add('active');
     }
+
+    // Unified click handler for document - handles dropdown closing, file links, and checkpoint restores
+    document.addEventListener('click', (e) => {
+      const target = e.target as HTMLElement;
+
+      // Close model dropdown when clicking outside
+      if (isModelDropdownOpen && !modelDropdown.contains(target) && !modelSelectorBtn.contains(target)) {
+        isModelDropdownOpen = false;
+        modelDropdown.style.display = 'none';
+      }
+
+      // Handle file link clicks
+      if (target?.matches?.('.file-link')) {
+        e.preventDefault();
+        const fileAttr = target.getAttribute('data-file') || '';
+        const file = decodeURIComponent(fileAttr);
+        this.vscode.postMessage({type: WEBVIEW_IN_MSG.OPEN_FILE, file});
+      }
+
+      // Handle restore checkpoint button (including clicks on SVG inside)
+      const restoreBtn = target?.closest?.('.restore-checkpoint-btn') as HTMLElement | null;
+      if (restoreBtn) {
+        e.preventDefault();
+        const checkpointId = restoreBtn.getAttribute('data-checkpoint');
+        const dialogId = this.dialogViewManager.getActiveDialogId();
+        if (checkpointId && dialogId) {
+          this.vscode.postMessage({
+            type: WEBVIEW_IN_MSG.RESTORE_CHECKPOINT,
+            dialogId,
+            checkpointId,
+          });
+        }
+      }
+    });
   }
 
   private setupEventListeners(): void {
@@ -182,32 +210,6 @@ class ChatWebview {
     if (this.loadMoreBtn) {
       this.loadMoreBtn.style.display = 'none';
     }
-
-    // File link clicks and checkpoint restore button clicks
-    window.addEventListener('click', (e) => {
-      const target = e.target as HTMLElement;
-      if (target?.matches?.('.file-link')) {
-        e.preventDefault();
-        const fileAttr = target.getAttribute('data-file') || '';
-        const file = decodeURIComponent(fileAttr);
-        this.vscode.postMessage({type: WEBVIEW_IN_MSG.OPEN_FILE, file});
-      }
-
-      // Handle restore checkpoint button (including clicks on SVG inside)
-      const restoreBtn = target?.closest?.('.restore-checkpoint-btn') as HTMLElement | null;
-      if (restoreBtn) {
-        e.preventDefault();
-        const checkpointId = restoreBtn.getAttribute('data-checkpoint');
-        const dialogId = this.dialogViewManager.getActiveDialogId();
-        if (checkpointId && dialogId) {
-          this.vscode.postMessage({
-            type: WEBVIEW_IN_MSG.RESTORE_CHECKPOINT,
-            dialogId,
-            checkpointId,
-          });
-        }
-      }
-    });
 
     // Message handler
     window.addEventListener('message', (event) => {
