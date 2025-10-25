@@ -26,7 +26,8 @@ type WebviewInMessage =
   | {type: typeof WEBVIEW_IN_MSG.LOAD_DIALOGS}
   | {type: typeof WEBVIEW_IN_MSG.RESTORE_CHECKPOINT; dialogId: string; checkpointId: string}
   | {type: typeof WEBVIEW_IN_MSG.APPROVE_SESSION; dialogId: string}
-  | {type: typeof WEBVIEW_IN_MSG.RESET_TO_APPROVED; dialogId: string};
+  | {type: typeof WEBVIEW_IN_MSG.RESET_TO_APPROVED; dialogId: string}
+  | {type: typeof WEBVIEW_IN_MSG.OPEN_SETTINGS};
 // Messages sent from the extension to the webview
 type WebviewOutMessage =
   | {
@@ -219,6 +220,9 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
           break;
         case WEBVIEW_IN_MSG.RESET_TO_APPROVED:
           await this._handleResetToApproved(message.dialogId);
+          break;
+        case WEBVIEW_IN_MSG.OPEN_SETTINGS:
+          await vscode.commands.executeCommand('workbench.action.openSettings', 'agentsmithy');
           break;
       }
     });
@@ -637,6 +641,28 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
             </div>
         </div>
         <div class="session-actions" id="sessionActions">
+            <button class="session-action-btn settings-btn" id="settingsBtn" title="Open Settings" aria-label="Open Settings">
+                <svg viewBox="0 0 16 16" aria-hidden="true">
+                    <path d="M15 7h-2.1a5 5 0 00-.4-1.1l1.5-1.5-1-1-1.5 1.5a5 5 0 00-1.1-.4V3h-1v2.1a5 5 0 00-1.1.4L6.6 4 5.6 5l1.5 1.5a5 5 0 00-.4 1.1H5v1h2.1a5 5 0 00.4 1.1L6 11.4l1 1 1.5-1.5a5 5 0 001.1.4V13h1v-2.1a5 5 0 001.1-.4l1.5 1.5 1-1-1.5-1.5a5 5 0 00.4-1.1H15V7zm-7 3a2 2 0 110-4 2 2 0 010 4z"/>
+                </svg>
+            </button>
+            <div class="model-selector">
+                <button class="model-selector-btn" id="modelSelectorBtn" aria-label="Select model">
+                    <span class="model-selector-text" id="modelSelectorText">GPT-5</span>
+                    <svg class="dropdown-icon" viewBox="0 0 16 16" aria-hidden="true">
+                        <path d="M8 5L13 10 3 10z"/>
+                    </svg>
+                </button>
+                <div class="model-dropdown" id="modelDropdown" style="display:none;">
+                    <div class="model-item" data-model="gpt5">
+                        <span class="model-name">GPT-5</span>
+                    </div>
+                    <div class="model-item" data-model="gpt5-mini">
+                        <span class="model-name">GPT-5 Mini</span>
+                    </div>
+                </div>
+            </div>
+            <div style="flex: 1;"></div>
             <button class="session-action-btn session-approve-btn" id="sessionApproveBtn" title="Approve all changes" aria-label="Approve all changes" disabled>
                 <svg viewBox="0 0 16 16" aria-hidden="true">
                     <path d="M13.78 4.22a.75.75 0 010 1.06l-7.25 7.25a.75.75 0 01-1.06 0L2.22 9.28a.75.75 0 011.06-1.06L6 10.94l6.72-6.72a.75.75 0 011.06 0z"/>

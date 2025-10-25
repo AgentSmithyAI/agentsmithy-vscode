@@ -760,7 +760,7 @@ body {
   padding: 8px;
   gap: 2px;
   background-color: var(--vscode-sideBar-background);
-  justify-content: flex-end;
+  align-items: center;
   flex-shrink: 0;
   border-top: 1px solid var(--vscode-widget-border);
 }
@@ -803,6 +803,11 @@ body {
   fill: currentColor;
 }
 
+.settings-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
 .session-approve-btn svg {
   fill: var(--vscode-debugIcon-startForeground, var(--vscode-gitDecoration-addedResourceForeground));
 }
@@ -819,4 +824,91 @@ body {
 .session-reset-btn:disabled svg {
   fill: var(--vscode-icon-foreground);
   opacity: 0.5;
+}
+
+/* Model Selector */
+.model-selector {
+  position: relative;
+  margin-left: 4px;
+}
+
+.model-selector-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background: transparent;
+  border: 1px solid var(--vscode-widget-border);
+  border-radius: 2px;
+  color: var(--vscode-foreground);
+  cursor: pointer;
+  font-family: inherit;
+  transition: background-color 0.1s;
+  height: 26px;
+}
+
+.model-selector-btn:hover {
+  background-color: var(--vscode-toolbar-hoverBackground);
+}
+
+.model-selector-btn:focus {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+}
+
+.model-selector-text {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.model-selector-btn .dropdown-icon {
+  width: 10px;
+  height: 10px;
+  fill: currentColor;
+  opacity: 0.6;
+  flex-shrink: 0;
+}
+
+.model-selector-btn:hover .dropdown-icon {
+  opacity: 1;
+}
+
+.model-dropdown {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 0;
+  min-width: 140px;
+  background-color: var(--vscode-dropdown-background);
+  border: 2px solid var(--vscode-dropdown-border, var(--vscode-widget-border));
+  border-radius: 3px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  z-index: 1000;
+  padding: 2px;
+}
+
+.model-item {
+  display: flex;
+  align-items: center;
+  padding: 6px 8px;
+  cursor: pointer;
+  border-radius: 2px;
+  transition: background-color 0.1s;
+}
+
+.model-item:hover {
+  background-color: var(--vscode-list-hoverBackground);
+}
+
+.model-item.active {
+  background-color: var(--vscode-list-activeSelectionBackground);
+  color: var(--vscode-list-activeSelectionForeground);
+}
+
+.model-name {
+  font-size: 0.9em;
+  color: var(--vscode-foreground);
+}
+
+.model-item.active .model-name {
+  color: var(--vscode-list-activeSelectionForeground);
 }

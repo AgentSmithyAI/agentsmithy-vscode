@@ -82,9 +82,76 @@ class ChatWebview {
 
     this.setupEventListeners();
     this.initializeMarked();
+    this.setupModelSelector();
 
     // Notify extension
     this.vscode.postMessage({type: WEBVIEW_IN_MSG.READY});
+  }
+
+  private setupModelSelector(): void {
+    // Settings button - opens VSCode settings
+    const settingsBtn = document.getElementById('settingsBtn');
+    if (settingsBtn) {
+      settingsBtn.addEventListener('click', () => {
+        this.vscode.postMessage({type: WEBVIEW_IN_MSG.OPEN_SETTINGS});
+      });
+    }
+
+    // Model selector dropdown
+    const modelSelectorBtn = document.getElementById('modelSelectorBtn');
+    const modelDropdown = document.getElementById('modelDropdown');
+    const modelSelectorText = document.getElementById('modelSelectorText');
+
+    if (!modelSelectorBtn || !modelDropdown || !modelSelectorText) {
+      return;
+    }
+
+    // Toggle dropdown
+    modelSelectorBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isVisible = modelDropdown.style.display !== 'none';
+      modelDropdown.style.display = isVisible ? 'none' : 'block';
+    });
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', () => {
+      modelDropdown.style.display = 'none';
+    });
+
+    // Prevent closing when clicking inside dropdown
+    modelDropdown.addEventListener('click', (e) => {
+      e.stopPropagation();
+    });
+
+    // Handle model selection (mock for now)
+    modelDropdown.addEventListener('click', (e) => {
+      const target = e.target as HTMLElement;
+      const modelItem = target.closest('.model-item') as HTMLElement;
+      if (modelItem) {
+        const modelName = modelItem.getAttribute('data-model');
+        const displayName = modelItem.querySelector('.model-name')?.textContent;
+        if (modelName && displayName) {
+          // Update displayed model name
+          modelSelectorText.textContent = displayName;
+
+          // Remove active class from all items
+          modelDropdown.querySelectorAll('.model-item').forEach((item) => {
+            item.classList.remove('active');
+          });
+          // Add active class to selected item
+          modelItem.classList.add('active');
+          // Close dropdown
+          modelDropdown.style.display = 'none';
+          // TODO: Send model selection to extension
+        }
+      }
+    });
+
+    // Set default active model (gpt5)
+    const defaultModel = modelDropdown.querySelector('.model-item[data-model="gpt5"]');
+    if (defaultModel) {
+      defaultModel.classList.add('active');
+    }
   }
 
   private setupEventListeners(): void {

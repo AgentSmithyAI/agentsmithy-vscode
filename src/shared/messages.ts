@@ -14,6 +14,7 @@ export const WEBVIEW_IN_MSG = {
   RESTORE_CHECKPOINT: 'restoreCheckpoint',
   APPROVE_SESSION: 'approveSession',
   RESET_TO_APPROVED: 'resetToApproved',
+  OPEN_SETTINGS: 'openSettings',
 } as const;
 
 export type WebviewInMessageType = (typeof WEBVIEW_IN_MSG)[keyof typeof WEBVIEW_IN_MSG];
