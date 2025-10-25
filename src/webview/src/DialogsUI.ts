@@ -36,6 +36,7 @@ export class DialogsUI {
     // Toggle dropdown
     this.dialogTitleBtn.addEventListener('click', (e) => {
       e.stopPropagation();
+      e.preventDefault();
       this.toggleDropdown();
     });
 

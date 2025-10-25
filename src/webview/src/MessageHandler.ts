@@ -2,6 +2,7 @@ import {WEBVIEW_OUT_MSG} from '../../shared/messages';
 import {DialogViewManager} from './DialogViewManager';
 import {MessageRenderer} from './renderer';
 import {ScrollManager} from './ScrollManager';
+import {SessionActionsUI} from './SessionActionsUI';
 import {StreamingStateManager} from './StreamingStateManager';
 import {HistoryEvent, MAX_MESSAGES_IN_DOM, WebviewOutMessage} from './types';
 import {UIController} from './UIController';
@@ -18,6 +19,7 @@ export class MessageHandler {
     private uiController: UIController,
     private messagesContainer: HTMLElement,
     private dialogViewManager?: DialogViewManager,
+    private sessionActionsUI?: SessionActionsUI,
   ) {}
 
   /**
@@ -33,7 +35,7 @@ export class MessageHandler {
     // Fallback to legacy handling (for backward compatibility or active dialog)
     switch (message.type) {
       case WEBVIEW_OUT_MSG.ADD_MESSAGE:
-        this.handleAddMessage(message.message.role, message.message.content);
+        this.handleAddMessage(message.message.role, message.message.content, message.checkpoint);
         break;
 
       case WEBVIEW_OUT_MSG.START_ASSISTANT_MESSAGE:
@@ -53,7 +55,7 @@ export class MessageHandler {
         break;
 
       case WEBVIEW_OUT_MSG.SHOW_FILE_EDIT:
-        this.renderer.addFileEdit(message.file, message.diff);
+        this.renderer.addFileEdit(message.file, message.diff, message.checkpoint);
         break;
 
       case WEBVIEW_OUT_MSG.SHOW_ERROR:
@@ -99,6 +101,18 @@ export class MessageHandler {
       case WEBVIEW_OUT_MSG.HISTORY_REPLACE_ALL:
         this.handleHistoryReplaceAll(message.events);
         break;
+
+      case WEBVIEW_OUT_MSG.SESSION_STATUS_UPDATE:
+        if (this.sessionActionsUI) {
+          this.sessionActionsUI.updateSessionStatus(message.hasUnapproved);
+        }
+        break;
+
+      case WEBVIEW_OUT_MSG.DIALOG_SWITCHED:
+        if (this.sessionActionsUI) {
+          this.sessionActionsUI.setCurrentDialogId(message.dialogId);
+        }
+        break;
     }
   }
 
@@ -120,7 +134,7 @@ export class MessageHandler {
     // Process the message for this specific dialog
     switch (message.type) {
       case WEBVIEW_OUT_MSG.ADD_MESSAGE:
-        renderer.addMessage(message.message.role, message.message.content);
+        renderer.addMessage(message.message.role, message.message.content, message.checkpoint);
         renderer.pruneByIdx(MAX_MESSAGES_IN_DOM);
         break;
 
@@ -290,8 +304,8 @@ export class MessageHandler {
     }
   }
 
-  private handleAddMessage(role: 'user' | 'assistant', content: string): void {
-    this.renderer.addMessage(role, content);
+  private handleAddMessage(role: 'user' | 'assistant', content: string, checkpoint?: string): void {
+    this.renderer.addMessage(role, content, checkpoint);
     // User message means new tail content → prune older
     this.renderer.pruneByIdx(MAX_MESSAGES_IN_DOM);
   }

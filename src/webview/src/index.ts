@@ -4,6 +4,7 @@ import {DialogViewManager} from './DialogViewManager';
 import {MessageHandler} from './MessageHandler';
 import {MessageRenderer} from './renderer';
 import {ScrollManager} from './ScrollManager';
+import {SessionActionsUI} from './SessionActionsUI';
 import {StreamingStateManager} from './StreamingStateManager';
 import {VSCodeAPI, WebviewOutMessage} from './types';
 import {UIController} from './UIController';
@@ -36,6 +37,7 @@ class ChatWebview {
   private uiController: UIController;
   private messageHandler: MessageHandler;
   private dialogsUI: DialogsUI;
+  private sessionActionsUI: SessionActionsUI;
   private dialogViewManager: DialogViewManager;
   private currentDialogId: string | null = null;
 
@@ -65,6 +67,7 @@ class ChatWebview {
     this.uiController = new UIController(this.messageInput, this.sendButton);
     this.scrollManager = new ScrollManager(this.messagesContainer, this.vscode, this.renderer);
     this.dialogsUI = new DialogsUI(this.vscode);
+    this.sessionActionsUI = new SessionActionsUI(this.vscode);
     // Connect renderer to scroll manager for smart auto-scroll
     this.renderer.setScrollManager(this.scrollManager);
     this.messageHandler = new MessageHandler(
@@ -74,13 +77,109 @@ class ChatWebview {
       this.uiController,
       this.messagesContainer,
       this.dialogViewManager,
+      this.sessionActionsUI,
     );
 
     this.setupEventListeners();
     this.initializeMarked();
+    this.setupModelSelector();
 
     // Notify extension
     this.vscode.postMessage({type: WEBVIEW_IN_MSG.READY});
+  }
+
+  private setupModelSelector(): void {
+    // Settings button - opens VSCode settings
+    const settingsBtn = document.getElementById('settingsBtn');
+    if (settingsBtn) {
+      settingsBtn.addEventListener('click', () => {
+        this.vscode.postMessage({type: WEBVIEW_IN_MSG.OPEN_SETTINGS});
+      });
+    }
+
+    // Model selector dropdown
+    const modelSelectorBtn = document.getElementById('modelSelectorBtn');
+    const modelDropdown = document.getElementById('modelDropdown');
+    const modelSelectorText = document.getElementById('modelSelectorText');
+
+    if (!modelSelectorBtn || !modelDropdown || !modelSelectorText) {
+      return;
+    }
+
+    let isModelDropdownOpen = false;
+
+    // Toggle dropdown on button click
+    modelSelectorBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      isModelDropdownOpen = !isModelDropdownOpen;
+      modelDropdown.style.display = isModelDropdownOpen ? 'block' : 'none';
+    });
+
+    // Handle model selection
+    modelDropdown.addEventListener('click', (e) => {
+      const target = e.target as HTMLElement;
+      const modelItem = target.closest('.model-item') as HTMLElement;
+      if (modelItem) {
+        const modelName = modelItem.getAttribute('data-model');
+        const displayName = modelItem.querySelector('.model-name')?.textContent;
+        if (modelName && displayName) {
+          // Update displayed model name in selector button
+          modelSelectorText.textContent = displayName;
+
+          // Update active state
+          modelDropdown.querySelectorAll('.model-item').forEach((item) => {
+            item.classList.remove('active');
+          });
+          modelItem.classList.add('active');
+
+          // Close dropdown
+          isModelDropdownOpen = false;
+          modelDropdown.style.display = 'none';
+
+          // TODO: Send model selection to extension when backend support is ready
+        }
+      }
+    });
+
+    // Set default active model (gpt5)
+    const defaultModel = modelDropdown.querySelector('.model-item[data-model="gpt5"]');
+    if (defaultModel) {
+      defaultModel.classList.add('active');
+    }
+
+    // Unified click handler for document - handles dropdown closing, file links, and checkpoint restores
+    document.addEventListener('click', (e) => {
+      const target = e.target as HTMLElement;
+
+      // Close model dropdown when clicking outside
+      if (isModelDropdownOpen && !modelDropdown.contains(target) && !modelSelectorBtn.contains(target)) {
+        isModelDropdownOpen = false;
+        modelDropdown.style.display = 'none';
+      }
+
+      // Handle file link clicks
+      if (target?.matches?.('.file-link')) {
+        e.preventDefault();
+        const fileAttr = target.getAttribute('data-file') || '';
+        const file = decodeURIComponent(fileAttr);
+        this.vscode.postMessage({type: WEBVIEW_IN_MSG.OPEN_FILE, file});
+      }
+
+      // Handle restore checkpoint button (including clicks on SVG inside)
+      const restoreBtn = target?.closest?.('.restore-checkpoint-btn') as HTMLElement | null;
+      if (restoreBtn) {
+        e.preventDefault();
+        const checkpointId = restoreBtn.getAttribute('data-checkpoint');
+        const dialogId = this.dialogViewManager.getActiveDialogId();
+        if (checkpointId && dialogId) {
+          this.vscode.postMessage({
+            type: WEBVIEW_IN_MSG.RESTORE_CHECKPOINT,
+            dialogId,
+            checkpointId,
+          });
+        }
+      }
+    });
   }
 
   private setupEventListeners(): void {
@@ -112,17 +211,6 @@ class ChatWebview {
       this.loadMoreBtn.style.display = 'none';
     }
 
-    // File link clicks
-    window.addEventListener('click', (e) => {
-      const target = e.target as HTMLElement;
-      if (target?.matches?.('.file-link')) {
-        e.preventDefault();
-        const fileAttr = target.getAttribute('data-file') || '';
-        const file = decodeURIComponent(fileAttr);
-        this.vscode.postMessage({type: WEBVIEW_IN_MSG.OPEN_FILE, file});
-      }
-    });
-
     // Message handler
     window.addEventListener('message', (event) => {
       const message = event.data as WebviewOutMessage;
@@ -144,35 +232,9 @@ class ChatWebview {
 
     // Use active view if available
     if (activeView) {
-      const renderer = activeView.getRenderer();
-      const scrollManager = activeView.getScrollManager();
-      const wasAtBottom = scrollManager.isAtBottom();
-
-      if (!wasAtBottom) {
-        renderer.setSuppressAutoScroll(true);
-      }
-
-      renderer.addMessage('user', text);
-
-      if (!wasAtBottom) {
-        renderer.setSuppressAutoScroll(false);
-      }
-
       activeView.getStreamingState().setProcessing(true, this.currentDialogId || undefined);
     } else {
       // Fallback to legacy behavior
-      const wasAtBottom = this.scrollManager.isAtBottom();
-
-      if (!wasAtBottom) {
-        this.renderer.setSuppressAutoScroll(true);
-      }
-
-      this.renderer.addMessage('user', text);
-
-      if (!wasAtBottom) {
-        this.renderer.setSuppressAutoScroll(false);
-      }
-
       this.streamingState.setProcessing(true);
     }
 

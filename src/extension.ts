@@ -30,6 +30,7 @@ export const activate = (context: vscode.ExtensionContext) => {
     historyService,
     dialogService,
     configService,
+    apiService,
   );
 
   context.subscriptions.push(

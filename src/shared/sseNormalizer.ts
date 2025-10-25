@@ -28,6 +28,12 @@ export const normalizeSSEEvent = (raw: unknown): SSEEvent | null => {
   }
 
   switch (type) {
+    case E.USER: {
+      const content = getString('content') ?? '';
+      const checkpoint = getString('checkpoint');
+      const dialog_id = getString('dialog_id');
+      return {type: E.USER, content, checkpoint, dialog_id} as const;
+    }
     case E.CHAT_START:
       return {type: E.CHAT_START} as const;
     case E.CHAT: {
