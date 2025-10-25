@@ -55,14 +55,21 @@ body {
 }
 
 .messages {
-  flex: 1;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
   padding: 8px;
-  padding-bottom: 0;
   display: flex;
   flex-direction: column;
   gap: 6px;
   background-color: var(--vscode-sideBar-background);
+}
+
+.messages::after {
+  content: '';
+  display: block;
+  height: 21px;
+  flex-shrink: 0;
 }
 
 .load-more {
@@ -264,7 +271,7 @@ body {
 }
 
 .input-container {
-  padding: 12px 8px 8px 8px;
+  padding: 8px;
   border-top: 1px solid var(--vscode-widget-border);
   display: flex;
   gap: 8px;
@@ -273,6 +280,7 @@ body {
   position: relative;
   z-index: 10;
   contain: layout style paint;
+  flex-shrink: 0;
 }
 
 #messageInput {
@@ -742,11 +750,12 @@ body {
 /* Session Actions Panel */
 .session-actions {
   display: flex;
-  padding: 6px 8px;
+  padding: 8px;
   gap: 2px;
   background-color: var(--vscode-sideBar-background);
   justify-content: flex-end;
   flex-shrink: 0;
+  border-top: 1px solid var(--vscode-widget-border);
 }
 
 .session-action-btn {
@@ -797,5 +806,10 @@ body {
 }
 
 .session-reset-btn svg {
+  fill: var(--vscode-errorForeground);
+}
+
+.session-reset-btn:disabled svg {
   fill: var(--vscode-icon-foreground);
+  opacity: 0.5;
 }
