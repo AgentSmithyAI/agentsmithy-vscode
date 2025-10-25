@@ -43,10 +43,15 @@ export class SessionActionsUI {
   }
 
   updateSessionStatus(hasUnapproved: boolean): void {
+    const approveBtnElement = this.approveBtn as HTMLButtonElement;
+    const resetBtnElement = this.resetBtn as HTMLButtonElement;
+
     if (hasUnapproved) {
-      this.panel.style.display = 'flex';
+      approveBtnElement.disabled = false;
+      resetBtnElement.disabled = false;
     } else {
-      this.panel.style.display = 'none';
+      approveBtnElement.disabled = true;
+      resetBtnElement.disabled = true;
     }
   }
 }

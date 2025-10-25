@@ -636,19 +636,16 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
                 Type a message to start...
             </div>
         </div>
-        <div class="session-actions" id="sessionActions" style="display:none;">
-            <button class="session-approve-btn" id="sessionApproveBtn" title="Approve all changes">
+        <div class="session-actions" id="sessionActions">
+            <button class="session-action-btn session-approve-btn" id="sessionApproveBtn" title="Approve all changes" aria-label="Approve all changes" disabled>
                 <svg viewBox="0 0 16 16" aria-hidden="true">
                     <path d="M13.78 4.22a.75.75 0 010 1.06l-7.25 7.25a.75.75 0 01-1.06 0L2.22 9.28a.75.75 0 011.06-1.06L6 10.94l6.72-6.72a.75.75 0 011.06 0z"/>
                 </svg>
-                <span>Approve</span>
             </button>
-            <button class="session-reset-btn" id="sessionResetBtn" title="Reset to approved state">
+            <button class="session-action-btn session-reset-btn" id="sessionResetBtn" title="Discard all unapproved changes" aria-label="Discard all unapproved changes" disabled>
                 <svg viewBox="0 0 16 16" aria-hidden="true">
-                    <path d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z"/>
-                    <path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/>
+                    <path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.75.75 0 1 1 1.06 1.06L9.06 8l3.22 3.22a.75.75 0 1 1-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 0 1-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06z"/>
                 </svg>
-                <span>Reset</span>
             </button>
         </div>
         <div class="${CSS_CLASSES.INPUT_CONTAINER}">
