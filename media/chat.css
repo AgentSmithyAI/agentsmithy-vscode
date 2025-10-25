@@ -45,6 +45,13 @@ body {
   background-color: var(--vscode-sideBar-background);
 }
 
+.dialog-view-container .messages::after {
+  content: '';
+  display: block;
+  height: 21px;
+  flex-shrink: 0;
+}
+
 /* Messages should flow vertically with gaps */
 .dialog-view-container .messages > * {
   margin-bottom: 6px;

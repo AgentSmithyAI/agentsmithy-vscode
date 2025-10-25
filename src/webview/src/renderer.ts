@@ -66,7 +66,10 @@ export class MessageRenderer {
 
   private scrollIntoViewIfBottom(node: HTMLElement): void {
     if (!this.suppressAutoScroll && this.scrollManager?.isAtBottom()) {
-      node.scrollIntoView({behavior: 'smooth', block: 'end'});
+      // Use scrollTop instead of scrollIntoView to properly handle ::after spacer
+      requestAnimationFrame(() => {
+        this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
+      });
     }
   }
 
