@@ -803,6 +803,14 @@ body {
   fill: currentColor;
 }
 
+/* Codicon sizing for settings button */
+.session-action-btn .codicon {
+  font-size: 16px;
+  width: 16px;
+  height: 16px;
+  line-height: 16px;
+}
+
 .settings-btn svg {
   width: 16px;
   height: 16px;

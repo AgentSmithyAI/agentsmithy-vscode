@@ -598,6 +598,9 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
 
     const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'dist', 'webview.js'));
     const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'media', 'chat.css'));
+    const codiconCssUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(this._extensionUri, 'node_modules', '@vscode', 'codicons', 'dist', 'codicon.css'),
+    );
 
     const workspaceRoot = this._configService.getWorkspaceRoot() || '';
 
@@ -606,8 +609,9 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src ${webview.cspSource} 'nonce-${nonce}';">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; font-src ${webview.cspSource}; script-src ${webview.cspSource} 'nonce-${nonce}';">
     <title>AgentSmithy Chat</title>
+    <link rel="stylesheet" href="${codiconCssUri.toString()}">
     <link rel="stylesheet" href="${styleUri.toString()}">
     <script nonce="${nonce}" src="${markedUri.toString()}"></script>
 </head>
@@ -642,9 +646,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
         </div>
         <div class="session-actions" id="sessionActions">
             <button class="session-action-btn settings-btn" id="settingsBtn" title="Open Settings" aria-label="Open Settings">
-                <svg viewBox="0 0 16 16" aria-hidden="true">
-                    <path d="M15 7h-2.1a5 5 0 00-.4-1.1l1.5-1.5-1-1-1.5 1.5a5 5 0 00-1.1-.4V3h-1v2.1a5 5 0 00-1.1.4L6.6 4 5.6 5l1.5 1.5a5 5 0 00-.4 1.1H5v1h2.1a5 5 0 00.4 1.1L6 11.4l1 1 1.5-1.5a5 5 0 001.1.4V13h1v-2.1a5 5 0 001.1-.4l1.5 1.5 1-1-1.5-1.5a5 5 0 00.4-1.1H15V7zm-7 3a2 2 0 110-4 2 2 0 010 4z"/>
-                </svg>
+                <span class="codicon codicon-gear" aria-hidden="true"></span>
             </button>
             <div class="model-selector">
                 <button class="model-selector-btn" id="modelSelectorBtn" aria-label="Select model">
