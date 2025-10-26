@@ -136,6 +136,10 @@ export class MessageHandler {
       case WEBVIEW_OUT_MSG.ADD_MESSAGE:
         renderer.addMessage(message.message.role, message.message.content, message.checkpoint);
         renderer.pruneByIdx(MAX_MESSAGES_IN_DOM);
+        // Always scroll to bottom when user sends a message
+        if (message.message.role === 'user' && isActive) {
+          renderer.scrollToBottom();
+        }
         break;
 
       case WEBVIEW_OUT_MSG.START_ASSISTANT_MESSAGE: {
@@ -172,7 +176,12 @@ export class MessageHandler {
       case WEBVIEW_OUT_MSG.END_ASSISTANT_MESSAGE: {
         const messageElement = streamingState.getCurrentAssistantMessage();
         if (messageElement && streamingState.getCurrentAssistantText()) {
+          const wasAtBottom = scrollManager.isAtBottom();
           streamingState.endAssistantMessage((text) => renderer.renderMarkdown(text));
+          // After markdown rendering, content size may change - ensure we stay scrolled to bottom
+          if (wasAtBottom && isActive) {
+            scrollManager.scrollToBottom();
+          }
         }
         renderer.pruneByIdx(MAX_MESSAGES_IN_DOM);
         break;
@@ -199,6 +208,10 @@ export class MessageHandler {
         // Update UI controller only if this is the active dialog
         if (isActive) {
           this.uiController.setProcessing(false);
+          // Final scroll to bottom after stream ends to ensure user sees the complete response
+          if (scrollManager.isAtBottom()) {
+            scrollManager.scrollToBottom();
+          }
         }
         break;
 
@@ -308,6 +321,10 @@ export class MessageHandler {
     this.renderer.addMessage(role, content, checkpoint);
     // User message means new tail content → prune older
     this.renderer.pruneByIdx(MAX_MESSAGES_IN_DOM);
+    // Always scroll to bottom when user sends a message
+    if (role === 'user') {
+      this.renderer.scrollToBottom();
+    }
   }
 
   private handleStartAssistantMessage(): void {
@@ -334,9 +351,12 @@ export class MessageHandler {
   private handleEndAssistantMessage(): void {
     const messageElement = this.streamingState.getCurrentAssistantMessage();
     if (messageElement && this.streamingState.getCurrentAssistantText()) {
+      const wasAtBottom = this.scrollManager.isAtBottom();
       this.streamingState.endAssistantMessage((text) => this.renderer.renderMarkdown(text));
-      // Don't auto-scroll on end - only during append
-      // This prevents unwanted scrolling if user has manually scrolled up
+      // After markdown rendering, content size may change - ensure we stay scrolled to bottom
+      if (wasAtBottom) {
+        this.scrollManager.scrollToBottom();
+      }
     }
     // Finalized assistant message → prune older
     this.renderer.pruneByIdx(MAX_MESSAGES_IN_DOM);
@@ -345,6 +365,10 @@ export class MessageHandler {
   private handleEndStream(): void {
     this.streamingState.setProcessing(false);
     this.uiController.setProcessing(false);
+    // Final scroll to bottom after stream ends to ensure user sees the complete response
+    if (this.scrollManager.isAtBottom()) {
+      this.scrollManager.scrollToBottom();
+    }
   }
 
   private handleStartReasoning(): void {

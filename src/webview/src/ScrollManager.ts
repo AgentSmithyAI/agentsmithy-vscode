@@ -66,8 +66,20 @@ export class ScrollManager {
    */
   scrollIntoViewIfAtBottom(element: HTMLElement): void {
     if (this.isAtBottom()) {
-      element.scrollIntoView({behavior: 'smooth', block: 'end'});
+      this.scrollToBottom();
     }
+  }
+
+  /**
+   * Scroll to the absolute bottom of the container
+   * Uses double rAF to ensure DOM updates are complete
+   */
+  scrollToBottom(): void {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
+      });
+    });
   }
 
   private pruneOldMessages(): void {

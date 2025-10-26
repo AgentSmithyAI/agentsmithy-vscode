@@ -290,6 +290,7 @@ class ChatWebview {
   private handleDialogSwitch(dialogId: string | null, title: string): void {
     this.currentDialogId = dialogId;
     this.dialogsUI.updateCurrentDialog(dialogId, title);
+    this.sessionActionsUI.setCurrentDialogId(dialogId);
 
     if (dialogId) {
       // Switch to the dialog view

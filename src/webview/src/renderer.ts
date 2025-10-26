@@ -66,9 +66,11 @@ export class MessageRenderer {
 
   private scrollIntoViewIfBottom(node: HTMLElement): void {
     if (!this.suppressAutoScroll && this.scrollManager?.isAtBottom()) {
-      // Use scrollTop instead of scrollIntoView to properly handle ::after spacer
+      // Use double rAF to ensure DOM updates are complete, properly handling ::after spacer
       requestAnimationFrame(() => {
-        this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
+        requestAnimationFrame(() => {
+          this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
+        });
       });
     }
   }
@@ -295,7 +297,7 @@ export class MessageRenderer {
   }
 
   clearMessages(): void {
-    const toRemove: Node[] = [];
+    const toRemove: Element[] = [];
     for (const child of Array.from(this.messagesContainer.children)) {
       if (child !== this.loadMoreBtn) {
         toRemove.push(child);
@@ -305,6 +307,11 @@ export class MessageRenderer {
   }
 
   scrollToBottom(): void {
-    this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
+    // Use double rAF to ensure all DOM updates are complete
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
+      });
+    });
   }
 }
