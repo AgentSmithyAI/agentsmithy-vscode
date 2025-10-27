@@ -113,7 +113,7 @@
     "@stylistic/eslint-plugin": "^5.5.0",
     "@types/node": "^24.8.1",
     "@types/vscode": "^1.100.0",
-    "@vitest/coverage-v8": "^3.2.4",
+    "@vitest/coverage-v8": "^4.0.3",
     "@vscode/vsce": "^3.6.2",
     "concurrently": "^9.2.1",
     "esbuild": "^0.25.11",
@@ -126,7 +126,7 @@
     "prettier": "^3.3.3",
     "typescript": "^5.9.2",
     "typescript-eslint": "^8.39.0",
-    "vitest": "^3.2.4"
+    "vitest": "^4.0.3"
   },
   "dependencies": {
     "marked": "^16.3.0"
