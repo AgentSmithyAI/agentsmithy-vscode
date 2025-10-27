@@ -53,7 +53,7 @@ jobs:
 
       - name: Upload coverage artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: coverage
           path: coverage
@@ -159,7 +159,7 @@ jobs:
 
       - name: Upload artifacts
         if: steps.ver.outputs.version != ''
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: agentsmithy-vscode-${{ steps.ver.outputs.version }}
           retention-days: 1
