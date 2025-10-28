@@ -101,11 +101,11 @@ describe('ApiService - Checkpoints', () => {
     });
   });
 
-  describe('resetDialog', () => {
-    it('should reset dialog to initial state', async () => {
+  describe('resetToApproved', () => {
+    it('should reset dialog to approved state', async () => {
       const mockResponse = {
-        restored_to: 'abc123',
-        new_checkpoint: 'xyz789',
+        reset_to: 'abc123',
+        new_session: 'xyz789',
       };
 
       (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
@@ -113,14 +113,14 @@ describe('ApiService - Checkpoints', () => {
         json: async () => mockResponse,
       });
 
-      const result = await apiService.resetDialog(testDialogId);
+      const result = await apiService.resetToApproved(testDialogId);
 
       expect(global.fetch).toHaveBeenCalledWith(`${baseUrl}/api/dialogs/${encodeURIComponent(testDialogId)}/reset`, {
         method: 'POST',
         headers: {Accept: 'application/json'},
       });
-      expect(result.restored_to).toBe('abc123');
-      expect(result.new_checkpoint).toBe('xyz789');
+      expect(result.reset_to).toBe('abc123');
+      expect(result.new_session).toBe('xyz789');
     });
 
     it('should handle HTTP errors', async () => {
@@ -129,7 +129,7 @@ describe('ApiService - Checkpoints', () => {
         status: 404,
       });
 
-      await expect(apiService.resetDialog(testDialogId)).rejects.toThrow('HTTP error! status: 404');
+      await expect(apiService.resetToApproved(testDialogId)).rejects.toThrow('HTTP error! status: 404');
     });
   });
 });

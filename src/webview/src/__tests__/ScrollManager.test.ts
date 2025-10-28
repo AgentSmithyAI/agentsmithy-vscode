@@ -78,49 +78,56 @@ describe('ScrollManager', () => {
 
     beforeEach(() => {
       testElement = document.createElement('div');
-      testElement.scrollIntoView = vi.fn();
     });
 
-    it('should scroll element into view when at bottom', () => {
+    it('should scroll element into view when at bottom', async () => {
       // Position at bottom
       messagesContainer.scrollTop = 500;
 
       scrollManager.scrollIntoViewIfAtBottom(testElement);
 
-      expect(testElement.scrollIntoView).toHaveBeenCalledWith({
-        behavior: 'smooth',
-        block: 'end',
-      });
+      // Wait for double rAF
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+      // Should scroll to bottom
+      expect(messagesContainer.scrollTop).toBe(1000);
     });
 
-    it('should NOT scroll element into view when scrolled up', () => {
+    it('should NOT scroll element into view when scrolled up', async () => {
       // Position at top
       messagesContainer.scrollTop = 0;
 
       scrollManager.scrollIntoViewIfAtBottom(testElement);
 
-      expect(testElement.scrollIntoView).not.toHaveBeenCalled();
+      // Wait for potential rAF
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+      expect(messagesContainer.scrollTop).toBe(0);
     });
 
-    it('should scroll when within bottom threshold', () => {
+    it('should scroll when within bottom threshold', async () => {
       // Just within threshold
       messagesContainer.scrollTop = 350;
 
       scrollManager.scrollIntoViewIfAtBottom(testElement);
 
-      expect(testElement.scrollIntoView).toHaveBeenCalledWith({
-        behavior: 'smooth',
-        block: 'end',
-      });
+      // Wait for double rAF
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+      // Should scroll to bottom
+      expect(messagesContainer.scrollTop).toBe(1000);
     });
 
-    it('should NOT scroll when just outside threshold', () => {
+    it('should NOT scroll when just outside threshold', async () => {
       // Just outside threshold: 1000 - 250 - 500 = 250 > 200
       messagesContainer.scrollTop = 250;
 
       scrollManager.scrollIntoViewIfAtBottom(testElement);
 
-      expect(testElement.scrollIntoView).not.toHaveBeenCalled();
+      // Wait for potential rAF
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+      expect(messagesContainer.scrollTop).toBe(250);
     });
   });
 

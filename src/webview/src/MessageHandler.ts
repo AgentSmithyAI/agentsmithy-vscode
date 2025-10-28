@@ -108,6 +108,12 @@ export class MessageHandler {
         }
         break;
 
+      case WEBVIEW_OUT_MSG.SESSION_OPERATION_CANCELLED:
+        if (this.sessionActionsUI) {
+          this.sessionActionsUI.cancelOperation();
+        }
+        break;
+
       case WEBVIEW_OUT_MSG.DIALOG_SWITCHED:
         if (this.sessionActionsUI) {
           this.sessionActionsUI.setCurrentDialogId(message.dialogId);

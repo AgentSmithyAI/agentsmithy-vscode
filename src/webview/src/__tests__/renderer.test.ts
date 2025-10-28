@@ -46,155 +46,158 @@ describe('MessageRenderer with smart auto-scroll', () => {
   });
 
   describe('addMessage', () => {
-    it('should auto-scroll when user is at bottom', () => {
-      const scrollIntoViewSpy = vi.fn();
-
-      // Mock scrollIntoView on the element that will be created
-      const originalCreateElement = document.createElement.bind(document);
-      vi.spyOn(document, 'createElement').mockImplementation((tag: string) => {
-        const element = originalCreateElement(tag);
-        element.scrollIntoView = scrollIntoViewSpy;
-        return element;
-      });
-
+    it('should auto-scroll when user is at bottom', async () => {
       mockScrollManager.isAtBottom = vi.fn(() => true);
 
-      renderer.addMessage('assistant', 'Test message');
-
-      expect(scrollIntoViewSpy).toHaveBeenCalledWith({
-        behavior: 'smooth',
-        block: 'end',
+      // Mock scrollHeight as readonly property
+      Object.defineProperty(messagesContainer, 'scrollHeight', {
+        value: 1000,
+        configurable: true,
       });
 
-      vi.restoreAllMocks();
+      // Set initial scroll position
+      messagesContainer.scrollTop = 0;
+
+      renderer.addMessage('assistant', 'Test message');
+
+      // Wait for double rAF
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+      // Should have scrolled to bottom
+      expect(messagesContainer.scrollTop).toBe(1000);
     });
 
-    it('should NOT auto-scroll when user is scrolled up', () => {
-      const scrollIntoViewSpy = vi.fn();
+    it('should NOT auto-scroll when user is scrolled up', async () => {
+      mockScrollManager.isAtBottom = vi.fn(() => false);
 
-      const originalCreateElement = document.createElement.bind(document);
-      vi.spyOn(document, 'createElement').mockImplementation((tag: string) => {
-        const element = originalCreateElement(tag);
-        element.scrollIntoView = scrollIntoViewSpy;
-        return element;
+      // Mock scrollHeight as readonly property
+      Object.defineProperty(messagesContainer, 'scrollHeight', {
+        value: 1000,
+        configurable: true,
       });
 
-      mockScrollManager.isAtBottom = vi.fn(() => false);
+      // Set initial scroll position
+      messagesContainer.scrollTop = 100;
 
       renderer.addMessage('assistant', 'Test message');
 
-      expect(scrollIntoViewSpy).not.toHaveBeenCalled();
+      // Wait for potential rAF
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 
-      vi.restoreAllMocks();
+      // Should NOT have scrolled
+      expect(messagesContainer.scrollTop).toBe(100);
     });
   });
 
   describe('createReasoningBlock', () => {
-    it('should auto-scroll when user is at bottom', () => {
-      const scrollIntoViewSpy = vi.fn();
-
-      const originalCreateElement = document.createElement.bind(document);
-      vi.spyOn(document, 'createElement').mockImplementation((tag: string) => {
-        const element = originalCreateElement(tag);
-        element.scrollIntoView = scrollIntoViewSpy;
-        return element;
-      });
-
+    it('should auto-scroll when user is at bottom', async () => {
       mockScrollManager.isAtBottom = vi.fn(() => true);
 
-      renderer.createReasoningBlock();
-
-      expect(scrollIntoViewSpy).toHaveBeenCalledWith({
-        behavior: 'smooth',
-        block: 'end',
+      // Mock scrollHeight as readonly property
+      Object.defineProperty(messagesContainer, 'scrollHeight', {
+        value: 1000,
+        configurable: true,
       });
 
-      vi.restoreAllMocks();
+      // Set initial scroll position
+      messagesContainer.scrollTop = 0;
+
+      renderer.createReasoningBlock();
+
+      // Wait for double rAF
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+      // Should have scrolled to bottom
+      expect(messagesContainer.scrollTop).toBe(1000);
     });
 
-    it('should NOT auto-scroll when user is scrolled up', () => {
-      const scrollIntoViewSpy = vi.fn();
+    it('should NOT auto-scroll when user is scrolled up', async () => {
+      mockScrollManager.isAtBottom = vi.fn(() => false);
 
-      const originalCreateElement = document.createElement.bind(document);
-      vi.spyOn(document, 'createElement').mockImplementation((tag: string) => {
-        const element = originalCreateElement(tag);
-        element.scrollIntoView = scrollIntoViewSpy;
-        return element;
+      // Mock scrollHeight as readonly property
+      Object.defineProperty(messagesContainer, 'scrollHeight', {
+        value: 1000,
+        configurable: true,
       });
 
-      mockScrollManager.isAtBottom = vi.fn(() => false);
+      // Set initial scroll position
+      messagesContainer.scrollTop = 100;
 
       renderer.createReasoningBlock();
 
-      expect(scrollIntoViewSpy).not.toHaveBeenCalled();
+      // Wait for potential rAF
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 
-      vi.restoreAllMocks();
+      // Should NOT have scrolled
+      expect(messagesContainer.scrollTop).toBe(100);
     });
   });
 
   describe('showError', () => {
-    it('should auto-scroll when user is at bottom', () => {
+    it('should auto-scroll when user is at bottom', async () => {
       mockScrollManager.isAtBottom = vi.fn(() => true);
 
-      const initialChildCount = messagesContainer.children.length;
-
-      // Mock scrollIntoView for elements created in showError
-      const scrollIntoViewSpy = vi.fn();
-      const originalAppendChild = messagesContainer.appendChild.bind(messagesContainer);
-      vi.spyOn(messagesContainer, 'appendChild').mockImplementation((node: Node) => {
-        if (node instanceof HTMLElement) {
-          node.scrollIntoView = scrollIntoViewSpy;
-        }
-        return originalAppendChild(node);
+      // Mock scrollHeight as readonly property
+      Object.defineProperty(messagesContainer, 'scrollHeight', {
+        value: 1000,
+        configurable: true,
       });
+
+      // Set initial scroll position
+      messagesContainer.scrollTop = 0;
+
+      const initialChildCount = messagesContainer.children.length;
 
       renderer.showError('Test error');
 
       expect(messagesContainer.children.length).toBe(initialChildCount + 1);
       const errorElement = messagesContainer.lastChild as HTMLElement;
       expect(errorElement.className).toBe('error');
-      expect(scrollIntoViewSpy).toHaveBeenCalledWith({
-        behavior: 'smooth',
-        block: 'end',
-      });
 
-      vi.restoreAllMocks();
+      // Wait for double rAF
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+      // Should have scrolled to bottom
+      expect(messagesContainer.scrollTop).toBe(1000);
     });
 
-    it('should NOT auto-scroll when user is scrolled up', () => {
+    it('should NOT auto-scroll when user is scrolled up', async () => {
       mockScrollManager.isAtBottom = vi.fn(() => false);
 
-      const scrollIntoViewSpy = vi.fn();
-      const originalAppendChild = messagesContainer.appendChild.bind(messagesContainer);
-      vi.spyOn(messagesContainer, 'appendChild').mockImplementation((node: Node) => {
-        if (node instanceof HTMLElement) {
-          node.scrollIntoView = scrollIntoViewSpy;
-        }
-        return originalAppendChild(node);
+      // Mock scrollHeight as readonly property
+      Object.defineProperty(messagesContainer, 'scrollHeight', {
+        value: 1000,
+        configurable: true,
       });
+
+      // Set initial scroll position
+      messagesContainer.scrollTop = 100;
 
       const initialChildCount = messagesContainer.children.length;
       renderer.showError('Test error');
 
       expect(messagesContainer.children.length).toBe(initialChildCount + 1);
-      expect(scrollIntoViewSpy).not.toHaveBeenCalled();
 
-      vi.restoreAllMocks();
+      // Wait for potential rAF
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+      // Should NOT have scrolled
+      expect(messagesContainer.scrollTop).toBe(100);
     });
   });
 
   describe('showInfo', () => {
-    it('should auto-scroll when user is at bottom', () => {
+    it('should auto-scroll when user is at bottom', async () => {
       mockScrollManager.isAtBottom = vi.fn(() => true);
 
-      const scrollIntoViewSpy = vi.fn();
-      const originalAppendChild = messagesContainer.appendChild.bind(messagesContainer);
-      vi.spyOn(messagesContainer, 'appendChild').mockImplementation((node: Node) => {
-        if (node instanceof HTMLElement) {
-          node.scrollIntoView = scrollIntoViewSpy;
-        }
-        return originalAppendChild(node);
+      // Mock scrollHeight as readonly property
+      Object.defineProperty(messagesContainer, 'scrollHeight', {
+        value: 1000,
+        configurable: true,
       });
+
+      // Set initial scroll position
+      messagesContainer.scrollTop = 0;
 
       const initialChildCount = messagesContainer.children.length;
       renderer.showInfo('Test info');
@@ -202,33 +205,36 @@ describe('MessageRenderer with smart auto-scroll', () => {
       expect(messagesContainer.children.length).toBe(initialChildCount + 1);
       const infoElement = messagesContainer.lastChild as HTMLElement;
       expect(infoElement.className).toBe('info');
-      expect(scrollIntoViewSpy).toHaveBeenCalledWith({
-        behavior: 'smooth',
-        block: 'end',
-      });
 
-      vi.restoreAllMocks();
+      // Wait for double rAF
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+      // Should have scrolled to bottom
+      expect(messagesContainer.scrollTop).toBe(1000);
     });
 
-    it('should NOT auto-scroll when user is scrolled up', () => {
+    it('should NOT auto-scroll when user is scrolled up', async () => {
       mockScrollManager.isAtBottom = vi.fn(() => false);
 
-      const scrollIntoViewSpy = vi.fn();
-      const originalAppendChild = messagesContainer.appendChild.bind(messagesContainer);
-      vi.spyOn(messagesContainer, 'appendChild').mockImplementation((node: Node) => {
-        if (node instanceof HTMLElement) {
-          node.scrollIntoView = scrollIntoViewSpy;
-        }
-        return originalAppendChild(node);
+      // Mock scrollHeight as readonly property
+      Object.defineProperty(messagesContainer, 'scrollHeight', {
+        value: 1000,
+        configurable: true,
       });
+
+      // Set initial scroll position
+      messagesContainer.scrollTop = 100;
 
       const initialChildCount = messagesContainer.children.length;
       renderer.showInfo('Test info');
 
       expect(messagesContainer.children.length).toBe(initialChildCount + 1);
-      expect(scrollIntoViewSpy).not.toHaveBeenCalled();
 
-      vi.restoreAllMocks();
+      // Wait for potential rAF
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+      // Should NOT have scrolled
+      expect(messagesContainer.scrollTop).toBe(100);
     });
   });
 

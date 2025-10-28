@@ -61,7 +61,8 @@ type WebviewOutMessage =
   | {type: typeof WEBVIEW_OUT_MSG.DIALOGS_LOADING}
   | {type: typeof WEBVIEW_OUT_MSG.DIALOGS_ERROR; error: string}
   | {type: typeof WEBVIEW_OUT_MSG.DIALOG_SWITCHED; dialogId: string | null; title: string}
-  | {type: typeof WEBVIEW_OUT_MSG.SESSION_STATUS_UPDATE; hasUnapproved: boolean};
+  | {type: typeof WEBVIEW_OUT_MSG.SESSION_STATUS_UPDATE; hasUnapproved: boolean}
+  | {type: typeof WEBVIEW_OUT_MSG.SESSION_OPERATION_CANCELLED};
 export class ChatWebviewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = VIEWS.CHAT;
 
@@ -567,6 +568,8 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
       );
 
       if (result !== 'Reset') {
+        // User cancelled - notify webview to clear processing state
+        this._postMessage({type: WEBVIEW_OUT_MSG.SESSION_OPERATION_CANCELLED});
         return;
       }
 
