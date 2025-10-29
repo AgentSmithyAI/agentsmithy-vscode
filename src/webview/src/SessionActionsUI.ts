@@ -28,7 +28,11 @@ export class SessionActionsUI {
 
   private setupEventListeners(): void {
     this.approveBtn.addEventListener('click', () => {
-      if (this.currentDialogId && !this.isApproveProcessing) {
+      // Prevent parallel actions: if any operation is running, ignore
+      if (this.isApproveProcessing || this.isResetProcessing) {
+        return;
+      }
+      if (this.currentDialogId) {
         this.isApproveProcessing = true;
         this.approveLoading.start();
         this.updateButtonStates();
@@ -40,7 +44,11 @@ export class SessionActionsUI {
     });
 
     this.resetBtn.addEventListener('click', () => {
-      if (this.currentDialogId && !this.isResetProcessing) {
+      // Prevent parallel actions: if any operation is running, ignore
+      if (this.isApproveProcessing || this.isResetProcessing) {
+        return;
+      }
+      if (this.currentDialogId) {
         this.isResetProcessing = true;
         this.resetLoading.start();
         this.updateButtonStates();
@@ -87,12 +95,15 @@ export class SessionActionsUI {
     const resetBtnElement = this.resetBtn as HTMLButtonElement;
 
     // Determine if buttons should be enabled based on session status
-    // If hasUnapproved is not provided, keep current disabled state
+    // If hasUnapproved is not provided, keep current disabled state from approve button
     const shouldEnable =
-      hasUnapproved !== undefined ? hasUnapproved : !approveBtnElement.disabled && !this.isApproveProcessing;
+      hasUnapproved !== undefined
+        ? hasUnapproved
+        : !approveBtnElement.disabled && !this.isApproveProcessing && !this.isResetProcessing;
 
-    // Disable if: no unapproved changes OR operation is in progress
-    approveBtnElement.disabled = !shouldEnable || this.isApproveProcessing;
-    resetBtnElement.disabled = !shouldEnable || this.isResetProcessing;
+    // Disable both if: no unapproved changes OR any operation is in progress
+    const anyProcessing = this.isApproveProcessing || this.isResetProcessing;
+    approveBtnElement.disabled = !shouldEnable || anyProcessing;
+    resetBtnElement.disabled = !shouldEnable || anyProcessing;
   }
 }
