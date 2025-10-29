@@ -11,9 +11,13 @@ export class SessionActionsUI {
   private resetBtn: HTMLButtonElement;
   private approveLoading: LoadingButton;
   private resetLoading: LoadingButton;
+
   private currentDialogId: string | null = null;
-  private isApproveProcessing = false;
-  private isResetProcessing = false;
+
+  // Single source of truth for processing and availability
+  private isProcessing = false;
+  private canAct = false; // reflects hasUnapproved from backend
+  private activeOp: 'approve' | 'reset' | null = null;
 
   constructor(private readonly vscode: VSCodeAPI) {
     this.panel = document.getElementById('sessionActions')!;
@@ -24,86 +28,80 @@ export class SessionActionsUI {
     this.resetLoading = new LoadingButton(this.resetBtn);
 
     this.setupEventListeners();
+    this.updateUI();
   }
 
+  // Event wiring
   private setupEventListeners(): void {
-    this.approveBtn.addEventListener('click', () => {
-      // Prevent parallel actions: if any operation is running, ignore
-      if (this.isApproveProcessing || this.isResetProcessing) {
-        return;
-      }
-      if (this.currentDialogId) {
-        this.isApproveProcessing = true;
-        this.approveLoading.start();
-        this.updateButtonStates();
-        this.vscode.postMessage({
-          type: WEBVIEW_IN_MSG.APPROVE_SESSION,
-          dialogId: this.currentDialogId,
-        });
-      }
-    });
-
-    this.resetBtn.addEventListener('click', () => {
-      // Prevent parallel actions: if any operation is running, ignore
-      if (this.isApproveProcessing || this.isResetProcessing) {
-        return;
-      }
-      if (this.currentDialogId) {
-        this.isResetProcessing = true;
-        this.resetLoading.start();
-        this.updateButtonStates();
-        this.vscode.postMessage({
-          type: WEBVIEW_IN_MSG.RESET_TO_APPROVED,
-          dialogId: this.currentDialogId,
-        });
-      }
-    });
+    this.approveBtn.addEventListener('click', () => this.onApprove());
+    this.resetBtn.addEventListener('click', () => this.onReset());
   }
 
+  // Public API
   setCurrentDialogId(dialogId: string | null): void {
     this.currentDialogId = dialogId;
-    // Reset processing flags when switching dialogs
-    this.isApproveProcessing = false;
-    this.isResetProcessing = false;
-    this.approveLoading.stop();
-    this.resetLoading.stop();
-    this.updateButtonStates();
+    // Reset processing and spinners when switching dialogs
+    this.finishOperation();
+    // Keep canAct as is until backend sends hasUnapproved for this dialog
+    this.updateUI();
   }
 
   updateSessionStatus(hasUnapproved: boolean): void {
-    // Clear processing flags when we get a status update (operation completed)
-    this.isApproveProcessing = false;
-    this.isResetProcessing = false;
-    this.approveLoading.stop();
-    this.resetLoading.stop();
-    this.updateButtonStates(hasUnapproved);
+    // Backend completed an operation or provided state; update flags
+    this.canAct = !!hasUnapproved;
+    this.finishOperation();
+    this.updateUI();
   }
 
   /**
    * Cancel any ongoing session operation (e.g., user cancelled confirmation dialog)
    */
   cancelOperation(): void {
-    this.isApproveProcessing = false;
-    this.isResetProcessing = false;
-    this.approveLoading.stop();
-    this.resetLoading.stop();
-    this.updateButtonStates();
+    this.finishOperation();
+    this.updateUI();
   }
 
-  private updateButtonStates(hasUnapproved?: boolean): void {
-    const approveBtnElement = this.approveBtn as HTMLButtonElement;
-    const resetBtnElement = this.resetBtn as HTMLButtonElement;
+  // Handlers
+  private onApprove(): void {
+    if (!this.currentDialogId || this.isProcessing || !this.canAct) return;
+    this.startOperation('approve');
+    this.vscode.postMessage({
+      type: WEBVIEW_IN_MSG.APPROVE_SESSION,
+      dialogId: this.currentDialogId,
+    });
+  }
 
-    // Determine if buttons should be enabled based on session status
-    // If hasUnapproved is not provided, keep current disabled state from approve button
-    const shouldEnable =
-      hasUnapproved !== undefined
-        ? hasUnapproved
-        : !approveBtnElement.disabled && !this.isApproveProcessing && !this.isResetProcessing;
+  private onReset(): void {
+    if (!this.currentDialogId || this.isProcessing || !this.canAct) return;
+    this.startOperation('reset');
+    this.vscode.postMessage({
+      type: WEBVIEW_IN_MSG.RESET_TO_APPROVED,
+      dialogId: this.currentDialogId,
+    });
+  }
 
-    // Disable both if: no unapproved changes OR any operation is in progress
-    const anyProcessing = this.isApproveProcessing || this.isResetProcessing;
-    approveBtnElement.disabled = !shouldEnable || anyProcessing;
-    resetBtnElement.disabled = !shouldEnable || anyProcessing;
+  // State helpers
+  private startOperation(op: 'approve' | 'reset'): void {
+    this.isProcessing = true;
+    this.activeOp = op;
+    // Start spinner only on the triggered button
+    if (op === 'approve') this.approveLoading.start();
+    else this.resetLoading.start();
+    this.updateUI();
+  }
+
+  private finishOperation(): void {
+    this.isProcessing = false;
+    // Stop both spinners to be safe (handles switch/cancel/finish)
+    this.approveLoading.stop();
+    this.resetLoading.stop();
+    this.activeOp = null;
+  }
+
+  private updateUI(): void {
+    // Disable both buttons if not allowed to act or while processing
+    const disabled = !this.canAct || this.isProcessing;
+    this.approveBtn.disabled = disabled;
+    this.resetBtn.disabled = disabled;
   }
 }
