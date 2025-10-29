@@ -193,6 +193,12 @@ class ChatWebview {
     this.messageInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
+        // Prevent VS Code/webview default key handling from stealing focus
+        e.stopPropagation();
+        try {
+          // In some environments needed to block other listeners
+          (e as any).stopImmediatePropagation?.();
+        } catch {}
         this.sendMessage();
       }
     });
@@ -211,6 +217,8 @@ class ChatWebview {
     this.messageInput.addEventListener('input', captureSelection);
 
     // Send/Stop button
+    // Prevent the button from grabbing focus on mouse down; keep caret in input
+    this.sendButton.addEventListener('mousedown', (e) => e.preventDefault());
     this.sendButton.addEventListener('click', () => {
       // Check if any dialog is processing
       const activeView = this.dialogViewManager.getActiveView();
@@ -263,6 +271,18 @@ class ChatWebview {
     });
 
     this.uiController.setProcessing(true);
+
+    // Robustly keep input focused after sending (both Enter and button)
+    // Defer to allow any DOM updates from setProcessing to settle
+    requestAnimationFrame(() => {
+      // If input was removed/disabled, skip
+      if (!document.body.contains(this.messageInput) || this.messageInput.disabled) return;
+      this.messageInput.focus();
+      // Input is cleared on send; caret should be at beginning
+      try {
+        this.messageInput.setSelectionRange(0, 0);
+      } catch {}
+    });
   }
 
   private handleMessage(message: WebviewOutMessage): void {

@@ -7,6 +7,9 @@ export class UIController {
     private sendButton: HTMLButtonElement,
   ) {
     this.setupInputAutoResize();
+    // Ensure input is enabled by default
+    this.messageInput.readOnly = false;
+    this.messageInput.disabled = false;
   }
 
   private setupInputAutoResize(): void {
@@ -32,9 +35,14 @@ export class UIController {
    * Update the UI to reflect processing state
    */
   setProcessing(processing: boolean): void {
-    this.messageInput.disabled = processing;
+    // Keep input editable to preserve caret visibility and focus.
+    // We avoid readOnly/disabled because some browsers hide the caret on readOnly textarea.
+    this.messageInput.readOnly = false;
+    this.messageInput.disabled = false;
 
+    // Reflect busy state for accessibility/automation without changing editability
     if (processing) {
+      this.messageInput.setAttribute('aria-busy', 'true');
       this.sendButton.innerHTML =
         '<svg class="stop-icon" viewBox="0 0 32 32" aria-hidden="true">' +
         '<rect x="10" y="10" width="12" height="12" fill="currentColor" rx="2"/>' +
@@ -44,8 +52,11 @@ export class UIController {
       this.sendButton.title = 'Stop';
       this.sendButton.setAttribute('aria-label', 'Stop');
     } else {
+      this.messageInput.removeAttribute('aria-busy');
       this.sendButton.innerHTML =
-        '<svg viewBox="0 0 24 24" aria-hidden="true">' + '<path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>' + '</svg>';
+        '<svg viewBox="0 0 24 24" aria-hidden="true">' +
+        '<path d=\"M2.01 21L23 12 2.01 3 2 10l15 2-15 2z\"/>' +
+        '</svg>';
       this.sendButton.classList.remove('processing');
       this.sendButton.title = 'Send (Enter)';
       this.sendButton.setAttribute('aria-label', 'Send');
@@ -56,6 +67,7 @@ export class UIController {
    * Check if input is disabled
    */
   isInputDisabled(): boolean {
-    return this.messageInput.disabled;
+    // Backward-compatible: treat readOnly as "disabled" for tests/UI expectations
+    return this.messageInput.readOnly;
   }
 }
