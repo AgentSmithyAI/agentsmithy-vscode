@@ -41,6 +41,11 @@ class ChatWebview {
   private dialogViewManager: DialogViewManager;
   private currentDialogId: string | null = null;
 
+  // Focus persistence state
+  private shouldRestoreInputFocus = false;
+  // Snapshot of caret/selection to restore after focus returns
+  private lastSelection: {start: number; end: number; direction?: 'forward' | 'backward' | 'none'} | null = null;
+
   private messagesContainer: HTMLElement;
   private dialogViewsContainer: HTMLElement;
   private messageInput: HTMLTextAreaElement;
@@ -81,6 +86,7 @@ class ChatWebview {
     );
 
     this.setupEventListeners();
+    this.setupFocusPersistence();
     this.initializeMarked();
     this.setupModelSelector();
 
@@ -190,6 +196,19 @@ class ChatWebview {
         this.sendMessage();
       }
     });
+
+    // Track selection while typing/navigating so we can restore caret position
+    const captureSelection = () => {
+      this.lastSelection = {
+        start: this.messageInput.selectionStart ?? this.messageInput.value.length,
+        end: this.messageInput.selectionEnd ?? this.messageInput.value.length,
+        direction: (this.messageInput as any).selectionDirection,
+      };
+    };
+    this.messageInput.addEventListener('keyup', captureSelection);
+    this.messageInput.addEventListener('mouseup', captureSelection);
+    this.messageInput.addEventListener('select', captureSelection);
+    this.messageInput.addEventListener('input', captureSelection);
 
     // Send/Stop button
     this.sendButton.addEventListener('click', () => {
@@ -307,7 +326,98 @@ class ChatWebview {
       this.messagesContainer.style.display = 'block';
     }
 
-    this.messageInput.focus();
+    // Don't forcibly focus the input on dialog switch; let the user control focus.
+  }
+
+  private setupFocusPersistence(): void {
+    // Focus persistence rules
+    // - Restore focus if the input was the last focused element when the webview lost focus/visibility.
+    // - Preserve caret/selection range; do NOT jump to end.
+    // - Never steal focus if user interacted elsewhere meanwhile.
+
+    let lastFocusedWasInput = false;
+
+    // Track the last focused element reliably (focusin bubbles and fires before window blur in most cases)
+    document.addEventListener('focusin', (e) => {
+      lastFocusedWasInput = e.target === this.messageInput;
+      if (lastFocusedWasInput) {
+        // Keep caret snapshot up to date
+        const valLen = this.messageInput.value.length;
+        const start = Math.max(0, Math.min(valLen, this.messageInput.selectionStart ?? valLen));
+        const end = Math.max(0, Math.min(valLen, this.messageInput.selectionEnd ?? valLen));
+        this.lastSelection = {
+          start,
+          end,
+          direction: (this.messageInput as any).selectionDirection,
+        };
+      }
+    });
+
+    const snapshotIfNeeded = () => {
+      this.shouldRestoreInputFocus = !!lastFocusedWasInput;
+      if (lastFocusedWasInput) {
+        const valLen = this.messageInput.value.length;
+        const start = Math.max(0, Math.min(valLen, this.messageInput.selectionStart ?? valLen));
+        const end = Math.max(0, Math.min(valLen, this.messageInput.selectionEnd ?? valLen));
+        this.lastSelection = {
+          start,
+          end,
+          direction: (this.messageInput as any).selectionDirection,
+        };
+      }
+    };
+
+    // When VS Code window (and thus this webview) loses focus or becomes hidden
+    window.addEventListener('blur', snapshotIfNeeded);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') {
+        snapshotIfNeeded();
+      }
+    });
+
+    // When window returns to focus or webview becomes visible again, restore focus if needed
+    const restoreIfNeeded = () => {
+      if (!this.shouldRestoreInputFocus) return;
+      // Defer twice to ensure the webview iframe is active and layout is ready
+      requestAnimationFrame(() => {
+        setTimeout(() => {
+          // If user focused something else in the meantime inside the webview, do not steal
+          if (!this.shouldRestoreInputFocus) return;
+          if (!document.body.contains(this.messageInput) || this.messageInput.disabled) {
+            this.shouldRestoreInputFocus = false;
+            return;
+          }
+          this.messageInput.focus();
+          const valLen = this.messageInput.value.length;
+          const start = Math.max(0, Math.min(valLen, this.lastSelection?.start ?? valLen));
+          const end = Math.max(0, Math.min(valLen, this.lastSelection?.end ?? valLen));
+          const direction = this.lastSelection?.direction as any;
+          try {
+            this.messageInput.setSelectionRange(start, end, direction);
+          } catch {
+            this.messageInput.setSelectionRange(start, end);
+          }
+          this.shouldRestoreInputFocus = false;
+        }, 50);
+      });
+    };
+
+    window.addEventListener('focus', restoreIfNeeded);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        restoreIfNeeded();
+      }
+    });
+
+    // Also handle explicit requests from the extension host to focus input.
+    window.addEventListener('message', (event) => {
+      const message = event.data as WebviewOutMessage;
+      if (message?.type === WEBVIEW_OUT_MSG.FOCUS_INPUT) {
+        // Respect shouldRestoreInputFocus flag to avoid stealing focus when not desired.
+        if (!this.shouldRestoreInputFocus) return;
+        requestAnimationFrame(() => restoreIfNeeded());
+      }
+    });
   }
 
   private initializeMarked(): void {

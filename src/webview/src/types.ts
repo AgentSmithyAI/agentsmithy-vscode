@@ -62,6 +62,7 @@ export type WebviewOutMessage =
   | {type: typeof WEBVIEW_OUT_MSG.HISTORY_REPLACE_ALL; events: HistoryEvent[]; dialogId?: string}
   | {type: typeof WEBVIEW_OUT_MSG.SCROLL_TO_BOTTOM; dialogId?: string}
   | {type: typeof WEBVIEW_OUT_MSG.GET_VISIBLE_FIRST_IDX}
+  | {type: typeof WEBVIEW_OUT_MSG.FOCUS_INPUT}
   | {
       type: typeof WEBVIEW_OUT_MSG.DIALOGS_UPDATE;
       dialogs: Array<{id: string; title: string | null; updated_at: string}>;

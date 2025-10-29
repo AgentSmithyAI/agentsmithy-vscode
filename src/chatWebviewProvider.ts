@@ -62,7 +62,8 @@ type WebviewOutMessage =
   | {type: typeof WEBVIEW_OUT_MSG.DIALOGS_ERROR; error: string}
   | {type: typeof WEBVIEW_OUT_MSG.DIALOG_SWITCHED; dialogId: string | null; title: string}
   | {type: typeof WEBVIEW_OUT_MSG.SESSION_STATUS_UPDATE; hasUnapproved: boolean}
-  | {type: typeof WEBVIEW_OUT_MSG.SESSION_OPERATION_CANCELLED};
+  | {type: typeof WEBVIEW_OUT_MSG.SESSION_OPERATION_CANCELLED}
+  | {type: typeof WEBVIEW_OUT_MSG.FOCUS_INPUT};
 export class ChatWebviewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = VIEWS.CHAT;
 
@@ -173,6 +174,17 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     };
 
     webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
+
+    // Focus management: do NOT forcibly focus the webview from the extension side.
+    // Webview script owns focus persistence and will only restore focus to the
+    // input if it was previously focused when the window lost focus. This avoids
+    // stealing focus from the editor or other VS Code areas.
+    const noopVisibilityDisposable = webviewView.onDidChangeVisibility(() => {
+      // Intentionally no-op: let the webview decide whether to restore focus.
+    });
+    webviewView.onDidDispose(() => {
+      noopVisibilityDisposable.dispose();
+    });
 
     // Handle messages from the webview
     webviewView.webview.onDidReceiveMessage(async (message: WebviewInMessage) => {

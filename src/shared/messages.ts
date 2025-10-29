@@ -44,6 +44,7 @@ export const WEBVIEW_OUT_MSG = {
   DIALOG_SWITCHED: 'dialogSwitched',
   SESSION_STATUS_UPDATE: 'sessionStatusUpdate',
   SESSION_OPERATION_CANCELLED: 'sessionOperationCancelled',
+  FOCUS_INPUT: 'focusInput',
 } as const;
 
 export type WebviewOutMessageType = (typeof WEBVIEW_OUT_MSG)[keyof typeof WEBVIEW_OUT_MSG];
