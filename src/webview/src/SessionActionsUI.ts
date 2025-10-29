@@ -1,21 +1,27 @@
 import {WEBVIEW_IN_MSG} from '../../shared/messages';
 import {VSCodeAPI} from './types';
+import {LoadingButton} from './LoadingButton';
 
 /**
  * Manages the session actions panel (approve/reset buttons)
  */
 export class SessionActionsUI {
   private panel: HTMLElement;
-  private approveBtn: HTMLElement;
-  private resetBtn: HTMLElement;
+  private approveBtn: HTMLButtonElement;
+  private resetBtn: HTMLButtonElement;
+  private approveLoading: LoadingButton;
+  private resetLoading: LoadingButton;
   private currentDialogId: string | null = null;
   private isApproveProcessing = false;
   private isResetProcessing = false;
 
   constructor(private readonly vscode: VSCodeAPI) {
     this.panel = document.getElementById('sessionActions')!;
-    this.approveBtn = document.getElementById('sessionApproveBtn')!;
-    this.resetBtn = document.getElementById('sessionResetBtn')!;
+    this.approveBtn = document.getElementById('sessionApproveBtn') as HTMLButtonElement;
+    this.resetBtn = document.getElementById('sessionResetBtn') as HTMLButtonElement;
+
+    this.approveLoading = new LoadingButton(this.approveBtn);
+    this.resetLoading = new LoadingButton(this.resetBtn);
 
     this.setupEventListeners();
   }
@@ -24,6 +30,7 @@ export class SessionActionsUI {
     this.approveBtn.addEventListener('click', () => {
       if (this.currentDialogId && !this.isApproveProcessing) {
         this.isApproveProcessing = true;
+        this.approveLoading.start();
         this.updateButtonStates();
         this.vscode.postMessage({
           type: WEBVIEW_IN_MSG.APPROVE_SESSION,
@@ -35,6 +42,7 @@ export class SessionActionsUI {
     this.resetBtn.addEventListener('click', () => {
       if (this.currentDialogId && !this.isResetProcessing) {
         this.isResetProcessing = true;
+        this.resetLoading.start();
         this.updateButtonStates();
         this.vscode.postMessage({
           type: WEBVIEW_IN_MSG.RESET_TO_APPROVED,
@@ -49,6 +57,8 @@ export class SessionActionsUI {
     // Reset processing flags when switching dialogs
     this.isApproveProcessing = false;
     this.isResetProcessing = false;
+    this.approveLoading.stop();
+    this.resetLoading.stop();
     this.updateButtonStates();
   }
 
@@ -56,6 +66,8 @@ export class SessionActionsUI {
     // Clear processing flags when we get a status update (operation completed)
     this.isApproveProcessing = false;
     this.isResetProcessing = false;
+    this.approveLoading.stop();
+    this.resetLoading.stop();
     this.updateButtonStates(hasUnapproved);
   }
 
@@ -65,6 +77,8 @@ export class SessionActionsUI {
   cancelOperation(): void {
     this.isApproveProcessing = false;
     this.isResetProcessing = false;
+    this.approveLoading.stop();
+    this.resetLoading.stop();
     this.updateButtonStates();
   }
 
