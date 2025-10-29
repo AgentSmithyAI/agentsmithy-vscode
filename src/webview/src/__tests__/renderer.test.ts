@@ -131,6 +131,29 @@ describe('MessageRenderer with smart auto-scroll', () => {
       // Should NOT have scrolled
       expect(messagesContainer.scrollTop).toBe(100);
     });
+
+    it('collapsing reasoning near bottom snaps to bottom (prevents drift)', async () => {
+      // Mock isAtBottom to true so auto-scroll is allowed
+      const handleContentShrink = vi.fn();
+      mockScrollManager = {
+        isAtBottom: vi.fn(() => true),
+        // @ts-expect-error - optional hook used by renderer
+        handleContentShrink,
+      };
+      renderer.setScrollManager(mockScrollManager);
+
+      // Prepare scroll container
+      Object.defineProperty(messagesContainer, 'scrollHeight', {value: 1200, configurable: true});
+      messagesContainer.scrollTop = 700; // not relevant; auto-scroll will move to bottom
+
+      const rb = renderer.createReasoningBlock();
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+
+      // Collapse the block
+      rb.header.click();
+
+      expect(handleContentShrink).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe('showError', () => {

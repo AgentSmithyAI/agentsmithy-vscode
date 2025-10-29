@@ -144,7 +144,7 @@ export class MessageHandler {
         renderer.pruneByIdx(MAX_MESSAGES_IN_DOM);
         // Always scroll to bottom when user sends a message
         if (message.message.role === 'user' && isActive) {
-          renderer.scrollToBottom();
+          scrollManager.scrollToBottom();
         }
         break;
 
@@ -329,7 +329,7 @@ export class MessageHandler {
     this.renderer.pruneByIdx(MAX_MESSAGES_IN_DOM);
     // Always scroll to bottom when user sends a message
     if (role === 'user') {
-      this.renderer.scrollToBottom();
+      this.scrollManager.scrollToBottom();
     }
   }
 

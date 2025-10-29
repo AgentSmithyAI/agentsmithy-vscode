@@ -12,9 +12,28 @@ export class ScrollManager {
   private canLoadMoreHistory = true;
   private cachedFirstVisibleIdx: number | undefined;
 
-  private readonly TOP_TRIGGER_THRESHOLD = 100;
-  private readonly REARM_THRESHOLD = 300;
-  private readonly BOTTOM_THRESHOLD = 200;
+  // Thresholds
+  private readonly TOP_TRIGGER_THRESHOLD = 100; // px from top to trigger history load
+  private readonly REARM_THRESHOLD = 300; // px user must move away from top to re-arm
+  private readonly BOTTOM_PRUNE_THRESHOLD = 200; // px from bottom considered "near" for pruning only
+  private readonly BOTTOM_AUTOSCROLL_THRESHOLD = 40; // tighter threshold for auto-scroll decisions
+
+  // User intent lock: when user scrolls up, we suppress auto-scroll until they return to bottom
+  private userScrollLocked = false;
+  // Track whether the scroll is user-initiated (pointer/keyboard). We only lock on user intent.
+  private userInteracting = false;
+  private interactionResetTimer: number | undefined;
+
+  /**
+   * Call when content height decreases significantly (e.g., reasoning collapsed).
+   * If user is near bottom, unlock and snap to bottom to prevent drift.
+   */
+  handleContentShrink(): void {
+    if (this.isNearBottomForAutoScroll()) {
+      this.userScrollLocked = false;
+      this.scrollToBottom();
+    }
+  }
 
   constructor(
     private messagesContainer: HTMLElement,
@@ -25,6 +44,26 @@ export class ScrollManager {
   }
 
   private setupScrollListener(): void {
+    // Detect user interaction to disambiguate programmatic/layout-induced scrolls
+    const setInteracting = () => {
+      this.userInteracting = true;
+      if (this.interactionResetTimer) {
+        clearTimeout(this.interactionResetTimer);
+      }
+      // Reset shortly after interaction ends to avoid sticky state
+      this.interactionResetTimer = window.setTimeout(() => {
+        this.userInteracting = false;
+      }, 250);
+    };
+    this.messagesContainer.addEventListener('wheel', setInteracting, {passive: true});
+    this.messagesContainer.addEventListener('touchstart', setInteracting, {passive: true});
+    this.messagesContainer.addEventListener('mousedown', setInteracting);
+    window.addEventListener('keydown', (e) => {
+      // Keys that typically scroll
+      const keys = ['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', 'Space'];
+      if (keys.includes(e.key)) setInteracting();
+    });
+
     this.messagesContainer.addEventListener('scroll', () => {
       const scrollTop = this.messagesContainer.scrollTop;
       const isScrollingUp = scrollTop < this.lastScrollTop;
@@ -40,8 +79,17 @@ export class ScrollManager {
         this.tryLoadMoreHistory();
       }
 
+      // Update user intent lock ONLY on real user-initiated scrolls
+      if (this.userInteracting && isScrollingUp && !this.isNearBottomForAutoScroll()) {
+        this.userScrollLocked = true;
+      }
+      // Unlock when user (or programmatic) returns near bottom
+      if (this.isNearBottomForAutoScroll()) {
+        this.userScrollLocked = false;
+      }
+
       // Prune when user is near bottom to keep recent view light
-      if (this.isNearBottom()) {
+      if (this.isNearBottomForPrune()) {
         this.pruneOldMessages();
       }
 
@@ -49,22 +97,27 @@ export class ScrollManager {
     });
   }
 
-  private isNearBottom(): boolean {
+  private isNearBottomForPrune(): boolean {
     const {scrollHeight, scrollTop, clientHeight} = this.messagesContainer;
-    return scrollHeight - scrollTop - clientHeight < this.BOTTOM_THRESHOLD;
+    return scrollHeight - scrollTop - clientHeight <= this.BOTTOM_PRUNE_THRESHOLD;
+  }
+
+  private isNearBottomForAutoScroll(): boolean {
+    const {scrollHeight, scrollTop, clientHeight} = this.messagesContainer;
+    return scrollHeight - scrollTop - clientHeight <= this.BOTTOM_AUTOSCROLL_THRESHOLD;
   }
 
   /**
    * Check if user is at the bottom of the chat (for auto-scroll purposes)
    */
   isAtBottom(): boolean {
-    return this.isNearBottom();
+    return this.isNearBottomForAutoScroll() && !this.userScrollLocked;
   }
 
   /**
-   * Scroll element into view only if user is at the bottom
+   * Scroll element into view only if user is at the bottom and not locked
    */
-  scrollIntoViewIfAtBottom(element: HTMLElement): void {
+  scrollIntoViewIfAtBottom(_element: HTMLElement): void {
     if (this.isAtBottom()) {
       this.scrollToBottom();
     }
@@ -73,8 +126,12 @@ export class ScrollManager {
   /**
    * Scroll to the absolute bottom of the container
    * Uses double rAF to ensure DOM updates are complete
+   * Also clears user lock (explicit action should follow user's intent to see bottom)
    */
   scrollToBottom(): void {
+    // Explicit action implies intent to see the bottom; clear lock and interaction
+    this.userScrollLocked = false;
+    this.userInteracting = false;
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;

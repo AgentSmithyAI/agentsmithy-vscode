@@ -280,6 +280,39 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     }
   };
 
+  private _shouldUpdateSession = (type: string): boolean => {
+    return (
+      type === E.USER ||
+      type === E.TOOL_CALL ||
+      type === E.FILE_EDIT ||
+      type === E.CHAT_END ||
+      type === E.REASONING_END ||
+      type === E.DONE
+    );
+  };
+
+  private async _safeUpdateSession(dialogId?: string): Promise<void> {
+    if (!dialogId) {
+      return;
+    }
+    try {
+      await this._updateSessionStatus(dialogId);
+    } catch {
+      // non-blocking
+    }
+  }
+
+  private async _safeReloadLatest(dialogId?: string): Promise<void> {
+    if (!dialogId) {
+      return;
+    }
+    try {
+      await this._loadLatestHistoryPage(dialogId, true);
+    } catch {
+      // non-blocking
+    }
+  }
+
   private _handleSendMessage = async (text: string): Promise<void> => {
     if (!this._view) {
       return;
@@ -298,6 +331,13 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
       this._historyService.currentDialogId,
     );
 
+    await this._runStream(request, eventHandlers);
+  };
+
+  private async _runStream(
+    request: import('./api/StreamService').ChatRequest,
+    eventHandlers: StreamEventHandlers,
+  ): Promise<void> {
     try {
       let hasReceivedEvents = false;
       let currentDialogId = this._historyService.currentDialogId;
@@ -306,36 +346,17 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
         hasReceivedEvents = true;
         await eventHandlers.handleEvent(event);
 
-        // Update dialog ID if present in event
         if (event.dialog_id) {
           currentDialogId = event.dialog_id;
         }
 
-        // Update session status after logical event blocks (not on every chunk)
-        const shouldUpdateSession =
-          event.type === E.USER ||
-          event.type === E.TOOL_CALL ||
-          event.type === E.FILE_EDIT ||
-          event.type === E.CHAT_END ||
-          event.type === E.REASONING_END ||
-          event.type === E.DONE;
-
-        if (shouldUpdateSession && currentDialogId) {
-          try {
-            await this._updateSessionStatus(currentDialogId);
-          } catch {
-            // non-blocking
-          }
+        if (this._shouldUpdateSession(event.type) && currentDialogId) {
+          await this._safeUpdateSession(currentDialogId);
         }
 
         if (event.type === E.DONE && event.dialog_id) {
           this._historyService.currentDialogId = event.dialog_id;
-          // Refresh the latest page to capture finalized blocks
-          try {
-            await this._loadLatestHistoryPage(event.dialog_id, true);
-          } catch {
-            // non-blocking
-          }
+          await this._safeReloadLatest(event.dialog_id);
         }
       }
 
@@ -352,7 +373,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     } finally {
       eventHandlers.finalize();
     }
-  };
+  }
 
   /**
    * Switch to a dialog - common logic used across multiple operations

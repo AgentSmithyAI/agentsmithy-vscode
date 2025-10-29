@@ -76,6 +76,10 @@ export class MessageRenderer {
   }
 
   private insertNode(node: HTMLElement): void {
+    // Take a snapshot of bottom state BEFORE DOM mutations to avoid losing closeness due to height growth
+    const shouldAutoScroll =
+      !this.suppressAutoScroll && !!this.scrollManager?.isAtBottom?.() && this.scrollManager!.isAtBottom();
+
     const anchor =
       this.loadMoreBtn && this.loadMoreBtn.parentNode === this.messagesContainer
         ? this.loadMoreBtn.nextSibling
@@ -84,7 +88,14 @@ export class MessageRenderer {
       this.messagesContainer.insertBefore(node, anchor);
     } else {
       this.messagesContainer.appendChild(node);
-      this.scrollIntoViewIfBottom(node);
+      if (shouldAutoScroll) {
+        // Use double rAF to ensure DOM updates are complete
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
+          });
+        });
+      }
     }
   }
 
@@ -222,11 +233,19 @@ export class MessageRenderer {
     content.textContent = ' ';
 
     header.addEventListener('click', () => {
-      const isExpanded = content.style.display !== 'none';
-      content.style.display = isExpanded ? 'none' : 'block';
+      const wasExpanded = content.style.display !== 'none';
+      content.style.display = wasExpanded ? 'none' : 'block';
       const toggle = header.querySelector('.reasoning-toggle');
       if (toggle) {
-        toggle.textContent = isExpanded ? '▶' : '▼';
+        toggle.textContent = wasExpanded ? '▶' : '▼';
+      }
+      // If collapsing while user is near bottom, snapping prevents drift upward
+      if (wasExpanded && this.scrollManager && typeof this.scrollManager.isAtBottom === 'function') {
+        // We can't call scrollManager.scrollToBottom directly; request via content shrink hook
+        const sm: any = this.scrollManager as any;
+        if (typeof sm.handleContentShrink === 'function') {
+          sm.handleContentShrink();
+        }
       }
     });
 
