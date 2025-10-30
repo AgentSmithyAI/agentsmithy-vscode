@@ -97,7 +97,7 @@ describe('ScrollManager autoscroll user-intent behavior', () => {
     expect(sm.isAtBottom()).toBe(true);
   });
 
-  it('stays glued to bottom during streaming when user is at bottom', () => {
+  it('stays glued to bottom during streaming when user is at bottom', async () => {
     // Start at bottom
     expect(sm.isAtBottom()).toBe(true);
 
@@ -105,6 +105,9 @@ describe('ScrollManager autoscroll user-intent behavior', () => {
     (container as any)._scrollHeight += 300;
     // Simulate ScrollManager-driven snap by calling scrollIntoViewIfAtBottom
     sm.scrollIntoViewIfAtBottom(document.createElement('div'));
+
+    // Wait for double rAF used inside scrollToBottom
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
 
     // Should be at absolute bottom
     expect(container.scrollTop).toBe(container.scrollHeight - container.clientHeight);

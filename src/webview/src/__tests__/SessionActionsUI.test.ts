@@ -44,6 +44,8 @@ describe('SessionActionsUI', () => {
     it('should send APPROVE_SESSION message when approve button is clicked', () => {
       const dialogId = 'test-dialog-123';
       sessionActionsUI.setCurrentDialogId(dialogId);
+      // Enable actions as backend would when there are unapproved changes
+      sessionActionsUI.updateSessionStatus(true);
 
       approveBtn.click();
 
@@ -56,6 +58,8 @@ describe('SessionActionsUI', () => {
     it('should send RESET_TO_APPROVED message when reset button is clicked', () => {
       const dialogId = 'test-dialog-123';
       sessionActionsUI.setCurrentDialogId(dialogId);
+      // Enable actions as backend would when there are unapproved changes
+      sessionActionsUI.updateSessionStatus(true);
 
       resetBtn.click();
 
@@ -125,6 +129,8 @@ describe('SessionActionsUI', () => {
       sessionActionsUI.setCurrentDialogId(dialog1);
       sessionActionsUI.setCurrentDialogId(dialog2);
       sessionActionsUI.setCurrentDialogId(dialog3);
+      // Enable actions before clicking
+      sessionActionsUI.updateSessionStatus(true);
 
       resetBtn.click();
 

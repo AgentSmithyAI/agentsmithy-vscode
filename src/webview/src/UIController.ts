@@ -67,7 +67,7 @@ export class UIController {
    * Check if input is disabled
    */
   isInputDisabled(): boolean {
-    // Backward-compatible: treat readOnly as "disabled" for tests/UI expectations
-    return this.messageInput.readOnly;
+    // Treat processing state (aria-busy) or readOnly as "disabled" for tests/UI expectations
+    return this.messageInput.readOnly || this.messageInput.getAttribute('aria-busy') === 'true';
   }
 }

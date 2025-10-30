@@ -50,10 +50,16 @@ export const createVSCodeMock = () => ({
       toString: () => path,
     }),
   },
+  commands: {
+    executeCommand: vi.fn(),
+    registerCommand: vi.fn(),
+  },
   window: {
     showInformationMessage: vi.fn(),
     showErrorMessage: vi.fn(),
     showWarningMessage: vi.fn(),
+    // Will be set by tests when needed
+    activeTextEditor: undefined as any,
   },
   workspace: {
     getConfiguration: vi.fn(() => ({
@@ -62,6 +68,8 @@ export const createVSCodeMock = () => ({
       has: vi.fn(),
       inspect: vi.fn(),
     })),
+    // Optional helpers used by some extension paths; safe defaults
+    openTextDocument: vi.fn(),
   },
 });
 

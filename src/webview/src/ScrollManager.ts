@@ -11,6 +11,8 @@ export class ScrollManager {
   private isLoadingHistory = false;
   private canLoadMoreHistory = true;
   private cachedFirstVisibleIdx: number | undefined;
+  // Track previous content height to detect growth between appends
+  private prevScrollHeight: number;
 
   // Thresholds
   private readonly TOP_TRIGGER_THRESHOLD = 100; // px from top to trigger history load
@@ -40,6 +42,7 @@ export class ScrollManager {
     private vscode: VSCodeAPI,
     private renderer: MessageRenderer,
   ) {
+    this.prevScrollHeight = this.messagesContainer.scrollHeight;
     this.setupScrollListener();
   }
 
@@ -67,6 +70,13 @@ export class ScrollManager {
     this.messagesContainer.addEventListener('scroll', () => {
       const scrollTop = this.messagesContainer.scrollTop;
       const isScrollingUp = scrollTop < this.lastScrollTop;
+
+      // If content grew and user hasn't locked, snap to bottom to stay glued during streaming
+      const grew = this.messagesContainer.scrollHeight > this.prevScrollHeight;
+      this.prevScrollHeight = this.messagesContainer.scrollHeight;
+      if (grew && !this.userScrollLocked && this.isNearBottomForAutoScroll()) {
+        this.scrollToBottom();
+      }
 
       // Arm the top trigger only after the user scrolls away sufficiently
       if (scrollTop > this.REARM_THRESHOLD) {
@@ -118,9 +128,11 @@ export class ScrollManager {
    * Scroll element into view only if user is at the bottom and not locked
    */
   scrollIntoViewIfAtBottom(_element: HTMLElement): void {
-    if (this.isAtBottom()) {
+    const grew = this.messagesContainer.scrollHeight > this.prevScrollHeight;
+    if (!this.userScrollLocked && (this.isAtBottom() || grew)) {
       this.scrollToBottom();
     }
+    this.prevScrollHeight = this.messagesContainer.scrollHeight;
   }
 
   /**
