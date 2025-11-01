@@ -23,7 +23,7 @@ describe('ChatWebviewProvider.resolveWebviewView', () => {
     const stream = new FakeStream();
     const history = new HistoryService(api);
     const dialog = new DialogService(api);
-    const config = new ConfigService({} as any);
+    const config = new ConfigService();
 
     provider = new ChatWebviewProvider(vscode.Uri.file('/ext'), stream, history, dialog, config, api);
   });

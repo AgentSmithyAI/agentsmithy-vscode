@@ -63,7 +63,7 @@ export class SessionActionsUI {
 
   // Handlers
   private onApprove(): void {
-    if (!this.currentDialogId || this.isProcessing || !this.canAct) return;
+    if (!this.ensureReady('approve')) return;
     this.startOperation('approve');
     this.vscode.postMessage({
       type: WEBVIEW_IN_MSG.APPROVE_SESSION,
@@ -72,12 +72,33 @@ export class SessionActionsUI {
   }
 
   private onReset(): void {
-    if (!this.currentDialogId || this.isProcessing || !this.canAct) return;
+    if (!this.ensureReady('reset')) return;
     this.startOperation('reset');
     this.vscode.postMessage({
       type: WEBVIEW_IN_MSG.RESET_TO_APPROVED,
       dialogId: this.currentDialogId,
     });
+  }
+
+  /**
+   * Ensures the component is in a valid state to perform an action.
+   * Logs a diagnostic warning if a user action is ignored due to state.
+   */
+  private ensureReady(action: 'approve' | 'reset'): boolean {
+    if (!this.currentDialogId) {
+      console.warn(`[SessionActionsUI] ${action} ignored: no currentDialogId`);
+      return false;
+    }
+    if (this.isProcessing) {
+      // Buttons should already be disabled; log defensively in case of race.
+      console.warn(`[SessionActionsUI] ${action} ignored: already processing`);
+      return false;
+    }
+    if (!this.canAct) {
+      console.warn(`[SessionActionsUI] ${action} ignored: action not allowed (no unapproved changes)`);
+      return false;
+    }
+    return true;
   }
 
   // State helpers

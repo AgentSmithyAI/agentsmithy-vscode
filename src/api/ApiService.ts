@@ -418,16 +418,11 @@ export class ApiService {
   /**
    * Approve current session
    */
-  async approveSession(dialogId: string, message?: string): Promise<ApproveSessionResponse> {
+  async approveSession(dialogId: string): Promise<ApproveSessionResponse> {
     const url = `${this.baseUrl}${this.endpoints.approve(dialogId)}`;
-    const body = message ? {message} : {};
     const resp = await fetch(url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-      },
-      body: JSON.stringify(body),
+      headers: {Accept: 'application/json'},
     });
 
     if (!resp.ok) {

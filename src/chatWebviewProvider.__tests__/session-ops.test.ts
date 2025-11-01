@@ -19,7 +19,7 @@ const createProvider = () => {
   const stream = new FakeStream();
   const history = new HistoryService(api);
   const dialog = new DialogService(api);
-  const config = new ConfigService({} as any);
+  const config = new ConfigService();
   const provider = new ChatWebviewProvider(vscode.Uri.file('/ext'), stream, history, dialog, config, api);
   return {provider, api, history, dialog};
 };

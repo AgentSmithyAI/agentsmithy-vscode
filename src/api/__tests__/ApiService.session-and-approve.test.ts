@@ -62,12 +62,11 @@ describe('ApiService - Session status and approve', () => {
         json: async () => mockResponse,
       });
 
-      const res = await apiService.approveSession(testDialogId, 'Looks good');
+      const res = await apiService.approveSession(testDialogId);
 
       expect(global.fetch).toHaveBeenCalledWith(`${baseUrl}/api/dialogs/${encodeURIComponent(testDialogId)}/approve`, {
         method: 'POST',
-        headers: {'Content-Type': 'application/json', Accept: 'application/json'},
-        body: JSON.stringify({message: 'Looks good'}),
+        headers: {Accept: 'application/json'},
       });
       expect(res).toEqual(mockResponse);
     });

@@ -19,6 +19,7 @@ export class ScrollManager {
   private readonly REARM_THRESHOLD = 300; // px user must move away from top to re-arm
   private readonly BOTTOM_PRUNE_THRESHOLD = 200; // px from bottom considered "near" for pruning only
   private readonly BOTTOM_AUTOSCROLL_THRESHOLD = 40; // tighter threshold for auto-scroll decisions
+  private readonly INTERACTION_RESET_TIMEOUT_MS = 250; // debounce for user interaction end
 
   // User intent lock: when user scrolls up, we suppress auto-scroll until they return to bottom
   private userScrollLocked = false;
@@ -56,7 +57,7 @@ export class ScrollManager {
       // Reset shortly after interaction ends to avoid sticky state
       this.interactionResetTimer = window.setTimeout(() => {
         this.userInteracting = false;
-      }, 250);
+      }, this.INTERACTION_RESET_TIMEOUT_MS);
     };
     this.messagesContainer.addEventListener('wheel', setInteracting, {passive: true});
     this.messagesContainer.addEventListener('touchstart', setInteracting, {passive: true});
