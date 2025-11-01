@@ -645,7 +645,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; font-src ${webview.cspSource}; script-src ${webview.cspSource} 'nonce-${nonce}';">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource}; font-src ${webview.cspSource}; script-src ${webview.cspSource} 'nonce-${nonce}';">
     <title>AgentSmithy Chat</title>
     <link rel="stylesheet" href="${codiconCssUri.toString()}">
     <link rel="stylesheet" href="${styleUri.toString()}">
@@ -661,7 +661,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
                         <path d="M8 11L3 6h10z"/>
                     </svg>
                 </button>
-                <div class="dialog-dropdown" id="dialogDropdown" style="display:none;">
+                <div class="dialog-dropdown hidden" id="dialogDropdown">
                     <div class="dialogs-list" id="dialogsList">
                         <div class="dialog-item loading">Loading...</div>
                     </div>
@@ -675,7 +675,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
         </div>
         <div id="dialogViews" class="dialog-views-container"></div>
         <div class="${CSS_CLASSES.MESSAGES}" id="${DOM_IDS.MESSAGES}">
-            <button id="${DOM_IDS.LOAD_MORE_BTN}" class="${CSS_CLASSES.LOAD_MORE}" style="display:none;">Load previous</button>
+            <button id="${DOM_IDS.LOAD_MORE_BTN}" class="${CSS_CLASSES.LOAD_MORE} hidden">Load previous</button>
             <div class="${CSS_CLASSES.WELCOME_PLACEHOLDER}" id="${DOM_IDS.WELCOME_PLACEHOLDER}">
                 Type a message to start...
             </div>
@@ -691,7 +691,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
                         <path d="M8 5L13 10 3 10z"/>
                     </svg>
                 </button>
-                <div class="model-dropdown" id="modelDropdown" style="display:none;">
+                <div class="model-dropdown hidden" id="modelDropdown">
                     <div class="model-item" data-model="gpt5">
                         <span class="model-name">GPT-5</span>
                     </div>
@@ -700,7 +700,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
                     </div>
                 </div>
             </div>
-            <div style="flex: 1;"></div>
+            <div class="flex-spacer"></div>
             <button class="session-action-btn session-approve-btn" id="sessionApproveBtn" title="Approve all changes" aria-label="Approve all changes" disabled>
                 <svg viewBox="0 0 16 16" aria-hidden="true">
                     <path d="M13.78 4.22a.75.75 0 010 1.06l-7.25 7.25a.75.75 0 01-1.06 0L2.22 9.28a.75.75 0 011.06-1.06L6 10.94l6.72-6.72a.75.75 0 011.06 0z"/>

@@ -77,8 +77,7 @@ export class MessageRenderer {
 
   private insertNode(node: HTMLElement): void {
     // Take a snapshot of bottom state BEFORE DOM mutations to avoid losing closeness due to height growth
-    const shouldAutoScroll =
-      !this.suppressAutoScroll && !!this.scrollManager?.isAtBottom?.() && this.scrollManager!.isAtBottom();
+    const shouldAutoScroll = !this.suppressAutoScroll && (this.scrollManager?.isAtBottom() ?? false);
 
     const anchor =
       this.loadMoreBtn && this.loadMoreBtn.parentNode === this.messagesContainer

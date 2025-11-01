@@ -257,11 +257,11 @@ class ChatWebview {
       return;
     }
 
-    // Use active view if available
+    // Use active view if available (processing only; rendering is driven by SSE events)
     if (activeView) {
       activeView.getStreamingState().setProcessing(true, this.currentDialogId || undefined);
     } else {
-      // Fallback to legacy behavior
+      // Fallback to legacy (processing only; message rendering comes via SSE)
       this.streamingState.setProcessing(true);
     }
 
