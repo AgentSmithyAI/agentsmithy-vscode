@@ -21,7 +21,11 @@ export default [
       '.vscode-test',
       'dist',
       'src/webview',
+      // Ignore all test files and special test folders from Type-aware linting
       'src/**/__tests__',
+      'src/**/*.test.*',
+      'src/**/*.spec.*',
+      'src/chatWebviewProvider.__tests__/**',
       'node_modules',
       'esbuild.webview.mjs',
       'vitest.config.*',
