@@ -205,10 +205,7 @@ class ChatWebview {
         // (e.g. global keybindings or 3rd-party injected handlers) from seeing this Enter.
         // Guard the call and log in dev if something goes wrong instead of swallowing silently.
         try {
-          const sip = (e as any).stopImmediatePropagation;
-          if (typeof sip === 'function') {
-            sip.call(e);
-          }
+          e.stopImmediatePropagation();
         } catch (err) {
           // Safe to ignore: failure to stop immediate propagation only affects other listeners,
           // not our own send flow. Log for debugging without spamming the user.
@@ -224,7 +221,7 @@ class ChatWebview {
       this.lastSelection = {
         start: this.messageInput.selectionStart ?? this.messageInput.value.length,
         end: this.messageInput.selectionEnd ?? this.messageInput.value.length,
-        direction: (this.messageInput as any).selectionDirection,
+        direction: this.messageInput.selectionDirection ?? undefined,
       };
     };
     this.messageInput.addEventListener('keyup', captureSelection);
@@ -401,7 +398,7 @@ class ChatWebview {
         this.lastSelection = {
           start,
           end,
-          direction: (this.messageInput as any).selectionDirection,
+          direction: this.messageInput.selectionDirection ?? undefined,
         };
       }
     });
@@ -415,7 +412,7 @@ class ChatWebview {
         this.lastSelection = {
           start,
           end,
-          direction: (this.messageInput as any).selectionDirection,
+          direction: this.messageInput.selectionDirection,
         };
       }
     };
@@ -444,7 +441,7 @@ class ChatWebview {
           const valLen = this.messageInput.value.length;
           const start = Math.max(0, Math.min(valLen, this.lastSelection?.start ?? valLen));
           const end = Math.max(0, Math.min(valLen, this.lastSelection?.end ?? valLen));
-          const direction = this.lastSelection?.direction as any;
+          const direction = this.lastSelection?.direction;
           try {
             this.messageInput.setSelectionRange(start, end, direction);
           } catch {

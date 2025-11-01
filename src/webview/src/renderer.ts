@@ -8,8 +8,13 @@ declare const marked: {
   setOptions: (options: unknown) => void;
 };
 
+export interface ScrollManagerLike {
+  isAtBottom: () => boolean;
+  handleContentShrink?: () => void;
+}
+
 export class MessageRenderer {
-  private scrollManager?: {isAtBottom: () => boolean};
+  private scrollManager?: ScrollManagerLike;
 
   constructor(
     private messagesContainer: HTMLElement,
@@ -21,7 +26,7 @@ export class MessageRenderer {
   private isPrepending = false;
   private suppressAutoScroll = false;
 
-  setScrollManager(scrollManager: {isAtBottom: () => boolean}): void {
+  setScrollManager(scrollManager: ScrollManagerLike): void {
     this.scrollManager = scrollManager;
   }
 
@@ -241,10 +246,7 @@ export class MessageRenderer {
       // If collapsing while user is near bottom, snapping prevents drift upward
       if (wasExpanded && this.scrollManager && typeof this.scrollManager.isAtBottom === 'function') {
         // We can't call scrollManager.scrollToBottom directly; request via content shrink hook
-        const sm: any = this.scrollManager as any;
-        if (typeof sm.handleContentShrink === 'function') {
-          sm.handleContentShrink();
-        }
+        this.scrollManager?.handleContentShrink?.();
       }
     });
 
