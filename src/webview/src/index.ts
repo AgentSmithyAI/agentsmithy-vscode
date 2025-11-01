@@ -9,6 +9,7 @@ import {StreamingStateManager} from './StreamingStateManager';
 import {VSCodeAPI, WebviewOutMessage} from './types';
 import {UIController} from './UIController';
 import {escapeHtml} from './utils';
+import {DOM_IDS, CSS_CLASSES, WEBVIEW_DEFAULTS} from '../../constants';
 
 declare const acquireVsCodeApi: () => VSCodeAPI;
 declare const marked: {
@@ -58,12 +59,23 @@ class ChatWebview {
     this.vscode = acquireVsCodeApi();
 
     // Get DOM elements
-    this.messagesContainer = document.getElementById('messages') as HTMLElement;
-    this.dialogViewsContainer = document.getElementById('dialogViews') as HTMLElement;
-    this.messageInput = document.getElementById('messageInput') as HTMLTextAreaElement;
-    this.sendButton = document.getElementById('sendButton') as HTMLButtonElement;
-    this.loadMoreBtn = document.getElementById('loadMoreBtn');
-    const welcomePlaceholder = document.getElementById('welcomePlaceholder');
+    this.messagesContainer = document.getElementById(DOM_IDS.MESSAGES) as HTMLElement;
+    this.dialogViewsContainer = document.getElementById(DOM_IDS.DIALOG_VIEWS) as HTMLElement;
+    this.messageInput = document.getElementById(DOM_IDS.MESSAGE_INPUT) as HTMLTextAreaElement;
+    this.sendButton = document.getElementById(DOM_IDS.SEND_BUTTON) as HTMLButtonElement;
+    this.loadMoreBtn = document.getElementById(DOM_IDS.LOAD_MORE_BTN);
+
+    // Ensure input scrolls to the bottom when content grows (in case UIController listener isn't yet attached)
+    this.messageInput.addEventListener(
+      'input',
+      () => {
+        try {
+          this.messageInput.scrollTop = this.messageInput.scrollHeight;
+        } catch {}
+      },
+      {capture: false},
+    );
+    const welcomePlaceholder = document.getElementById(DOM_IDS.WELCOME_PLACEHOLDER);
 
     // Initialize dialog view manager
     this.dialogViewManager = new DialogViewManager(workspaceRoot, this.vscode, this.dialogViewsContainer);
@@ -102,7 +114,8 @@ class ChatWebview {
 
   private setupModelSelector(): void {
     // Settings button - opens VSCode settings
-    const settingsBtn = document.getElementById('settingsBtn');
+    const settingsBtn = document.getElementById(DOM_IDS.SETTINGS_BTN);
+    // If needed, settingsBtn id should be kept centralized in constants.ts
     if (settingsBtn) {
       settingsBtn.addEventListener('click', () => {
         this.vscode.postMessage({type: WEBVIEW_IN_MSG.OPEN_SETTINGS});
@@ -110,9 +123,10 @@ class ChatWebview {
     }
 
     // Model selector dropdown
-    const modelSelectorBtn = document.getElementById('modelSelectorBtn');
-    const modelDropdown = document.getElementById('modelDropdown');
-    const modelSelectorText = document.getElementById('modelSelectorText');
+    const modelSelectorBtn = document.getElementById(DOM_IDS.MODEL_SELECTOR_BTN);
+    const modelDropdown = document.getElementById(DOM_IDS.MODEL_DROPDOWN);
+    const modelSelectorText = document.getElementById(DOM_IDS.MODEL_SELECTOR_TEXT);
+    // These IDs are also declared in constants.ts DOM_IDS
 
     if (!modelSelectorBtn || !modelDropdown || !modelSelectorText) {
       return;
@@ -130,16 +144,16 @@ class ChatWebview {
     // Handle model selection
     modelDropdown.addEventListener('click', (e) => {
       const target = e.target as HTMLElement;
-      const modelItem = target.closest('.model-item') as HTMLElement;
+      const modelItem = target.closest('.' + CSS_CLASSES.MODEL_ITEM) as HTMLElement;
       if (modelItem) {
         const modelName = modelItem.getAttribute('data-model');
-        const displayName = modelItem.querySelector('.model-name')?.textContent;
+        const displayName = modelItem.querySelector('.' + CSS_CLASSES.MODEL_NAME)?.textContent;
         if (modelName && displayName) {
           // Update displayed model name in selector button
           modelSelectorText.textContent = displayName;
 
           // Update active state
-          modelDropdown.querySelectorAll('.model-item').forEach((item) => {
+          modelDropdown.querySelectorAll('.' + CSS_CLASSES.MODEL_ITEM).forEach((item) => {
             item.classList.remove('active');
           });
           modelItem.classList.add('active');
@@ -154,7 +168,10 @@ class ChatWebview {
     });
 
     // Set default active model (gpt5)
-    const defaultModel = modelDropdown.querySelector('.model-item[data-model="gpt5"]');
+    const defaultModel = modelDropdown.querySelector(
+      '.' + CSS_CLASSES.MODEL_ITEM + '[data-model="' + WEBVIEW_DEFAULTS.MODEL_ID + '"]',
+    );
+    // Default model id is in WEBVIEW_DEFAULTS.MODEL_ID
     if (defaultModel) {
       defaultModel.classList.add('active');
     }
@@ -170,7 +187,7 @@ class ChatWebview {
       }
 
       // Handle file link clicks
-      if (target?.matches?.('.file-link')) {
+      if (target?.matches?.('.' + CSS_CLASSES.FILE_LINK)) {
         e.preventDefault();
         const fileAttr = target.getAttribute('data-file') || '';
         const file = decodeURIComponent(fileAttr);
@@ -178,7 +195,7 @@ class ChatWebview {
       }
 
       // Handle restore checkpoint button (including clicks on SVG inside)
-      const restoreBtn = target?.closest?.('.restore-checkpoint-btn') as HTMLElement | null;
+      const restoreBtn = target?.closest?.('.' + CSS_CLASSES.RESTORE_CHECKPOINT_BTN) as HTMLElement | null;
       if (restoreBtn) {
         e.preventDefault();
         const checkpointId = restoreBtn.getAttribute('data-checkpoint');
@@ -228,6 +245,24 @@ class ChatWebview {
     this.messageInput.addEventListener('mouseup', captureSelection);
     this.messageInput.addEventListener('select', captureSelection);
     this.messageInput.addEventListener('input', captureSelection);
+
+    // After paste, move caret to the end of the textarea content (requested UX)
+    this.messageInput.addEventListener('paste', () => {
+      // Run after the input value updates
+      requestAnimationFrame(() => {
+        if (!document.body.contains(this.messageInput) || this.messageInput.disabled) return;
+        const len = this.messageInput.value.length;
+        try {
+          this.messageInput.setSelectionRange(len, len, 'none');
+        } catch {
+          try {
+            this.messageInput.setSelectionRange(len, len);
+          } catch {}
+        }
+        // Keep our snapshot consistent
+        this.lastSelection = {start: len, end: len, direction: 'none'};
+      });
+    });
 
     // Send/Stop button
     // Prevent the button from grabbing focus on mouse down; keep caret in input

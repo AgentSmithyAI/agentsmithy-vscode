@@ -14,8 +14,15 @@ export class UIController {
 
   private setupInputAutoResize(): void {
     this.messageInput.addEventListener('input', () => {
+      // Resize to fit content up to CSS max-height
       this.messageInput.style.height = 'auto';
       this.messageInput.style.height = this.messageInput.scrollHeight + 'px';
+
+      // Ensure the last line is visible when content grows (e.g., large paste)
+      // Works both when auto-resize hits max-height and when the field is shorter.
+      try {
+        this.messageInput.scrollTop = this.messageInput.scrollHeight;
+      } catch {}
     });
   }
 

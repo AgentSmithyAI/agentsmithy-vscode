@@ -57,6 +57,11 @@ export const DOM_IDS = {
   WELCOME_PLACEHOLDER: 'welcomePlaceholder',
   MESSAGE_INPUT: 'messageInput',
   SEND_BUTTON: 'sendButton',
+  DIALOG_VIEWS: 'dialogViews',
+  SETTINGS_BTN: 'settingsBtn',
+  MODEL_SELECTOR_BTN: 'modelSelectorBtn',
+  MODEL_DROPDOWN: 'modelDropdown',
+  MODEL_SELECTOR_TEXT: 'modelSelectorText',
 } as const;
 
 // CSS class names
@@ -68,6 +73,9 @@ export const CSS_CLASSES = {
   INPUT_CONTAINER: 'input-container',
   REASONING_TOGGLE: 'reasoning-toggle',
   FILE_LINK: 'file-link',
+  MODEL_ITEM: 'model-item',
+  MODEL_NAME: 'model-name',
+  RESTORE_CHECKPOINT_BTN: 'restore-checkpoint-btn',
 } as const;
 
 // SSE event types
@@ -83,4 +91,8 @@ export const SSE_EVENT_TYPES = {
   FILE_EDIT: 'file_edit',
   ERROR: 'error',
   DONE: 'done',
+} as const;
+
+export const WEBVIEW_DEFAULTS = {
+  MODEL_ID: 'gpt5',
 } as const;
