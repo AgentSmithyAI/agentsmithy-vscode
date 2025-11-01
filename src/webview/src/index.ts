@@ -45,6 +45,8 @@ class ChatWebview {
   private shouldRestoreInputFocus = false;
   // Snapshot of caret/selection to restore after focus returns
   private lastSelection: {start: number; end: number; direction?: 'forward' | 'backward' | 'none'} | null = null;
+  // Set when user explicitly clicked "New dialog"; consumed on next DIALOG_SWITCHED
+  private pendingFocusAfterCreate = false;
 
   private messagesContainer: HTMLElement;
   private dialogViewsContainer: HTMLElement;
@@ -72,6 +74,10 @@ class ChatWebview {
     this.uiController = new UIController(this.messageInput, this.sendButton);
     this.scrollManager = new ScrollManager(this.messagesContainer, this.vscode, this.renderer);
     this.dialogsUI = new DialogsUI(this.vscode);
+    // Hook into UI events to avoid heuristics
+    this.dialogsUI.onCreateNewDialog = () => {
+      this.pendingFocusAfterCreate = true;
+    };
     this.sessionActionsUI = new SessionActionsUI(this.vscode);
     // Connect renderer to scroll manager for smart auto-scroll
     this.renderer.setScrollManager(this.scrollManager);
@@ -357,6 +363,23 @@ class ChatWebview {
     }
 
     // Don't forcibly focus the input on dialog switch; let the user control focus.
+
+    // Focus rules on dialog switch:
+    // - If user explicitly initiated "New dialog" via the button, focus the input once.
+    // - If dialogId is null (no dialogs exist), also focus input.
+    // - Otherwise do not steal focus on mere switching.
+    const shouldFocusNow = this.pendingFocusAfterCreate || !dialogId;
+    if (shouldFocusNow) {
+      this.pendingFocusAfterCreate = false;
+      requestAnimationFrame(() => {
+        if (!document.body.contains(this.messageInput) || this.messageInput.disabled) return;
+        this.messageInput.focus();
+        try {
+          const pos = this.messageInput.value.length;
+          this.messageInput.setSelectionRange(pos, pos);
+        } catch {}
+      });
+    }
   }
 
   private setupFocusPersistence(): void {

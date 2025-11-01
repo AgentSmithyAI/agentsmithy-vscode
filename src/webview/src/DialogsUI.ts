@@ -17,6 +17,9 @@ export class DialogsUI {
   private currentDialogId: string | null = null;
   private isDropdownOpen = false;
 
+  // Optional callback hooks for host (index.ts)
+  public onCreateNewDialog?: () => void;
+
   private dialogTitleBtn: HTMLElement;
   private dialogTitleText: HTMLElement;
   private dialogDropdown: HTMLElement;
@@ -45,6 +48,10 @@ export class DialogsUI {
 
     // Create new dialog
     this.newDialogBtn.addEventListener('click', () => {
+      // Notify host so it can adjust focus behavior without guessing
+      try {
+        this.onCreateNewDialog?.();
+      } catch {}
       this.newDialogLoading?.start();
       this.vscode.postMessage({type: WEBVIEW_IN_MSG.CREATE_DIALOG});
       this.closeDropdown();
