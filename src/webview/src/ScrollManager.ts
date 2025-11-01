@@ -126,6 +126,14 @@ export class ScrollManager {
 
   /**
    * Scroll element into view only if user is at the bottom and not locked
+   *
+   * Note: `_element` is intentionally unused. Historically this method accepted
+   * an element to scroll into view, but current logic snaps the container to
+   * bottom based on auto-scroll heuristics (growth/lock state) and does not
+   * need the specific element. We keep the parameter for API compatibility with
+   * existing callers/tests. Consider making it optional or removing in a major
+   * revision.
+   * @param _element Unused, kept for backward compatibility
    */
   scrollIntoViewIfAtBottom(_element: HTMLElement): void {
     const grew = this.messagesContainer.scrollHeight > this.prevScrollHeight;

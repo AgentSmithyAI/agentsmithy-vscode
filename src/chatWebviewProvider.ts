@@ -175,16 +175,10 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
 
     webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
 
-    // Focus management: do NOT forcibly focus the webview from the extension side.
-    // Webview script owns focus persistence and will only restore focus to the
-    // input if it was previously focused when the window lost focus. This avoids
-    // stealing focus from the editor or other VS Code areas.
-    const noopVisibilityDisposable = webviewView.onDidChangeVisibility(() => {
-      // Intentionally no-op: let the webview decide whether to restore focus.
-    });
-    webviewView.onDidDispose(() => {
-      noopVisibilityDisposable.dispose();
-    });
+    // Focus management policy:
+    // Do not force focus from the extension on visibility changes.
+    // The webview script owns focus persistence and will restore the input
+    // itself if it was focused before. No visibility listener is needed here.
 
     // Handle messages from the webview
     webviewView.webview.onDidReceiveMessage(async (message: WebviewInMessage) => {

@@ -195,10 +195,20 @@ class ChatWebview {
         e.preventDefault();
         // Prevent VS Code/webview default key handling from stealing focus
         e.stopPropagation();
+        // In VS Code webviews we sometimes need to block other document-level listeners
+        // (e.g. global keybindings or 3rd-party injected handlers) from seeing this Enter.
+        // Guard the call and log in dev if something goes wrong instead of swallowing silently.
         try {
-          // In some environments needed to block other listeners
-          (e as any).stopImmediatePropagation?.();
-        } catch {}
+          const sip = (e as any).stopImmediatePropagation;
+          if (typeof sip === 'function') {
+            sip.call(e);
+          }
+        } catch (err) {
+          // Safe to ignore: failure to stop immediate propagation only affects other listeners,
+          // not our own send flow. Log for debugging without spamming the user.
+          // eslint-disable-next-line no-console
+          console.debug('[chat] stopImmediatePropagation failed', err);
+        }
         this.sendMessage();
       }
     });

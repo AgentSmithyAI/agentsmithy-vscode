@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
-import {describe, it, expect, vi, beforeEach} from 'vitest';
+import {describe, it, expect, beforeEach} from 'vitest';
 
 // Minimal harness to test caret restore logic in isolation by importing the built module is complex.
 // Instead, we unit test the restore algorithm with a small harness that mirrors snapshot/restore rules.
