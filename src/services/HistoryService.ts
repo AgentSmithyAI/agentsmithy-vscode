@@ -3,13 +3,15 @@ import {ApiService, HistoryEvent} from '../api/ApiService';
 import {ERROR_MESSAGES} from '../constants';
 import {getErrorMessage} from '../utils/typeGuards';
 
+const DEFAULT_PAGE_SIZE = 20;
+
 /**
  * Service for managing chat history and pagination
  */
 export class HistoryService {
   private _currentDialogId?: string;
   private _historyCursor?: number;
-  private _historyHasMore = false;
+  private _lastExhaustedBefore?: number;
   private _historyLoading = false;
   // The server-reported first_idx of the topmost loaded page
   private _serverCursor?: number;
@@ -31,13 +33,20 @@ export class HistoryService {
    */
   setVisibleFirstIdx(idx: number | undefined | null): void {
     const nextVisible = typeof idx === 'number' ? idx : undefined;
+    const prevCursor = this._historyCursor;
     this._visibleFloor = nextVisible;
 
-    // Minimal guard: only perform reset when clearly at/after latest boundary
-    if (nextVisible !== undefined && this._latestFirstIdx !== undefined && nextVisible >= this._latestFirstIdx) {
+    const topMovedDown =
+      nextVisible !== undefined && prevCursor !== undefined && Number.isFinite(prevCursor) && nextVisible > prevCursor;
+    if (topMovedDown) {
+      this._serverCursor = nextVisible;
+      this._historyCursor = nextVisible;
+      this._lastExhaustedBefore = undefined;
+    } else if (nextVisible !== undefined && this._latestFirstIdx !== undefined && nextVisible >= this._latestFirstIdx) {
+      // User has scrolled back to the latest page; restore cursor to latest snapshot
       this._serverCursor = this._latestFirstIdx;
       this._historyCursor = this._latestFirstIdx;
-      this._historyHasMore = Boolean(this._latestHasMore);
+      this._lastExhaustedBefore = this._latestHasMore ? undefined : this._latestFirstIdx;
     }
 
     this._onDidChangeState.fire();
@@ -53,7 +62,17 @@ export class HistoryService {
   }
 
   get hasMore(): boolean {
-    return this._historyHasMore;
+    if (this._historyCursor === undefined) {
+      return false;
+    }
+    // If we never hit an exhausted boundary, we can always try to load more
+    if (this._lastExhaustedBefore === undefined) {
+      return true;
+    }
+    // We can load more if cursor is strictly greater than the exhausted boundary
+    // OR if cursor equals boundary but we haven't actually tried loading from there yet
+    // (this handles the case where we pruned and moved cursor forward)
+    return this._historyCursor >= this._lastExhaustedBefore;
   }
 
   get isLoading(): boolean {
@@ -72,13 +91,12 @@ export class HistoryService {
     this._onDidChangeState.fire();
 
     try {
-      const PAGE_SIZE = 20;
-      const resp = await this.apiService.loadHistory(dialogId, PAGE_SIZE);
+      const resp = await this.apiService.loadHistory(dialogId, DEFAULT_PAGE_SIZE);
       this._serverCursor = resp.first_idx ?? undefined;
       // Fresh load resets visible floor; cursor comes directly from server
       this._visibleFloor = undefined;
       this._historyCursor = resp.first_idx ?? undefined;
-      this._historyHasMore = Boolean(resp.has_more);
+      this._lastExhaustedBefore = resp.has_more ? undefined : this._historyCursor;
       // Store snapshot of latest page to allow reset when returning to it
       this._latestFirstIdx = resp.first_idx ?? undefined;
       this._latestHasMore = Boolean(resp.has_more);
@@ -103,7 +121,11 @@ export class HistoryService {
   async loadPrevious(dialogId: string): Promise<{events: HistoryEvent[]; hasMore: boolean} | null> {
     // Trust server pagination; only load when server previously indicated there is more
     const beforeUsed = this._historyCursor;
-    if (this._historyLoading || beforeUsed === undefined || !this._historyHasMore) {
+    if (this._historyLoading || beforeUsed === undefined) {
+      return null;
+    }
+
+    if (this._lastExhaustedBefore !== undefined && beforeUsed <= this._lastExhaustedBefore) {
       return null;
     }
 
@@ -111,18 +133,21 @@ export class HistoryService {
     this._onDidChangeState.fire();
 
     try {
-      const PAGE_SIZE = 20;
-      const resp = await this.apiService.loadHistory(dialogId, PAGE_SIZE, beforeUsed);
+      const resp = await this.apiService.loadHistory(dialogId, DEFAULT_PAGE_SIZE, beforeUsed);
 
       // Update cursors directly from server response
       this._serverCursor = resp.first_idx ?? undefined;
       this._historyCursor = this._serverCursor;
-      this._historyHasMore = Boolean(resp.has_more);
+      if (!resp.has_more) {
+        this._lastExhaustedBefore = this._historyCursor;
+      } else {
+        this._lastExhaustedBefore = undefined;
+      }
       this._onDidChangeState.fire();
 
       return {
         events: resp.events,
-        hasMore: this._historyHasMore,
+        hasMore: this._lastExhaustedBefore === undefined,
       };
     } catch (e: unknown) {
       const msg = getErrorMessage(e, ERROR_MESSAGES.LOAD_HISTORY);
@@ -175,7 +200,7 @@ export class HistoryService {
     this._visibleFloor = undefined;
     this._latestFirstIdx = undefined;
     this._latestHasMore = undefined;
-    this._historyHasMore = false;
+    this._lastExhaustedBefore = undefined;
     this._historyLoading = false;
     this._onDidChangeState.fire();
   }

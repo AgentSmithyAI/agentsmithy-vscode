@@ -161,13 +161,21 @@ export class ScrollManager {
   }
 
   private pruneOldMessages(): void {
-    // Cache first loaded idx (first in DOM) so provider can keep cursor forward-only
-    this.cachedFirstVisibleIdx = this.getFirstLoadedIdx();
-    this.vscode.postMessage({
-      type: WEBVIEW_IN_MSG.VISIBLE_FIRST_IDX,
-      idx: this.cachedFirstVisibleIdx,
-    });
+    // Prune old messages from DOM
     this.renderer.pruneByIdx(MAX_MESSAGES_IN_DOM);
+
+    // After pruning, send the ACTUAL first idx that remains in DOM
+    // Use requestAnimationFrame to ensure DOM has updated
+    requestAnimationFrame(() => {
+      this.cachedFirstVisibleIdx = this.getFirstLoadedIdx();
+      this.vscode.postMessage({
+        type: WEBVIEW_IN_MSG.VISIBLE_FIRST_IDX,
+        idx: this.cachedFirstVisibleIdx,
+      });
+    });
+
+    // Re-arm the top trigger after pruning so user can scroll back to load more history
+    this.topTriggerArmed = true;
   }
 
   private tryLoadMoreHistory(): void {

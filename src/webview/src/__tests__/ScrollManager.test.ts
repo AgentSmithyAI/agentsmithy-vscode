@@ -314,4 +314,104 @@ describe('ScrollManager', () => {
       expect(messagesContainer.scrollTop).toBe(900);
     });
   });
+
+  describe('re-arming trigger after pruning', () => {
+    it('prunes and reports new first index when history chunk is removed', async () => {
+      const pruneSpy = vi.spyOn(mockRenderer, 'pruneByIdx');
+      const postSpy = vi.spyOn(mockVscode, 'postMessage');
+
+      // Populate container with more messages than MAX_MESSAGES_IN_DOM
+      for (let i = 0; i < 25; i++) {
+        const el = document.createElement('div');
+        el.dataset.idx = String(100 + i);
+        messagesContainer.appendChild(el);
+      }
+
+      Object.defineProperty(messagesContainer, 'scrollHeight', {
+        value: 1500,
+        writable: true,
+        configurable: true,
+      });
+      messagesContainer.scrollTop = 800; // within prune threshold (1500 - 800 - 500 = 200)
+
+      messagesContainer.dispatchEvent(new Event('scroll'));
+
+      expect(pruneSpy).toHaveBeenCalled();
+
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      expect(postSpy).toHaveBeenCalledWith(expect.objectContaining({type: 'visibleFirstIdx'}));
+    });
+
+    it('re-arms trigger after pruning so user can load history again', () => {
+      const postSpy = mockVscode.postMessage as ReturnType<typeof vi.fn>;
+      postSpy.mockClear();
+
+      // Initialize lastScrollTop
+      messagesContainer.scrollTop = 400;
+      messagesContainer.dispatchEvent(new Event('scroll'));
+      postSpy.mockClear();
+
+      // Step 1: Scroll back and trigger history load
+      messagesContainer.scrollTop = 50;
+      messagesContainer.dispatchEvent(new Event('scroll'));
+      let loadCalls = postSpy.mock.calls.filter((c) => c[0]?.type === 'loadMoreHistory');
+      expect(loadCalls.length).toBe(1);
+
+      // Step 2: Finish loading, trigger disarms
+      scrollManager.finishHistoryLoad();
+
+      // Step 3: Trigger pruning by scrolling near bottom
+      Object.defineProperty(messagesContainer, 'scrollHeight', {value: 1500, writable: true, configurable: true});
+      messagesContainer.scrollTop = 800; // 1500 - 800 - 500 = 200 (triggers prune)
+      messagesContainer.dispatchEvent(new Event('scroll'));
+      expect(mockRenderer.pruneByIdx).toHaveBeenCalled();
+
+      // Step 4: After pruning, scrollHeight decreases
+      Object.defineProperty(messagesContainer, 'scrollHeight', {value: 900, writable: true, configurable: true});
+      messagesContainer.scrollTop = 250;
+
+      // Step 5: Scroll back again - should trigger because prune re-armed
+      postSpy.mockClear();
+      messagesContainer.scrollTop = 80;
+      messagesContainer.dispatchEvent(new Event('scroll'));
+
+      loadCalls = postSpy.mock.calls.filter((c) => c[0]?.type === 'loadMoreHistory');
+      expect(loadCalls.length).toBe(1);
+    });
+
+    it('reproduces the bug scenario: back-forward-back scroll cycle', () => {
+      const postSpy = mockVscode.postMessage as ReturnType<typeof vi.fn>;
+
+      // Initialize scroll position
+      messagesContainer.scrollTop = 400;
+      messagesContainer.dispatchEvent(new Event('scroll'));
+      postSpy.mockClear();
+
+      // User scrolls back -> history loads
+      messagesContainer.scrollTop = 50;
+      messagesContainer.dispatchEvent(new Event('scroll'));
+      expect(postSpy.mock.calls.some((c) => c[0]?.type === 'loadMoreHistory')).toBe(true);
+
+      scrollManager.finishHistoryLoad();
+
+      // User scrolls forward -> pruning happens
+      Object.defineProperty(messagesContainer, 'scrollHeight', {value: 1500, writable: true, configurable: true});
+      messagesContainer.scrollTop = 800;
+      messagesContainer.dispatchEvent(new Event('scroll'));
+
+      // After pruning, scrollHeight decreases
+      Object.defineProperty(messagesContainer, 'scrollHeight', {value: 900, writable: true, configurable: true});
+      messagesContainer.scrollTop = 250;
+
+      // User scrolls back again
+      postSpy.mockClear();
+      messagesContainer.scrollTop = 80;
+      messagesContainer.dispatchEvent(new Event('scroll'));
+
+      // With fix: trigger is re-armed after prune, so history loads
+      // Without fix: trigger not re-armed, no history request
+      const loadCalls = postSpy.mock.calls.filter((c) => c[0]?.type === 'loadMoreHistory');
+      expect(loadCalls.length).toBe(1);
+    });
+  });
 });
