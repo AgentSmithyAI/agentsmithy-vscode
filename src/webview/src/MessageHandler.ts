@@ -1,7 +1,7 @@
 import {WEBVIEW_OUT_MSG} from '../../shared/messages';
 import {DialogViewManager} from './DialogViewManager';
 import {MessageRenderer} from './renderer';
-import {ScrollManager} from './ScrollManager';
+import {ScrollManager} from './scroll/ScrollManager';
 import {SessionActionsUI} from './SessionActionsUI';
 import {StreamingStateManager} from './StreamingStateManager';
 import {HistoryEvent, MAX_MESSAGES_IN_DOM, WebviewOutMessage} from './types';
@@ -82,12 +82,8 @@ export class MessageHandler {
         this.handleEndReasoning();
         break;
 
-      case WEBVIEW_OUT_MSG.HISTORY_SET_LOAD_MORE_VISIBLE:
-        // We use infinite scroll, keep button hidden regardless
-        break;
-
-      case WEBVIEW_OUT_MSG.HISTORY_SET_LOAD_MORE_ENABLED:
-        this.scrollManager.setCanLoadMore(message.enabled !== false);
+      case WEBVIEW_OUT_MSG.HISTORY_SET_CAN_LOAD:
+        this.scrollManager.setCanLoadMore(message.canLoad !== false);
         break;
 
       case WEBVIEW_OUT_MSG.HISTORY_PREPEND_EVENTS:
@@ -315,9 +311,9 @@ export class MessageHandler {
         renderer.scrollToBottom();
         break;
 
-      case WEBVIEW_OUT_MSG.HISTORY_SET_LOAD_MORE_ENABLED: {
-        const enabledMessage = message as WebviewOutMessage & {enabled: boolean};
-        scrollManager.setCanLoadMore(enabledMessage.enabled !== false);
+      case WEBVIEW_OUT_MSG.HISTORY_SET_CAN_LOAD: {
+        const loadMessage = message as WebviewOutMessage & {canLoad: boolean};
+        scrollManager.setCanLoadMore(loadMessage.canLoad !== false);
         break;
       }
     }

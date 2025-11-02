@@ -3,7 +3,7 @@ import {DialogsUI} from './DialogsUI';
 import {DialogViewManager} from './DialogViewManager';
 import {MessageHandler} from './MessageHandler';
 import {MessageRenderer} from './renderer';
-import {ScrollManager} from './ScrollManager';
+import {ScrollManager} from './scroll/ScrollManager';
 import {SessionActionsUI} from './SessionActionsUI';
 import {StreamingStateManager} from './StreamingStateManager';
 import {VSCodeAPI, WebviewOutMessage} from './types';
@@ -53,7 +53,6 @@ class ChatWebview {
   private dialogViewsContainer: HTMLElement;
   private messageInput: HTMLTextAreaElement;
   private sendButton: HTMLButtonElement;
-  private loadMoreBtn: HTMLElement | null;
 
   constructor(workspaceRoot: string) {
     this.vscode = acquireVsCodeApi();
@@ -63,7 +62,6 @@ class ChatWebview {
     this.dialogViewsContainer = document.getElementById(DOM_IDS.DIALOG_VIEWS) as HTMLElement;
     this.messageInput = document.getElementById(DOM_IDS.MESSAGE_INPUT) as HTMLTextAreaElement;
     this.sendButton = document.getElementById(DOM_IDS.SEND_BUTTON) as HTMLButtonElement;
-    this.loadMoreBtn = document.getElementById(DOM_IDS.LOAD_MORE_BTN);
 
     // Ensure input scrolls to the bottom when content grows (in case UIController listener isn't yet attached)
     this.messageInput.addEventListener(
@@ -81,7 +79,7 @@ class ChatWebview {
     this.dialogViewManager = new DialogViewManager(workspaceRoot, this.vscode, this.dialogViewsContainer);
 
     // Initialize specialized managers (for legacy/fallback support)
-    this.renderer = new MessageRenderer(this.messagesContainer, this.loadMoreBtn, welcomePlaceholder, workspaceRoot);
+    this.renderer = new MessageRenderer(this.messagesContainer, welcomePlaceholder, workspaceRoot);
     this.streamingState = new StreamingStateManager();
     this.uiController = new UIController(this.messageInput, this.sendButton);
     this.scrollManager = new ScrollManager(this.messagesContainer, this.vscode, this.renderer);
@@ -280,11 +278,6 @@ class ChatWebview {
         this.sendMessage();
       }
     });
-
-    // Hide legacy Load more button
-    if (this.loadMoreBtn) {
-      this.loadMoreBtn.style.display = 'none';
-    }
 
     // Message handler
     window.addEventListener('message', (event) => {

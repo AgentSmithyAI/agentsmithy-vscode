@@ -47,8 +47,7 @@ type WebviewOutMessage =
   | {type: typeof WEBVIEW_OUT_MSG.SHOW_ERROR; error: string; dialogId?: string}
   | {type: typeof WEBVIEW_OUT_MSG.SHOW_INFO; message: string; dialogId?: string}
   | {type: typeof WEBVIEW_OUT_MSG.END_STREAM; dialogId?: string}
-  | {type: typeof WEBVIEW_OUT_MSG.HISTORY_SET_LOAD_MORE_VISIBLE; visible: boolean; dialogId?: string}
-  | {type: typeof WEBVIEW_OUT_MSG.HISTORY_SET_LOAD_MORE_ENABLED; enabled: boolean; dialogId?: string}
+  | {type: typeof WEBVIEW_OUT_MSG.HISTORY_SET_CAN_LOAD; canLoad: boolean; dialogId?: string}
   | {type: typeof WEBVIEW_OUT_MSG.HISTORY_PREPEND_EVENTS; events: HistoryEvent[]; dialogId?: string}
   | {type: typeof WEBVIEW_OUT_MSG.HISTORY_REPLACE_ALL; events: HistoryEvent[]; dialogId?: string}
   | {type: typeof WEBVIEW_OUT_MSG.SCROLL_TO_BOTTOM; dialogId?: string}
@@ -80,10 +79,10 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     // Listen to history state changes
     this._historyService.onDidChangeState(() => {
       // Enable only when not loading AND there is more to load
-      const enable = !this._historyService.isLoading && this._historyService.hasMore;
+      const canLoad = !this._historyService.isLoading && this._historyService.hasMore;
       this._postMessage({
-        type: WEBVIEW_OUT_MSG.HISTORY_SET_LOAD_MORE_ENABLED,
-        enabled: enable,
+        type: WEBVIEW_OUT_MSG.HISTORY_SET_CAN_LOAD,
+        canLoad,
       });
     });
   }
@@ -97,12 +96,11 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
       return;
     }
 
-    this._postMessage({type: WEBVIEW_OUT_MSG.HISTORY_SET_LOAD_MORE_ENABLED, enabled: false, dialogId});
+    this._postMessage({type: WEBVIEW_OUT_MSG.HISTORY_SET_CAN_LOAD, canLoad: false, dialogId});
 
     try {
       const result = await this._historyService.loadLatest(dialogId);
       if (result) {
-        this._postMessage({type: WEBVIEW_OUT_MSG.HISTORY_SET_LOAD_MORE_VISIBLE, visible: result.hasMore, dialogId});
         if (result.events.length > 0) {
           if (replace) {
             this._postMessage({type: WEBVIEW_OUT_MSG.HISTORY_REPLACE_ALL, events: result.events, dialogId});
@@ -117,10 +115,10 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
       const msg = getErrorMessage(e, ERROR_MESSAGES.LOAD_HISTORY);
       this._postMessage({type: WEBVIEW_OUT_MSG.SHOW_ERROR, error: msg, dialogId});
     } finally {
-      // Enable only when there is more to load to avoid inconsistent UI states when button is hidden
+      // Enable only when there is more to load
       this._postMessage({
-        type: WEBVIEW_OUT_MSG.HISTORY_SET_LOAD_MORE_ENABLED,
-        enabled: this._historyService.hasMore,
+        type: WEBVIEW_OUT_MSG.HISTORY_SET_CAN_LOAD,
+        canLoad: this._historyService.hasMore,
         dialogId,
       });
     }
@@ -131,12 +129,11 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
       return;
     }
 
-    this._postMessage({type: WEBVIEW_OUT_MSG.HISTORY_SET_LOAD_MORE_ENABLED, enabled: false, dialogId});
+    this._postMessage({type: WEBVIEW_OUT_MSG.HISTORY_SET_CAN_LOAD, canLoad: false, dialogId});
 
     try {
       const result = await this._historyService.loadPrevious(dialogId);
       if (result) {
-        this._postMessage({type: WEBVIEW_OUT_MSG.HISTORY_SET_LOAD_MORE_VISIBLE, visible: result.hasMore, dialogId});
         if (result.events.length > 0) {
           this._postMessage({type: WEBVIEW_OUT_MSG.HISTORY_PREPEND_EVENTS, events: result.events, dialogId});
         }
@@ -147,8 +144,8 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     } finally {
       // Enable only if there is more to load according to HistoryService
       this._postMessage({
-        type: WEBVIEW_OUT_MSG.HISTORY_SET_LOAD_MORE_ENABLED,
-        enabled: this._historyService.hasMore,
+        type: WEBVIEW_OUT_MSG.HISTORY_SET_CAN_LOAD,
+        canLoad: this._historyService.hasMore,
         dialogId,
       });
     }
@@ -669,7 +666,6 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
         </div>
         <div id="dialogViews" class="dialog-views-container"></div>
         <div class="${CSS_CLASSES.MESSAGES}" id="${DOM_IDS.MESSAGES}">
-            <button id="${DOM_IDS.LOAD_MORE_BTN}" class="${CSS_CLASSES.LOAD_MORE} hidden">Load previous</button>
             <div class="${CSS_CLASSES.WELCOME_PLACEHOLDER}" id="${DOM_IDS.WELCOME_PLACEHOLDER}">
                 Type a message to start...
             </div>

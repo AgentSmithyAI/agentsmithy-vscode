@@ -53,7 +53,6 @@ export const STATE_KEYS = {
 // HTML element IDs for webview
 export const DOM_IDS = {
   MESSAGES: 'messages',
-  LOAD_MORE_BTN: 'loadMoreBtn',
   WELCOME_PLACEHOLDER: 'welcomePlaceholder',
   MESSAGE_INPUT: 'messageInput',
   SEND_BUTTON: 'sendButton',
@@ -68,7 +67,6 @@ export const DOM_IDS = {
 export const CSS_CLASSES = {
   CHAT_CONTAINER: 'chat-container',
   MESSAGES: 'messages',
-  LOAD_MORE: 'load-more',
   WELCOME_PLACEHOLDER: 'welcome-placeholder',
   INPUT_CONTAINER: 'input-container',
   REASONING_TOGGLE: 'reasoning-toggle',

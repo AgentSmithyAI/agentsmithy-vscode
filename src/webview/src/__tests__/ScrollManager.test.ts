@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 import {beforeEach, describe, expect, it, vi} from 'vitest';
-import {ScrollManager} from '../ScrollManager';
+import {ScrollManager} from '../scroll/ScrollManager';
 import {MessageRenderer} from '../renderer';
 import {VSCodeAPI} from '../types';
 

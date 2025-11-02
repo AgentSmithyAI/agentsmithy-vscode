@@ -30,7 +30,7 @@ describe('MessageRenderer with smart auto-scroll', () => {
     document.body.appendChild(messagesContainer);
 
     // Create renderer
-    renderer = new MessageRenderer(messagesContainer, null, null, '/test/workspace');
+    renderer = new MessageRenderer(messagesContainer, null, '/test/workspace');
 
     // Create mock scroll manager
     mockScrollManager = {
@@ -310,7 +310,7 @@ describe('MessageRenderer with smart auto-scroll', () => {
   describe('scrollManager not set', () => {
     it('should handle missing scrollManager gracefully', () => {
       // Create renderer without scroll manager
-      const rendererWithoutScroll = new MessageRenderer(messagesContainer, null, null, '/test/workspace');
+      const rendererWithoutScroll = new MessageRenderer(messagesContainer, null, '/test/workspace');
 
       // Should not throw
       expect(() => {

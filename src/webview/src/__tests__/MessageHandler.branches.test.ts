@@ -6,7 +6,7 @@ import {WEBVIEW_OUT_MSG} from '../../../shared/messages';
 import {DialogViewManager} from '../DialogViewManager';
 import {MessageHandler} from '../MessageHandler';
 import {MessageRenderer} from '../renderer';
-import {ScrollManager} from '../ScrollManager';
+import {ScrollManager} from '../scroll/ScrollManager';
 import {StreamingStateManager} from '../StreamingStateManager';
 import {UIController} from '../UIController';
 
@@ -42,7 +42,7 @@ describe('MessageHandler branches', () => {
     messageInput = document.getElementById('messageInput') as HTMLTextAreaElement;
     sendButton = document.getElementById('sendButton') as HTMLButtonElement;
 
-    renderer = new MessageRenderer(messagesContainer, null, null, '/workspace');
+    renderer = new MessageRenderer(messagesContainer, null, '/workspace');
     streamingState = new StreamingStateManager();
     scrollManager = new ScrollManager(messagesContainer, {postMessage: vi.fn()} as any, renderer);
     uiController = new UIController(messageInput, sendButton);

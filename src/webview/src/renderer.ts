@@ -18,7 +18,6 @@ export class MessageRenderer {
 
   constructor(
     private messagesContainer: HTMLElement,
-    private loadMoreBtn: HTMLElement | null,
     private welcomePlaceholder: HTMLElement | null,
     private workspaceRoot: string,
   ) {}
@@ -46,7 +45,6 @@ export class MessageRenderer {
     // Count index-bearing elements
     let idxCount = 0;
     for (const child of Array.from(this.messagesContainer.children)) {
-      if (child === this.loadMoreBtn) continue;
       if (child instanceof HTMLElement && child.dataset && child.dataset.idx) {
         idxCount++;
       }
@@ -57,7 +55,6 @@ export class MessageRenderer {
     const toRemove: Element[] = [];
     let needToRemove = idxCount - maxIdxCount;
     for (const child of Array.from(this.messagesContainer.children)) {
-      if (child === this.loadMoreBtn) continue;
       toRemove.push(child);
       if (child instanceof HTMLElement && child.dataset && child.dataset.idx) {
         needToRemove--;
@@ -84,12 +81,8 @@ export class MessageRenderer {
     // Take a snapshot of bottom state BEFORE DOM mutations to avoid losing closeness due to height growth
     const shouldAutoScroll = !this.suppressAutoScroll && (this.scrollManager?.isAtBottom() ?? false);
 
-    const anchor =
-      this.loadMoreBtn && this.loadMoreBtn.parentNode === this.messagesContainer
-        ? this.loadMoreBtn.nextSibling
-        : this.messagesContainer.firstChild;
     if (this.isPrepending) {
-      this.messagesContainer.insertBefore(node, anchor);
+      this.messagesContainer.insertBefore(node, this.messagesContainer.firstChild);
     } else {
       this.messagesContainer.appendChild(node);
       if (shouldAutoScroll) {

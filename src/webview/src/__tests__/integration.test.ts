@@ -6,7 +6,7 @@ import {WEBVIEW_OUT_MSG} from '../../../shared/messages';
 import {DialogViewManager} from '../DialogViewManager';
 import {MessageHandler} from '../MessageHandler';
 import {MessageRenderer} from '../renderer';
-import {ScrollManager} from '../ScrollManager';
+import {ScrollManager} from '../scroll/ScrollManager';
 import {StreamingStateManager} from '../StreamingStateManager';
 import type {VSCodeAPI} from '../types';
 import {UIController} from '../UIController';
@@ -43,7 +43,7 @@ describe('Dialog Switching Integration Tests', () => {
     sendButton = document.getElementById('sendButton') as HTMLButtonElement;
 
     dialogViewManager = new DialogViewManager('/workspace', vscode, dialogViewsContainer);
-    const renderer = new MessageRenderer(messagesContainer, null, null, '/workspace');
+    const renderer = new MessageRenderer(messagesContainer, null, '/workspace');
     const streamingState = new StreamingStateManager();
     const scrollManager = new ScrollManager(messagesContainer, vscode, renderer);
     uiController = new UIController(messageInput, sendButton);
