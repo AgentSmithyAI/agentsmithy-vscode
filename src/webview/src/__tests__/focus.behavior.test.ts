@@ -11,7 +11,7 @@ describe('focus persistence rules (unit)', () => {
     const valLen = input.value.length;
     const start = Math.max(0, Math.min(valLen, input.selectionStart ?? valLen));
     const end = Math.max(0, Math.min(valLen, input.selectionEnd ?? valLen));
-    const direction = (input as any).selectionDirection as 'forward' | 'backward' | 'none' | undefined;
+    const direction = input.selectionDirection;
     const shouldRestore = activeEl === input;
     return {shouldRestore, lastSelection: shouldRestore ? {start, end, direction} : null};
   }

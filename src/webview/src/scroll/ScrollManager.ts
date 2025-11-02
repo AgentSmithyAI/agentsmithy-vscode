@@ -81,9 +81,9 @@ export class ScrollManager {
    * need the specific element. We keep the parameter for API compatibility with
    * existing callers/tests. Consider making it optional or removing in a major
    * revision.
-   * @param _element Unused, kept for backward compatibility
+   * @param _element Optional, unused - kept for backward compatibility
    */
-  scrollIntoViewIfAtBottom(_element: HTMLElement): void {
+  scrollIntoViewIfAtBottom(_element?: HTMLElement): void {
     this.autoScrollController.scrollIntoViewIfAtBottom();
   }
 

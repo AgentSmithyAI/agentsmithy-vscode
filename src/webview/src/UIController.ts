@@ -61,9 +61,7 @@ export class UIController {
     } else {
       this.messageInput.removeAttribute('aria-busy');
       this.sendButton.innerHTML =
-        '<svg viewBox="0 0 24 24" aria-hidden="true">' +
-        '<path d=\"M2.01 21L23 12 2.01 3 2 10l15 2-15 2z\"/>' +
-        '</svg>';
+        '<svg viewBox="0 0 24 24" aria-hidden="true">' + '<path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>' + '</svg>';
       this.sendButton.classList.remove('processing');
       this.sendButton.title = 'Send (Enter)';
       this.sendButton.setAttribute('aria-label', 'Send');
