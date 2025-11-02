@@ -83,9 +83,7 @@ describe('ChatWebviewProvider - session operations', () => {
     // Expect info, history reload, session status update
     expect(api.approveSession).toHaveBeenCalledWith('d1');
     expect(postMessage).toHaveBeenCalledWith(expect.objectContaining({type: WEBVIEW_OUT_MSG.SHOW_INFO}));
-    expect(postMessage).toHaveBeenCalledWith(
-      expect.objectContaining({type: WEBVIEW_OUT_MSG.HISTORY_SET_LOAD_MORE_ENABLED}),
-    );
+    expect(postMessage).toHaveBeenCalledWith(expect.objectContaining({type: WEBVIEW_OUT_MSG.HISTORY_SET_CAN_LOAD}));
     expect(postMessage).toHaveBeenCalledWith(expect.objectContaining({type: WEBVIEW_OUT_MSG.SESSION_STATUS_UPDATE}));
   });
 
@@ -138,9 +136,7 @@ describe('ChatWebviewProvider - session operations', () => {
 
     expect(api.resetToApproved).toHaveBeenCalledWith('d1');
     expect(postMessage).toHaveBeenCalledWith(expect.objectContaining({type: WEBVIEW_OUT_MSG.SHOW_INFO}));
-    expect(postMessage).toHaveBeenCalledWith(
-      expect.objectContaining({type: WEBVIEW_OUT_MSG.HISTORY_SET_LOAD_MORE_ENABLED}),
-    );
+    expect(postMessage).toHaveBeenCalledWith(expect.objectContaining({type: WEBVIEW_OUT_MSG.HISTORY_SET_CAN_LOAD}));
     expect(postMessage).toHaveBeenCalledWith(expect.objectContaining({type: WEBVIEW_OUT_MSG.SESSION_STATUS_UPDATE}));
   });
 
@@ -165,9 +161,7 @@ describe('ChatWebviewProvider - session operations', () => {
 
     expect(api.restoreCheckpoint).toHaveBeenCalledWith('d1', 'c1');
     expect(postMessage).toHaveBeenCalledWith(expect.objectContaining({type: WEBVIEW_OUT_MSG.SHOW_INFO}));
-    expect(postMessage).toHaveBeenCalledWith(
-      expect.objectContaining({type: WEBVIEW_OUT_MSG.HISTORY_SET_LOAD_MORE_ENABLED}),
-    );
+    expect(postMessage).toHaveBeenCalledWith(expect.objectContaining({type: WEBVIEW_OUT_MSG.HISTORY_SET_CAN_LOAD}));
     expect(postMessage).toHaveBeenCalledWith(expect.objectContaining({type: WEBVIEW_OUT_MSG.SESSION_STATUS_UPDATE}));
   });
 

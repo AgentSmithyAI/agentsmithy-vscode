@@ -32,6 +32,10 @@ export const TIMEOUTS = {
   PROCESSING_SAFETY: 30000,
 } as const;
 
+export const PAGINATION = {
+  DEFAULT_PAGE_SIZE: 20,
+} as const;
+
 export const STATUS_FILE_PATH = '.agentsmithy/status.json';
 
 export const WELCOME_MESSAGE =

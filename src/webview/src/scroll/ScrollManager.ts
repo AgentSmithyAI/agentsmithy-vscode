@@ -51,7 +51,7 @@ export class ScrollManager {
       this.autoScrollController.updateLockState(scrollTop, this.lastScrollTop);
 
       // Check if we need to load more history (infinite scroll up)
-      const didLoadHistory = this.historyLoadTrigger.checkTrigger(scrollTop, isScrollingUp);
+      this.historyLoadTrigger.checkTrigger(scrollTop, isScrollingUp);
 
       // Prune when user is near bottom to keep recent view light
       const didPrune = this.domPruner.checkAndPrune(MAX_MESSAGES_IN_DOM);

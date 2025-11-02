@@ -1,9 +1,7 @@
 import * as vscode from 'vscode';
 import {ApiService, HistoryEvent} from '../api/ApiService';
-import {ERROR_MESSAGES} from '../constants';
+import {ERROR_MESSAGES, PAGINATION} from '../constants';
 import {getErrorMessage} from '../utils/typeGuards';
-
-const DEFAULT_PAGE_SIZE = 20;
 
 /**
  * Service for managing chat history and pagination
@@ -91,7 +89,7 @@ export class HistoryService {
     this._onDidChangeState.fire();
 
     try {
-      const resp = await this.apiService.loadHistory(dialogId, DEFAULT_PAGE_SIZE);
+      const resp = await this.apiService.loadHistory(dialogId, PAGINATION.DEFAULT_PAGE_SIZE);
       this._serverCursor = resp.first_idx ?? undefined;
       // Fresh load resets visible floor; cursor comes directly from server
       this._visibleFloor = undefined;
@@ -133,7 +131,7 @@ export class HistoryService {
     this._onDidChangeState.fire();
 
     try {
-      const resp = await this.apiService.loadHistory(dialogId, DEFAULT_PAGE_SIZE, beforeUsed);
+      const resp = await this.apiService.loadHistory(dialogId, PAGINATION.DEFAULT_PAGE_SIZE, beforeUsed);
 
       // Update cursors directly from server response
       this._serverCursor = resp.first_idx ?? undefined;
