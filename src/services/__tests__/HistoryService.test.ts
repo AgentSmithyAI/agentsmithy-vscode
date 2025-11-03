@@ -93,24 +93,24 @@ describe('HistoryService cursor logic', () => {
     expect(api.loadHistory).toHaveBeenNthCalledWith(4, 'dlg', 20, 180);
   });
 
-  it('resets cursor/hasMore when returning to latest via setVisibleFirstIdx', async () => {
-    // Load latest -> snapshot latestFirstIdx=500, has_more=true
+  it('moves cursor forward when visible first idx advances after pruning', async () => {
+    // Load latest -> snapshot latestFirstIdx=500
     api.loadHistory.mockResolvedValueOnce(mkHistoryResp({first_idx: 500, has_more: true}));
     await svc.loadLatest('dlg');
 
-    // Go back one page -> cursor becomes 450
+    // Load older chunk -> cursor becomes 450
     api.loadHistory.mockResolvedValueOnce(mkHistoryResp({first_idx: 450, has_more: true}));
     await svc.loadPrevious('dlg');
 
-    // Sanity: next call would use before=450
-    api.loadHistory.mockResolvedValueOnce(mkHistoryResp({first_idx: 400, has_more: false}));
-
-    // Now emulate returning to latest view by setting visible idx >= latestFirstIdx
+    // Pruning removes that chunk, visible idx jumps forward
     svc.setVisibleFirstIdx(505);
+    expect((svc as any)._historyCursor).toBe(505);
+    expect(svc.hasMore).toBe(true);
 
-    // After reset, loadPrevious should use the latest boundary (500), not 450
+    // Next load should use the new boundary (505)
+    api.loadHistory.mockResolvedValueOnce(mkHistoryResp({first_idx: 400, has_more: false}));
     await svc.loadPrevious('dlg');
-    expect(api.loadHistory).toHaveBeenLastCalledWith('dlg', 20, 500);
+    expect(api.loadHistory).toHaveBeenLastCalledWith('dlg', 20, 505);
   });
 
   it('ignores loadPrevious when already loading or when hasMore=false or cursor is undefined', async () => {
@@ -144,5 +144,50 @@ describe('HistoryService cursor logic', () => {
     // Second should be ignored due to _historyLoading gate
     expect(r1).not.toBeNull();
     expect(r2).toBeNull();
+  });
+
+  it('updates cursor forward and re-enables history loading when visible first idx increases', async () => {
+    // Step 1: Load latest history (indices 480+)
+    api.loadHistory.mockResolvedValueOnce(mkHistoryResp({first_idx: 480, has_more: true}));
+    await svc.loadLatest('dlg');
+
+    // Step 2: Load previous chunk that reaches the very top (server says no more)
+    api.loadHistory.mockResolvedValueOnce(mkHistoryResp({first_idx: 16, has_more: false}));
+    await svc.loadPrevious('dlg');
+    expect((svc as any)._historyCursor).toBe(16);
+    // hasMore should still be true (cursor >= exhaustedBefore allows one more try)
+    expect(svc.hasMore).toBe(true);
+
+    // Step 3: Webview prunes that chunk and reports new first idx (146)
+    svc.setVisibleFirstIdx(146);
+
+    expect((svc as any)._historyCursor).toBe(146);
+    expect(svc.hasMore).toBe(true);
+
+    // Step 4: User scrolls back up -> should trigger another load from 146
+    api.loadHistory.mockResolvedValueOnce(mkHistoryResp({first_idx: 16, has_more: false}));
+    const result = await svc.loadPrevious('dlg');
+    expect(result).not.toBeNull();
+    expect(api.loadHistory).toHaveBeenLastCalledWith('dlg', 20, 146);
+  });
+
+  it('restores latest snapshot when visible first idx returns to latest boundary', async () => {
+    // Load latest page
+    api.loadHistory.mockResolvedValueOnce(mkHistoryResp({first_idx: 480, has_more: true}));
+    await svc.loadLatest('dlg');
+
+    // Load previous chunk to move cursor back
+    api.loadHistory.mockResolvedValueOnce(mkHistoryResp({first_idx: 200, has_more: true}));
+    await svc.loadPrevious('dlg');
+
+    // Pruning removes that chunk, so visible idx jumps forward
+    svc.setVisibleFirstIdx(300);
+    expect((svc as any)._historyCursor).toBe(300);
+    expect(svc.hasMore).toBe(true);
+
+    // When visible idx reaches the latest boundary, cursor snaps back to latest snapshot
+    svc.setVisibleFirstIdx(480);
+    expect((svc as any)._historyCursor).toBe(480);
+    expect(svc.hasMore).toBe(true);
   });
 });

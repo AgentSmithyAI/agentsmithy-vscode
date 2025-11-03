@@ -6,7 +6,7 @@ import {WEBVIEW_OUT_MSG} from '../../../shared/messages';
 import {DialogViewManager} from '../DialogViewManager';
 import {MessageHandler} from '../MessageHandler';
 import {MessageRenderer} from '../renderer';
-import {ScrollManager} from '../ScrollManager';
+import {ScrollManager} from '../scroll/ScrollManager';
 import {StreamingStateManager} from '../StreamingStateManager';
 import type {VSCodeAPI, WebviewOutMessage} from '../types';
 import {UIController} from '../UIController';
@@ -16,6 +16,11 @@ const createMockVSCodeAPI = (): VSCodeAPI => ({
   getState: vi.fn(),
   setState: vi.fn(),
 });
+
+// Test helper to check if input is in busy/processing state
+function isInputBusy(input: HTMLTextAreaElement): boolean {
+  return input.getAttribute('aria-busy') === 'true';
+}
 
 describe('MessageHandler with DialogViewManager', () => {
   let vscode: VSCodeAPI;
@@ -48,7 +53,7 @@ describe('MessageHandler with DialogViewManager', () => {
     messageInput = document.getElementById('messageInput') as HTMLTextAreaElement;
     sendButton = document.getElementById('sendButton') as HTMLButtonElement;
 
-    renderer = new MessageRenderer(messagesContainer, null, null, '/workspace');
+    renderer = new MessageRenderer(messagesContainer, null, '/workspace');
     streamingState = new StreamingStateManager();
     scrollManager = new ScrollManager(messagesContainer, vscode, renderer);
     uiController = new UIController(messageInput, sendButton);
@@ -118,7 +123,7 @@ describe('MessageHandler with DialogViewManager', () => {
         dialogId: 'dialog-1',
       });
 
-      expect(uiController.isInputDisabled()).toBe(true);
+      expect(isInputBusy(messageInput)).toBe(true);
 
       // Start stream in inactive dialog
       dialogViewManager.getOrCreateView('dialog-2');
@@ -128,7 +133,7 @@ describe('MessageHandler with DialogViewManager', () => {
       });
 
       // UI should not update for inactive dialog
-      expect(uiController.isInputDisabled()).toBe(true); // Still from dialog-1
+      expect(isInputBusy(messageInput)).toBe(true); // Still from dialog-1
     });
 
     it('handles HISTORY_PREPEND_EVENTS for specific dialog', () => {

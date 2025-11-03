@@ -1,5 +1,5 @@
 import {MessageRenderer} from './renderer';
-import {ScrollManager} from './ScrollManager';
+import {ScrollManager} from './scroll/ScrollManager';
 import {StreamingStateManager} from './StreamingStateManager';
 import {VSCodeAPI} from './types';
 
@@ -41,7 +41,7 @@ export class DialogView {
     parentContainer.appendChild(this.container);
 
     // Initialize managers for this dialog
-    this.renderer = new MessageRenderer(messagesContainer, null, welcomePlaceholder, workspaceRoot);
+    this.renderer = new MessageRenderer(messagesContainer, welcomePlaceholder, workspaceRoot);
     this.streamingState = new StreamingStateManager();
     this.scrollManager = new ScrollManager(messagesContainer, vscode, this.renderer);
 

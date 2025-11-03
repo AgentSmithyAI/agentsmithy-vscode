@@ -1,7 +1,8 @@
 import {WEBVIEW_OUT_MSG} from '../../shared/messages';
 import {DialogViewManager} from './DialogViewManager';
 import {MessageRenderer} from './renderer';
-import {ScrollManager} from './ScrollManager';
+import {ScrollManager} from './scroll/ScrollManager';
+import {SessionActionsUI} from './SessionActionsUI';
 import {StreamingStateManager} from './StreamingStateManager';
 import {HistoryEvent, MAX_MESSAGES_IN_DOM, WebviewOutMessage} from './types';
 import {UIController} from './UIController';
@@ -18,6 +19,7 @@ export class MessageHandler {
     private uiController: UIController,
     private messagesContainer: HTMLElement,
     private dialogViewManager?: DialogViewManager,
+    private sessionActionsUI?: SessionActionsUI,
   ) {}
 
   /**
@@ -33,7 +35,7 @@ export class MessageHandler {
     // Fallback to legacy handling (for backward compatibility or active dialog)
     switch (message.type) {
       case WEBVIEW_OUT_MSG.ADD_MESSAGE:
-        this.handleAddMessage(message.message.role, message.message.content);
+        this.handleAddMessage(message.message.role, message.message.content, message.checkpoint);
         break;
 
       case WEBVIEW_OUT_MSG.START_ASSISTANT_MESSAGE:
@@ -53,7 +55,7 @@ export class MessageHandler {
         break;
 
       case WEBVIEW_OUT_MSG.SHOW_FILE_EDIT:
-        this.renderer.addFileEdit(message.file, message.diff);
+        this.renderer.addFileEdit(message.file, message.diff, message.checkpoint);
         break;
 
       case WEBVIEW_OUT_MSG.SHOW_ERROR:
@@ -80,12 +82,8 @@ export class MessageHandler {
         this.handleEndReasoning();
         break;
 
-      case WEBVIEW_OUT_MSG.HISTORY_SET_LOAD_MORE_VISIBLE:
-        // We use infinite scroll, keep button hidden regardless
-        break;
-
-      case WEBVIEW_OUT_MSG.HISTORY_SET_LOAD_MORE_ENABLED:
-        this.scrollManager.setCanLoadMore(message.enabled !== false);
+      case WEBVIEW_OUT_MSG.HISTORY_SET_CAN_LOAD:
+        this.scrollManager.setCanLoadMore(message.canLoad !== false);
         break;
 
       case WEBVIEW_OUT_MSG.HISTORY_PREPEND_EVENTS:
@@ -98,6 +96,24 @@ export class MessageHandler {
 
       case WEBVIEW_OUT_MSG.HISTORY_REPLACE_ALL:
         this.handleHistoryReplaceAll(message.events);
+        break;
+
+      case WEBVIEW_OUT_MSG.SESSION_STATUS_UPDATE:
+        if (this.sessionActionsUI) {
+          this.sessionActionsUI.updateSessionStatus(message.hasUnapproved);
+        }
+        break;
+
+      case WEBVIEW_OUT_MSG.SESSION_OPERATION_CANCELLED:
+        if (this.sessionActionsUI) {
+          this.sessionActionsUI.cancelOperation();
+        }
+        break;
+
+      case WEBVIEW_OUT_MSG.DIALOG_SWITCHED:
+        if (this.sessionActionsUI) {
+          this.sessionActionsUI.setCurrentDialogId(message.dialogId);
+        }
         break;
     }
   }
@@ -120,8 +136,12 @@ export class MessageHandler {
     // Process the message for this specific dialog
     switch (message.type) {
       case WEBVIEW_OUT_MSG.ADD_MESSAGE:
-        renderer.addMessage(message.message.role, message.message.content);
+        renderer.addMessage(message.message.role, message.message.content, message.checkpoint);
         renderer.pruneByIdx(MAX_MESSAGES_IN_DOM);
+        // Always scroll to bottom when user sends a message
+        if (message.message.role === 'user' && isActive) {
+          scrollManager.scrollToBottom();
+        }
         break;
 
       case WEBVIEW_OUT_MSG.START_ASSISTANT_MESSAGE: {
@@ -158,7 +178,12 @@ export class MessageHandler {
       case WEBVIEW_OUT_MSG.END_ASSISTANT_MESSAGE: {
         const messageElement = streamingState.getCurrentAssistantMessage();
         if (messageElement && streamingState.getCurrentAssistantText()) {
+          const wasAtBottom = scrollManager.isAtBottom();
           streamingState.endAssistantMessage((text) => renderer.renderMarkdown(text));
+          // After markdown rendering, content size may change - ensure we stay scrolled to bottom
+          if (wasAtBottom && isActive) {
+            scrollManager.scrollToBottom();
+          }
         }
         renderer.pruneByIdx(MAX_MESSAGES_IN_DOM);
         break;
@@ -185,6 +210,10 @@ export class MessageHandler {
         // Update UI controller only if this is the active dialog
         if (isActive) {
           this.uiController.setProcessing(false);
+          // Final scroll to bottom after stream ends to ensure user sees the complete response
+          if (scrollManager.isAtBottom()) {
+            scrollManager.scrollToBottom();
+          }
         }
         break;
 
@@ -282,18 +311,22 @@ export class MessageHandler {
         renderer.scrollToBottom();
         break;
 
-      case WEBVIEW_OUT_MSG.HISTORY_SET_LOAD_MORE_ENABLED: {
-        const enabledMessage = message as WebviewOutMessage & {enabled: boolean};
-        scrollManager.setCanLoadMore(enabledMessage.enabled !== false);
+      case WEBVIEW_OUT_MSG.HISTORY_SET_CAN_LOAD: {
+        const loadMessage = message as WebviewOutMessage & {canLoad: boolean};
+        scrollManager.setCanLoadMore(loadMessage.canLoad !== false);
         break;
       }
     }
   }
 
-  private handleAddMessage(role: 'user' | 'assistant', content: string): void {
-    this.renderer.addMessage(role, content);
+  private handleAddMessage(role: 'user' | 'assistant', content: string, checkpoint?: string): void {
+    this.renderer.addMessage(role, content, checkpoint);
     // User message means new tail content → prune older
     this.renderer.pruneByIdx(MAX_MESSAGES_IN_DOM);
+    // Always scroll to bottom when user sends a message
+    if (role === 'user') {
+      this.scrollManager.scrollToBottom();
+    }
   }
 
   private handleStartAssistantMessage(): void {
@@ -320,9 +353,12 @@ export class MessageHandler {
   private handleEndAssistantMessage(): void {
     const messageElement = this.streamingState.getCurrentAssistantMessage();
     if (messageElement && this.streamingState.getCurrentAssistantText()) {
+      const wasAtBottom = this.scrollManager.isAtBottom();
       this.streamingState.endAssistantMessage((text) => this.renderer.renderMarkdown(text));
-      // Don't auto-scroll on end - only during append
-      // This prevents unwanted scrolling if user has manually scrolled up
+      // After markdown rendering, content size may change - ensure we stay scrolled to bottom
+      if (wasAtBottom) {
+        this.scrollManager.scrollToBottom();
+      }
     }
     // Finalized assistant message → prune older
     this.renderer.pruneByIdx(MAX_MESSAGES_IN_DOM);
@@ -331,6 +367,10 @@ export class MessageHandler {
   private handleEndStream(): void {
     this.streamingState.setProcessing(false);
     this.uiController.setProcessing(false);
+    // Final scroll to bottom after stream ends to ensure user sees the complete response
+    if (this.scrollManager.isAtBottom()) {
+      this.scrollManager.scrollToBottom();
+    }
   }
 
   private handleStartReasoning(): void {

@@ -6,7 +6,7 @@ import {WEBVIEW_OUT_MSG} from '../../../shared/messages';
 import {DialogViewManager} from '../DialogViewManager';
 import {MessageHandler} from '../MessageHandler';
 import {MessageRenderer} from '../renderer';
-import {ScrollManager} from '../ScrollManager';
+import {ScrollManager} from '../scroll/ScrollManager';
 import {StreamingStateManager} from '../StreamingStateManager';
 import type {VSCodeAPI} from '../types';
 import {UIController} from '../UIController';
@@ -16,6 +16,11 @@ const createMockVSCodeAPI = (): VSCodeAPI => ({
   getState: vi.fn(),
   setState: vi.fn(),
 });
+
+// Test helper to check if input is in busy/processing state
+function isInputBusy(input: HTMLTextAreaElement): boolean {
+  return input.getAttribute('aria-busy') === 'true';
+}
 
 describe('Dialog Switching Integration Tests', () => {
   let vscode: VSCodeAPI;
@@ -43,7 +48,7 @@ describe('Dialog Switching Integration Tests', () => {
     sendButton = document.getElementById('sendButton') as HTMLButtonElement;
 
     dialogViewManager = new DialogViewManager('/workspace', vscode, dialogViewsContainer);
-    const renderer = new MessageRenderer(messagesContainer, null, null, '/workspace');
+    const renderer = new MessageRenderer(messagesContainer, null, '/workspace');
     const streamingState = new StreamingStateManager();
     const scrollManager = new ScrollManager(messagesContainer, vscode, renderer);
     uiController = new UIController(messageInput, sendButton);
@@ -156,7 +161,7 @@ describe('Dialog Switching Integration Tests', () => {
         dialogId: dialogA,
       });
 
-      expect(uiController.isInputDisabled()).toBe(true);
+      expect(isInputBusy(messageInput)).toBe(true);
 
       // Switch to dialog B (no stream)
       dialogViewManager.switchToDialog(dialogB);

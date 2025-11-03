@@ -8,12 +8,16 @@ declare const marked: {
   setOptions: (options: unknown) => void;
 };
 
+export interface ScrollManagerLike {
+  isAtBottom: () => boolean;
+  handleContentShrink?: () => void;
+}
+
 export class MessageRenderer {
-  private scrollManager?: {isAtBottom: () => boolean};
+  private scrollManager?: ScrollManagerLike;
 
   constructor(
     private messagesContainer: HTMLElement,
-    private loadMoreBtn: HTMLElement | null,
     private welcomePlaceholder: HTMLElement | null,
     private workspaceRoot: string,
   ) {}
@@ -21,7 +25,7 @@ export class MessageRenderer {
   private isPrepending = false;
   private suppressAutoScroll = false;
 
-  setScrollManager(scrollManager: {isAtBottom: () => boolean}): void {
+  setScrollManager(scrollManager: ScrollManagerLike): void {
     this.scrollManager = scrollManager;
   }
 
@@ -41,7 +45,6 @@ export class MessageRenderer {
     // Count index-bearing elements
     let idxCount = 0;
     for (const child of Array.from(this.messagesContainer.children)) {
-      if (child === this.loadMoreBtn) continue;
       if (child instanceof HTMLElement && child.dataset && child.dataset.idx) {
         idxCount++;
       }
@@ -52,7 +55,6 @@ export class MessageRenderer {
     const toRemove: Element[] = [];
     let needToRemove = idxCount - maxIdxCount;
     for (const child of Array.from(this.messagesContainer.children)) {
-      if (child === this.loadMoreBtn) continue;
       toRemove.push(child);
       if (child instanceof HTMLElement && child.dataset && child.dataset.idx) {
         needToRemove--;
@@ -66,20 +68,31 @@ export class MessageRenderer {
 
   private scrollIntoViewIfBottom(node: HTMLElement): void {
     if (!this.suppressAutoScroll && this.scrollManager?.isAtBottom()) {
-      node.scrollIntoView({behavior: 'smooth', block: 'end'});
+      // Use double rAF to ensure DOM updates are complete, properly handling ::after spacer
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
+        });
+      });
     }
   }
 
   private insertNode(node: HTMLElement): void {
-    const anchor =
-      this.loadMoreBtn && this.loadMoreBtn.parentNode === this.messagesContainer
-        ? this.loadMoreBtn.nextSibling
-        : this.messagesContainer.firstChild;
+    // Take a snapshot of bottom state BEFORE DOM mutations to avoid losing closeness due to height growth
+    const shouldAutoScroll = !this.suppressAutoScroll && (this.scrollManager?.isAtBottom() ?? false);
+
     if (this.isPrepending) {
-      this.messagesContainer.insertBefore(node, anchor);
+      this.messagesContainer.insertBefore(node, this.messagesContainer.firstChild);
     } else {
       this.messagesContainer.appendChild(node);
-      this.scrollIntoViewIfBottom(node);
+      if (shouldAutoScroll) {
+        // Use double rAF to ensure DOM updates are complete
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
+          });
+        });
+      }
     }
   }
 
@@ -97,17 +110,33 @@ export class MessageRenderer {
     return escapeHtml(t).replace(/\n/g, '<br>');
   }
 
-  addMessage(role: 'user' | 'assistant', content: string): HTMLElement {
+  addMessage(role: 'user' | 'assistant', content: string, checkpoint?: string): HTMLElement {
     this.hideWelcome();
 
     const messageDiv = document.createElement('div');
     messageDiv.className = 'message ' + (role === 'user' ? 'user-message' : 'assistant-message');
+
     if (content) {
       if (role === 'assistant') {
         messageDiv.innerHTML = this.renderMarkdown(content);
       } else {
-        const escapedContent = escapeHtml(content);
-        messageDiv.innerHTML = linkifyUrls(escapedContent);
+        const textDiv = document.createElement('div');
+        textDiv.className = 'user-message-text';
+        textDiv.innerHTML = linkifyUrls(escapeHtml(content));
+        messageDiv.appendChild(textDiv);
+
+        // Add restore checkpoint button for user messages if checkpoint is present
+        if (checkpoint) {
+          const restoreBtn = document.createElement('button');
+          restoreBtn.className = 'restore-checkpoint-btn';
+          restoreBtn.setAttribute('data-checkpoint', checkpoint);
+          restoreBtn.title = 'Restore to this state';
+          restoreBtn.innerHTML = `<svg viewBox="0 0 16 16" aria-hidden="true">
+            <path d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z"/>
+            <path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/>
+          </svg>`;
+          messageDiv.appendChild(restoreBtn);
+        }
       }
     }
     this.insertNode(messageDiv);
@@ -169,6 +198,7 @@ export class MessageRenderer {
     openLink.textContent = 'Open';
     openLink.style.marginLeft = '8px';
     header.appendChild(openLink);
+
     editDiv.appendChild(header);
 
     if (diff) {
@@ -200,11 +230,16 @@ export class MessageRenderer {
     content.textContent = ' ';
 
     header.addEventListener('click', () => {
-      const isExpanded = content.style.display !== 'none';
-      content.style.display = isExpanded ? 'none' : 'block';
+      const wasExpanded = content.style.display !== 'none';
+      content.style.display = wasExpanded ? 'none' : 'block';
       const toggle = header.querySelector('.reasoning-toggle');
       if (toggle) {
-        toggle.textContent = isExpanded ? '▶' : '▼';
+        toggle.textContent = wasExpanded ? '▶' : '▼';
+      }
+      // If collapsing while user is near bottom, snapping prevents drift upward
+      if (wasExpanded && this.scrollManager && typeof this.scrollManager.isAtBottom === 'function') {
+        // We can't call scrollManager.scrollToBottom directly; request via content shrink hook
+        this.scrollManager?.handleContentShrink?.();
       }
     });
 
@@ -238,7 +273,11 @@ export class MessageRenderer {
   renderHistoryEvent(evt: HistoryEvent): void {
     switch (evt.type) {
       case 'user': {
-        const el = this.addMessage('user', evt && typeof evt.content !== 'undefined' ? evt.content : '');
+        const el = this.addMessage(
+          'user',
+          evt && typeof evt.content !== 'undefined' ? evt.content : '',
+          evt && typeof evt.checkpoint === 'string' ? evt.checkpoint : undefined,
+        );
         if (el && evt && typeof evt.idx === 'number') {
           (el as HTMLElement).dataset.idx = String(evt.idx);
         }
@@ -271,16 +310,19 @@ export class MessageRenderer {
   }
 
   clearMessages(): void {
-    const toRemove: Node[] = [];
+    const toRemove: Element[] = [];
     for (const child of Array.from(this.messagesContainer.children)) {
-      if (child !== this.loadMoreBtn) {
-        toRemove.push(child);
-      }
+      toRemove.push(child);
     }
     toRemove.forEach((n) => n.remove());
   }
 
   scrollToBottom(): void {
-    this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
+    // Use double rAF to ensure all DOM updates are complete
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
+      });
+    });
   }
 }

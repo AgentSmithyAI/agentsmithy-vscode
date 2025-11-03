@@ -21,6 +21,9 @@ export class StreamEventHandlers {
 
   async handleEvent(event: SSEEvent): Promise<void> {
     switch (event.type) {
+      case E.USER:
+        this.handleUser(event);
+        break;
       case E.CHAT_START:
         this.handleChatStart();
         break;
@@ -52,6 +55,18 @@ export class StreamEventHandlers {
         // Handled by caller
         break;
     }
+  }
+
+  private handleUser(event: SSEEvent): void {
+    this.postMessage({
+      type: 'addMessage',
+      message: {
+        role: 'user',
+        content: typeof event.content === 'string' ? event.content : '',
+      },
+      checkpoint: typeof event.checkpoint === 'string' ? event.checkpoint : undefined,
+      dialogId: this.dialogId,
+    });
   }
 
   private handleChatStart(): void {
