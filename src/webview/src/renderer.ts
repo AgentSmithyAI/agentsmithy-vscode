@@ -312,9 +312,7 @@ export class MessageRenderer {
   clearMessages(): void {
     const toRemove: Element[] = [];
     for (const child of Array.from(this.messagesContainer.children)) {
-      if (child !== this.loadMoreBtn) {
-        toRemove.push(child);
-      }
+      toRemove.push(child);
     }
     toRemove.forEach((n) => n.remove());
   }

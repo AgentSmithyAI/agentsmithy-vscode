@@ -17,6 +17,11 @@ const createMockVSCodeAPI = (): VSCodeAPI => ({
   setState: vi.fn(),
 });
 
+// Test helper to check if input is in busy/processing state
+function isInputBusy(input: HTMLTextAreaElement): boolean {
+  return input.getAttribute('aria-busy') === 'true';
+}
+
 describe('Dialog Switching Integration Tests', () => {
   let vscode: VSCodeAPI;
   let dialogViewsContainer: HTMLElement;
@@ -156,7 +161,7 @@ describe('Dialog Switching Integration Tests', () => {
         dialogId: dialogA,
       });
 
-      expect(uiController.isInputDisabled()).toBe(true);
+      expect(isInputBusy(messageInput)).toBe(true);
 
       // Switch to dialog B (no stream)
       dialogViewManager.switchToDialog(dialogB);

@@ -15,6 +15,11 @@ const nextTick = async () => {
   await Promise.resolve();
 };
 
+// Test helper to check if input is in busy/processing state
+function isInputBusy(input: HTMLTextAreaElement): boolean {
+  return input.getAttribute('aria-busy') === 'true';
+}
+
 describe('MessageHandler branches', () => {
   let messagesContainer: HTMLElement;
   let dialogViewsContainer: HTMLElement;
@@ -85,15 +90,15 @@ describe('MessageHandler branches', () => {
 
     // Start assistant in other dialog (should not affect active UIController)
     messageHandler.handle({type: WEBVIEW_OUT_MSG.START_ASSISTANT_MESSAGE, dialogId: other});
-    expect(uiController.isInputDisabled()).toBe(false);
+    expect(isInputBusy(messageInput)).toBe(false);
 
     // Start assistant in active dialog (should reflect in UI)
     messageHandler.handle({type: WEBVIEW_OUT_MSG.START_ASSISTANT_MESSAGE, dialogId: active});
-    expect(uiController.isInputDisabled()).toBe(true);
+    expect(isInputBusy(messageInput)).toBe(true);
 
     // End stream for the active dialog
     messageHandler.handle({type: WEBVIEW_OUT_MSG.END_STREAM, dialogId: active});
     await nextTick();
-    expect(uiController.isInputDisabled()).toBe(false);
+    expect(isInputBusy(messageInput)).toBe(false);
   });
 });

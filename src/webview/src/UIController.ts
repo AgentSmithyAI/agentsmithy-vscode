@@ -67,12 +67,4 @@ export class UIController {
       this.sendButton.setAttribute('aria-label', 'Send');
     }
   }
-
-  /**
-   * Check if input is disabled
-   */
-  isInputDisabled(): boolean {
-    // Treat processing state (aria-busy) or readOnly as "disabled" for tests/UI expectations
-    return this.messageInput.readOnly || this.messageInput.getAttribute('aria-busy') === 'true';
-  }
 }

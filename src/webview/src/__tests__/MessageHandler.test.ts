@@ -17,6 +17,11 @@ const createMockVSCodeAPI = (): VSCodeAPI => ({
   setState: vi.fn(),
 });
 
+// Test helper to check if input is in busy/processing state
+function isInputBusy(input: HTMLTextAreaElement): boolean {
+  return input.getAttribute('aria-busy') === 'true';
+}
+
 describe('MessageHandler with DialogViewManager', () => {
   let vscode: VSCodeAPI;
   let messagesContainer: HTMLElement;
@@ -118,7 +123,7 @@ describe('MessageHandler with DialogViewManager', () => {
         dialogId: 'dialog-1',
       });
 
-      expect(uiController.isInputDisabled()).toBe(true);
+      expect(isInputBusy(messageInput)).toBe(true);
 
       // Start stream in inactive dialog
       dialogViewManager.getOrCreateView('dialog-2');
@@ -128,7 +133,7 @@ describe('MessageHandler with DialogViewManager', () => {
       });
 
       // UI should not update for inactive dialog
-      expect(uiController.isInputDisabled()).toBe(true); // Still from dialog-1
+      expect(isInputBusy(messageInput)).toBe(true); // Still from dialog-1
     });
 
     it('handles HISTORY_PREPEND_EVENTS for specific dialog', () => {
