@@ -113,7 +113,7 @@
     "@stylistic/eslint-plugin": "^5.5.0",
     "@types/node": "^24.10.0",
     "@types/vscode": "^1.100.0",
-    "@vitest/coverage-v8": "^4.0.3",
+    "@vitest/coverage-v8": "^4.0.7",
     "@vscode/vsce": "^3.6.2",
     "concurrently": "^9.2.1",
     "esbuild": "^0.25.12",
