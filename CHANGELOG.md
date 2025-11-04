@@ -1,3 +1,10 @@
+# [1.3.0](https://github.com/AgentSmithyAI/agentsmithy-vscode/compare/v1.2.1...v1.3.0) (2025-11-03)
+
+
+### Features
+
+* Checkpoints, rollbacks, edit transactions ([8ce35c1](https://github.com/AgentSmithyAI/agentsmithy-vscode/commit/8ce35c1f970d2f5989dc24a0b42f19b29f9f2012))
+
 ## [1.2.1](https://github.com/AgentSmithyAI/agentsmithy-vscode/compare/v1.2.0...v1.2.1) (2025-10-23)
 
 

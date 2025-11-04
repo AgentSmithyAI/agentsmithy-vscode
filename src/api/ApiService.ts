@@ -29,6 +29,40 @@ interface UpdateDialogResponse {
   updated_at: string;
 }
 
+export interface Checkpoint {
+  commit_id: string;
+  message: string;
+}
+
+interface ListCheckpointsResponse {
+  dialog_id: string;
+  checkpoints: Checkpoint[];
+  initial_checkpoint: string | null;
+}
+
+interface RestoreCheckpointResponse {
+  restored_to: string;
+  new_checkpoint: string;
+}
+
+export interface SessionStatus {
+  active_session: string | null;
+  session_ref: string | null;
+  has_unapproved: boolean;
+  last_approved_at: string | null;
+}
+
+interface ApproveSessionResponse {
+  approved_commit: string;
+  new_session: string;
+  commits_approved: number;
+}
+
+interface ResetToApprovedResponse {
+  reset_to: string;
+  new_session: string;
+}
+
 import {SSE_EVENT_TYPES as E} from '../constants';
 
 export interface HistoryEvent {
@@ -62,6 +96,11 @@ export class ApiService {
     dialogs: '/api/dialogs',
     dialog: (dialogId: string) => `/api/dialogs/${encodeURIComponent(dialogId)}`,
     history: (dialogId: string) => `/api/dialogs/${encodeURIComponent(dialogId)}/history`,
+    checkpoints: (dialogId: string) => `/api/dialogs/${encodeURIComponent(dialogId)}/checkpoints`,
+    restore: (dialogId: string) => `/api/dialogs/${encodeURIComponent(dialogId)}/restore`,
+    session: (dialogId: string) => `/api/dialogs/${encodeURIComponent(dialogId)}/session`,
+    approve: (dialogId: string) => `/api/dialogs/${encodeURIComponent(dialogId)}/approve`,
+    reset: (dialogId: string) => `/api/dialogs/${encodeURIComponent(dialogId)}/reset`,
   };
 
   constructor(private readonly baseUrl: string) {}
@@ -290,5 +329,140 @@ export class ApiService {
     if (!resp.ok) {
       throw new Error(`HTTP error! status: ${resp.status}`);
     }
+  }
+
+  /**
+   * List all checkpoints for a dialog
+   */
+  async listCheckpoints(dialogId: string): Promise<ListCheckpointsResponse> {
+    const url = `${this.baseUrl}${this.endpoints.checkpoints(dialogId)}`;
+    const resp = await fetch(url, {headers: {Accept: 'application/json'}});
+
+    if (!resp.ok) {
+      throw new Error(`HTTP error! status: ${resp.status}`);
+    }
+
+    const data: unknown = await resp.json();
+    if (!isRecord(data)) {
+      throw new Error('Malformed checkpoints response');
+    }
+
+    const checkpoints = Array.isArray(data.checkpoints) ? data.checkpoints : [];
+    const normalizedCheckpoints: Checkpoint[] = checkpoints
+      .filter((x): x is Record<string, unknown> => isRecord(x))
+      .map((x) => ({
+        commit_id: typeof x.commit_id === 'string' ? x.commit_id : '',
+        message: typeof x.message === 'string' ? x.message : '',
+      }));
+
+    return {
+      dialog_id: typeof data.dialog_id === 'string' ? data.dialog_id : dialogId,
+      checkpoints: normalizedCheckpoints,
+      initial_checkpoint: typeof data.initial_checkpoint === 'string' ? data.initial_checkpoint : null,
+    };
+  }
+
+  /**
+   * Restore dialog to a specific checkpoint
+   */
+  async restoreCheckpoint(dialogId: string, checkpointId: string): Promise<RestoreCheckpointResponse> {
+    const url = `${this.baseUrl}${this.endpoints.restore(dialogId)}`;
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({checkpoint_id: checkpointId}),
+    });
+
+    if (!resp.ok) {
+      throw new Error(`HTTP error! status: ${resp.status}`);
+    }
+
+    const data: unknown = await resp.json();
+    if (!isRecord(data)) {
+      throw new Error('Malformed restore response');
+    }
+
+    return {
+      restored_to: typeof data.restored_to === 'string' ? data.restored_to : '',
+      new_checkpoint: typeof data.new_checkpoint === 'string' ? data.new_checkpoint : '',
+    };
+  }
+
+  /**
+   * Get session status for a dialog
+   */
+  async getSessionStatus(dialogId: string): Promise<SessionStatus> {
+    const url = `${this.baseUrl}${this.endpoints.session(dialogId)}`;
+    const resp = await fetch(url, {headers: {Accept: 'application/json'}});
+
+    if (!resp.ok) {
+      throw new Error(`HTTP error! status: ${resp.status}`);
+    }
+
+    const data: unknown = await resp.json();
+    if (!isRecord(data)) {
+      throw new Error('Malformed session status response');
+    }
+
+    return {
+      active_session: typeof data.active_session === 'string' ? data.active_session : null,
+      session_ref: typeof data.session_ref === 'string' ? data.session_ref : null,
+      has_unapproved: Boolean(data.has_unapproved),
+      last_approved_at: typeof data.last_approved_at === 'string' ? data.last_approved_at : null,
+    };
+  }
+
+  /**
+   * Approve current session
+   */
+  async approveSession(dialogId: string): Promise<ApproveSessionResponse> {
+    const url = `${this.baseUrl}${this.endpoints.approve(dialogId)}`;
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: {Accept: 'application/json'},
+    });
+
+    if (!resp.ok) {
+      throw new Error(`HTTP error! status: ${resp.status}`);
+    }
+
+    const data: unknown = await resp.json();
+    if (!isRecord(data)) {
+      throw new Error('Malformed approve response');
+    }
+
+    return {
+      approved_commit: typeof data.approved_commit === 'string' ? data.approved_commit : '',
+      new_session: typeof data.new_session === 'string' ? data.new_session : '',
+      commits_approved: typeof data.commits_approved === 'number' ? data.commits_approved : 0,
+    };
+  }
+
+  /**
+   * Reset to approved state (discard current session)
+   */
+  async resetToApproved(dialogId: string): Promise<ResetToApprovedResponse> {
+    const url = `${this.baseUrl}${this.endpoints.reset(dialogId)}`;
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: {Accept: 'application/json'},
+    });
+
+    if (!resp.ok) {
+      throw new Error(`HTTP error! status: ${resp.status}`);
+    }
+
+    const data: unknown = await resp.json();
+    if (!isRecord(data)) {
+      throw new Error('Malformed reset response');
+    }
+
+    return {
+      reset_to: typeof data.reset_to === 'string' ? data.reset_to : '',
+      new_session: typeof data.new_session === 'string' ? data.new_session : '',
+    };
   }
 }

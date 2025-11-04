@@ -3,7 +3,7 @@
   "publisher": "agentsmithy",
   "displayName": "AgentSmithy VSCode",
   "description": "VSCode extension for AgentSmithy coding assistant",
-  "version": "1.2.1",
+  "version": "1.3.0",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
@@ -111,7 +111,7 @@
   "devDependencies": {
     "@eslint/js": "^9.13.0",
     "@stylistic/eslint-plugin": "^5.5.0",
-    "@types/node": "^24.9.1",
+    "@types/node": "^24.10.0",
     "@types/vscode": "^1.100.0",
     "@vitest/coverage-v8": "^4.0.3",
     "@vscode/vsce": "^3.6.2",
@@ -122,13 +122,14 @@
     "eslint-plugin-prefer-arrow-functions": "^3.5.2",
     "eslint-plugin-sonarjs": "^3.0.1",
     "eslint-plugin-unicorn": "^62.0.0",
-    "jsdom": "^27.0.1",
+    "jsdom": "^27.1.0",
     "prettier": "^3.3.3",
     "typescript": "^5.9.2",
     "typescript-eslint": "^8.46.2",
     "vitest": "^4.0.3"
   },
   "dependencies": {
+    "@vscode/codicons": "^0.0.36",
     "marked": "^16.3.0"
   }
 }

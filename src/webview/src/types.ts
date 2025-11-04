@@ -29,7 +29,11 @@ export type WebviewInMessage =
   | {type: typeof WEBVIEW_IN_MSG.RENAME_DIALOG; dialogId: string; title: string}
   | {type: typeof WEBVIEW_IN_MSG.DELETE_DIALOG; dialogId: string}
   | {type: typeof WEBVIEW_IN_MSG.DELETE_DIALOG_CONFIRM; dialogId: string; title: string}
-  | {type: typeof WEBVIEW_IN_MSG.LOAD_DIALOGS};
+  | {type: typeof WEBVIEW_IN_MSG.LOAD_DIALOGS}
+  | {type: typeof WEBVIEW_IN_MSG.RESTORE_CHECKPOINT; dialogId: string; checkpointId: string}
+  | {type: typeof WEBVIEW_IN_MSG.APPROVE_SESSION; dialogId: string}
+  | {type: typeof WEBVIEW_IN_MSG.RESET_TO_APPROVED; dialogId: string}
+  | {type: typeof WEBVIEW_IN_MSG.OPEN_SETTINGS};
 
 /**
  * Messages sent from extension to webview
@@ -38,6 +42,7 @@ export type WebviewOutMessage =
   | {
       type: typeof WEBVIEW_OUT_MSG.ADD_MESSAGE;
       message: {role: 'user' | 'assistant'; content: string};
+      checkpoint?: string;
       dialogId?: string;
     }
   | {type: typeof WEBVIEW_OUT_MSG.START_ASSISTANT_MESSAGE; dialogId?: string}
@@ -47,16 +52,16 @@ export type WebviewOutMessage =
   | {type: typeof WEBVIEW_OUT_MSG.APPEND_TO_REASONING; content: string; dialogId?: string}
   | {type: typeof WEBVIEW_OUT_MSG.END_REASONING; dialogId?: string}
   | {type: typeof WEBVIEW_OUT_MSG.SHOW_TOOL_CALL; tool?: string; args?: unknown; dialogId?: string}
-  | {type: typeof WEBVIEW_OUT_MSG.SHOW_FILE_EDIT; file: string; diff?: string; dialogId?: string}
+  | {type: typeof WEBVIEW_OUT_MSG.SHOW_FILE_EDIT; file: string; diff?: string; checkpoint?: string; dialogId?: string}
   | {type: typeof WEBVIEW_OUT_MSG.SHOW_ERROR; error: string; dialogId?: string}
   | {type: typeof WEBVIEW_OUT_MSG.SHOW_INFO; message: string; dialogId?: string}
   | {type: typeof WEBVIEW_OUT_MSG.END_STREAM; dialogId?: string}
-  | {type: typeof WEBVIEW_OUT_MSG.HISTORY_SET_LOAD_MORE_VISIBLE; visible: boolean; dialogId?: string}
-  | {type: typeof WEBVIEW_OUT_MSG.HISTORY_SET_LOAD_MORE_ENABLED; enabled: boolean; dialogId?: string}
+  | {type: typeof WEBVIEW_OUT_MSG.HISTORY_SET_CAN_LOAD; canLoad: boolean; dialogId?: string}
   | {type: typeof WEBVIEW_OUT_MSG.HISTORY_PREPEND_EVENTS; events: HistoryEvent[]; dialogId?: string}
   | {type: typeof WEBVIEW_OUT_MSG.HISTORY_REPLACE_ALL; events: HistoryEvent[]; dialogId?: string}
   | {type: typeof WEBVIEW_OUT_MSG.SCROLL_TO_BOTTOM; dialogId?: string}
   | {type: typeof WEBVIEW_OUT_MSG.GET_VISIBLE_FIRST_IDX}
+  | {type: typeof WEBVIEW_OUT_MSG.FOCUS_INPUT; force?: boolean}
   | {
       type: typeof WEBVIEW_OUT_MSG.DIALOGS_UPDATE;
       dialogs: Array<{id: string; title: string | null; updated_at: string}>;
@@ -64,7 +69,9 @@ export type WebviewOutMessage =
     }
   | {type: typeof WEBVIEW_OUT_MSG.DIALOGS_LOADING}
   | {type: typeof WEBVIEW_OUT_MSG.DIALOGS_ERROR; error: string}
-  | {type: typeof WEBVIEW_OUT_MSG.DIALOG_SWITCHED; dialogId: string | null; title: string};
+  | {type: typeof WEBVIEW_OUT_MSG.DIALOG_SWITCHED; dialogId: string | null; title: string}
+  | {type: typeof WEBVIEW_OUT_MSG.SESSION_STATUS_UPDATE; hasUnapproved: boolean}
+  | {type: typeof WEBVIEW_OUT_MSG.SESSION_OPERATION_CANCELLED};
 
 export interface HistoryEvent {
   type: 'user' | 'chat' | 'reasoning' | 'tool_call' | 'file_edit';

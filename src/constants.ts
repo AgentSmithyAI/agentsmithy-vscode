@@ -32,6 +32,10 @@ export const TIMEOUTS = {
   PROCESSING_SAFETY: 30000,
 } as const;
 
+export const PAGINATION = {
+  DEFAULT_PAGE_SIZE: 20,
+} as const;
+
 export const STATUS_FILE_PATH = '.agentsmithy/status.json';
 
 export const WELCOME_MESSAGE =
@@ -53,25 +57,32 @@ export const STATE_KEYS = {
 // HTML element IDs for webview
 export const DOM_IDS = {
   MESSAGES: 'messages',
-  LOAD_MORE_BTN: 'loadMoreBtn',
   WELCOME_PLACEHOLDER: 'welcomePlaceholder',
   MESSAGE_INPUT: 'messageInput',
   SEND_BUTTON: 'sendButton',
+  DIALOG_VIEWS: 'dialogViews',
+  SETTINGS_BTN: 'settingsBtn',
+  MODEL_SELECTOR_BTN: 'modelSelectorBtn',
+  MODEL_DROPDOWN: 'modelDropdown',
+  MODEL_SELECTOR_TEXT: 'modelSelectorText',
 } as const;
 
 // CSS class names
 export const CSS_CLASSES = {
   CHAT_CONTAINER: 'chat-container',
   MESSAGES: 'messages',
-  LOAD_MORE: 'load-more',
   WELCOME_PLACEHOLDER: 'welcome-placeholder',
   INPUT_CONTAINER: 'input-container',
   REASONING_TOGGLE: 'reasoning-toggle',
   FILE_LINK: 'file-link',
+  MODEL_ITEM: 'model-item',
+  MODEL_NAME: 'model-name',
+  RESTORE_CHECKPOINT_BTN: 'restore-checkpoint-btn',
 } as const;
 
 // SSE event types
 export const SSE_EVENT_TYPES = {
+  USER: 'user',
   CHAT_START: 'chat_start',
   CHAT: 'chat',
   CHAT_END: 'chat_end',
@@ -82,4 +93,8 @@ export const SSE_EVENT_TYPES = {
   FILE_EDIT: 'file_edit',
   ERROR: 'error',
   DONE: 'done',
+} as const;
+
+export const WEBVIEW_DEFAULTS = {
+  MODEL_ID: 'gpt5',
 } as const;

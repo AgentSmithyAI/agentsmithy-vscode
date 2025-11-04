@@ -1,6 +1,7 @@
 import {WEBVIEW_IN_MSG} from '../../shared/messages';
 import type {VSCodeAPI} from './types';
 import {escapeHtml} from './utils';
+import {LoadingButton} from './LoadingButton';
 
 interface Dialog {
   id: string;
@@ -16,18 +17,23 @@ export class DialogsUI {
   private currentDialogId: string | null = null;
   private isDropdownOpen = false;
 
+  // Optional callback hooks for host (index.ts)
+  public onCreateNewDialog?: () => void;
+
   private dialogTitleBtn: HTMLElement;
   private dialogTitleText: HTMLElement;
   private dialogDropdown: HTMLElement;
   private dialogsList: HTMLElement;
-  private newDialogBtn: HTMLElement;
+  private newDialogBtn: HTMLButtonElement;
+  private newDialogLoading: LoadingButton | null = null;
 
   constructor(private readonly vscode: VSCodeAPI) {
     this.dialogTitleBtn = document.getElementById('dialogTitleBtn')!;
     this.dialogTitleText = document.getElementById('dialogTitleText')!;
     this.dialogDropdown = document.getElementById('dialogDropdown')!;
     this.dialogsList = document.getElementById('dialogsList')!;
-    this.newDialogBtn = document.getElementById('newDialogBtn')!;
+    this.newDialogBtn = document.getElementById('newDialogBtn') as HTMLButtonElement;
+    this.newDialogLoading = new LoadingButton(this.newDialogBtn);
 
     this.setupEventListeners();
   }
@@ -36,11 +42,17 @@ export class DialogsUI {
     // Toggle dropdown
     this.dialogTitleBtn.addEventListener('click', (e) => {
       e.stopPropagation();
+      e.preventDefault();
       this.toggleDropdown();
     });
 
     // Create new dialog
     this.newDialogBtn.addEventListener('click', () => {
+      // Notify host so it can adjust focus behavior without guessing
+      try {
+        this.onCreateNewDialog?.();
+      } catch {}
+      this.newDialogLoading?.start();
       this.vscode.postMessage({type: WEBVIEW_IN_MSG.CREATE_DIALOG});
       this.closeDropdown();
     });
@@ -81,6 +93,7 @@ export class DialogsUI {
   updateDialogs(dialogs: Dialog[], currentDialogId: string | null): void {
     this.dialogs = dialogs;
     this.currentDialogId = currentDialogId;
+    this.newDialogLoading?.stop();
     this.renderDialogsList();
     this.updateCurrentDialogTitle();
   }
@@ -112,6 +125,7 @@ export class DialogsUI {
   updateCurrentDialog(dialogId: string | null, title: string): void {
     this.currentDialogId = dialogId;
     this.dialogTitleText.textContent = title || 'New dialog';
+    this.newDialogLoading?.stop();
     this.checkTitleOverflow();
     this.renderDialogsList();
   }
