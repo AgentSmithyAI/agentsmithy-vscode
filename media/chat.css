@@ -752,6 +752,10 @@ body {
   background-color: var(--vscode-sideBar-background);
   border-top: 1px solid var(--vscode-widget-border);
   border-bottom: 1px solid var(--vscode-widget-border);
+  overflow-y: auto;
+  /* initial max-height calculated in JS to 5 rows; allow CSS fallback */
+  max-height: 140px;
+  position: relative; /* for resizer positioning */
 }
 .session-changes-header {
   font-size: 12px;
@@ -777,6 +781,7 @@ body {
 .session-change-item .session-change-meta {
   font-size: 12px;
   color: var(--vscode-descriptionForeground);
+  justify-self: end;
 }
 /* Colorize additions/deletions like git decorations */
 .session-change-meta .added {
@@ -784,6 +789,31 @@ body {
 }
 .session-change-meta .removed {
   color: var(--vscode-gitDecoration-deletedResourceForeground);
+}
+
+/* Drag handle for changes panel (top) */
+.session-changes-resizer.top {
+  position: sticky;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 6px;
+  cursor: ns-resize;
+  background: linear-gradient(to top, transparent 0%, rgba(128, 128, 128, 0.15) 50%, transparent 100%);
+  z-index: 1;
+}
+
+.session-changes-resizer.top::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  top: 1px;
+  width: 24px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--vscode-descriptionForeground);
+  opacity: 0.7;
 }
 
 /* Session Actions Panel */

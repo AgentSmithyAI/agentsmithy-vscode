@@ -14,6 +14,7 @@ import {getErrorMessage} from './utils/typeGuards';
 type WebviewInMessage =
   | {type: typeof WEBVIEW_IN_MSG.SEND_MESSAGE; text?: string}
   | {type: typeof WEBVIEW_IN_MSG.OPEN_FILE; file?: string}
+  | {type: typeof WEBVIEW_IN_MSG.OPEN_FILE_DIFF; file?: string}
   | {type: typeof WEBVIEW_IN_MSG.STOP_PROCESSING}
   | {type: typeof WEBVIEW_IN_MSG.READY}
   | {type: typeof WEBVIEW_IN_MSG.LOAD_MORE_HISTORY}
@@ -84,6 +85,11 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
         type: WEBVIEW_OUT_MSG.HISTORY_SET_CAN_LOAD,
         canLoad,
       });
+    });
+
+    // Re-apply inline diff decorations when user switches active editor
+    vscode.window.onDidChangeActiveTextEditor((ed) => {
+      this._refreshInlineDiffDecorationsFor(ed ?? undefined);
     });
   }
 
@@ -186,6 +192,9 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
         case WEBVIEW_IN_MSG.OPEN_FILE:
           await this._handleOpenFile(message.file);
           break;
+        case WEBVIEW_IN_MSG.OPEN_FILE_DIFF:
+          await this._handleOpenFileDiff(message.file);
+          break;
         case WEBVIEW_IN_MSG.STOP_PROCESSING:
           this._stream.abort();
           break;
@@ -253,6 +262,199 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     }
   };
 
+  // In-memory content provider for virtual documents used in diffs
+  private _diffContentProvider?: vscode.TextDocumentContentProvider;
+  private _diffContentMap: Map<string, string> = new Map();
+  // Cache of last session changed files to resolve diffs from API (no Git dependency)
+  private _lastChangedFiles: ChangedFile[] = [];
+
+  private _ensureDiffProvider(): void {
+    if (this._diffContentProvider) {
+      return;
+    }
+    const scheme = 'agentsmithy-diff';
+    this._diffContentProvider = {
+      provideTextDocumentContent: (uri) => {
+        // Compose a stable key from authority + path to avoid encoding/decoding mismatches
+        const key = `${uri.authority}${uri.path}`;
+        return this._diffContentMap.get(key) ?? '';
+      },
+    };
+    vscode.workspace.registerTextDocumentContentProvider(scheme, this._diffContentProvider);
+  }
+
+  private _resolveAbsPath(p: string): string {
+    const workspaceRoot = this._configService.getWorkspaceRoot();
+    if (p.startsWith('/') || /^\w:\\/.test(p)) {
+      return p;
+    }
+    return workspaceRoot ? `${workspaceRoot}/${p}` : p;
+  }
+
+  // Decorations for inline diff highlighting
+  private _addedLineDecoration?: vscode.TextEditorDecorationType;
+  private _deletedVirtualDecoration?: vscode.TextEditorDecorationType;
+
+  private _ensureDiffDecorations(): void {
+    if (!this._addedLineDecoration) {
+      this._addedLineDecoration = vscode.window.createTextEditorDecorationType({
+        isWholeLine: true,
+        backgroundColor: new vscode.ThemeColor('diffEditor.insertedTextBackground'),
+        overviewRulerColor: new vscode.ThemeColor('diffEditor.insertedTextBackground'),
+      });
+    }
+    if (!this._deletedVirtualDecoration) {
+      this._deletedVirtualDecoration = vscode.window.createTextEditorDecorationType({
+        after: {
+          margin: '0 0 0 8px',
+        },
+        rangeBehavior: vscode.DecorationRangeBehavior.ClosedOpen,
+      });
+    }
+  }
+
+  private _clearInlineDiff(editor: vscode.TextEditor): void {
+    if (this._addedLineDecoration) {
+      editor.setDecorations(this._addedLineDecoration, []);
+    }
+    if (this._deletedVirtualDecoration) {
+      editor.setDecorations(this._deletedVirtualDecoration, []);
+    }
+  }
+
+  // Re-apply (or clear) inline diff decorations for the given editor
+  private _refreshInlineDiffDecorationsFor(editor?: vscode.TextEditor): void {
+    if (!editor) {
+      return;
+    }
+    // Try to find a changed file matching the active editor
+    const absPath = editor.document.fileName;
+    const match = this._lastChangedFiles.find((cf) => this._resolveAbsPath(cf.path) === absPath);
+
+    // Always clear first, then re-apply if we have a diff
+    this._clearInlineDiff(editor);
+    if (match?.diff) {
+      this._applyInlineDiff(editor, match.diff);
+    }
+  }
+
+  private _applyInlineDiff(editor: vscode.TextEditor, unifiedDiff: string): void {
+    this._ensureDiffDecorations();
+
+    const addedRanges: vscode.Range[] = [];
+    const deletedVirtuals: vscode.DecorationOptions[] = [];
+
+    const lines = unifiedDiff.split(/\r?\n/);
+
+    let i = 0;
+    // Use 0-based counters internally to avoid off-by-one mistakes
+    let newStart0 = 0; // 0-based start line for new file in current hunk
+
+    const hunkHeaderRe = /^@@\s+-\d+(?:,\d+)?\s+\+(\d+)(?:,(\d+))?\s+@@/;
+
+    while (i < lines.length) {
+      const header = hunkHeaderRe.exec(lines[i]);
+      if (header) {
+        // parse new file hunk start (header is 1-based -> convert to 0-based)
+        newStart0 = Math.max(0, parseInt(header[1], 10) - 1);
+        i++;
+        let newLine0 = newStart0;
+        // iterate hunk body until next header or EOF
+        while (i < lines.length && !lines[i].startsWith('@@')) {
+          const l = lines[i];
+
+          // Skip file headers and non-content markers within a hunk
+          if (l.startsWith('+++') || l.startsWith('---')) {
+            i++;
+            continue;
+          }
+          // Special marker: do not advance counters
+          if (l.startsWith('\\ No newline at end of file')) {
+            i++;
+            continue;
+          }
+
+          if (l.startsWith('+')) {
+            // Added line occupies a new line in the new file; decorate at the resulting visual line
+            // Shift by +1 to align with VS Code SCM gutter behavior
+            const lineIdx = Math.min(newLine0 + 1, Math.max(0, editor.document.lineCount - 1));
+            const lineRange = editor.document.lineAt(lineIdx).range;
+            addedRanges.push(lineRange);
+            newLine0++;
+            i++;
+            continue;
+          }
+          if (l.startsWith('-')) {
+            // Deleted line does not advance new file counter; anchor virtual text to the current visual line
+            const anchorIdx = Math.min(newLine0, Math.max(0, editor.document.lineCount - 1));
+            const range = new vscode.Range(anchorIdx, 0, anchorIdx, 0);
+            const text = l.substring(1);
+            deletedVirtuals.push({
+              range,
+              renderOptions: {
+                after: {
+                  contentText: `- ${text}`,
+                  color: new vscode.ThemeColor('diffEditor.removedTextForeground'),
+                  backgroundColor: new vscode.ThemeColor('diffEditor.removedTextBackground'),
+                  fontStyle: 'italic',
+                },
+              },
+            });
+            i++;
+            continue;
+          }
+          // Context line (starts with space) advances both old and new; here we keep only new
+          newLine0++;
+          i++;
+        }
+        continue;
+      }
+      i++;
+    }
+
+    // Apply decorations
+    if (this._addedLineDecoration) {
+      editor.setDecorations(this._addedLineDecoration, addedRanges);
+    }
+    if (this._deletedVirtualDecoration) {
+      editor.setDecorations(this._deletedVirtualDecoration, deletedVirtuals);
+    }
+
+    // Reveal first change if any
+    let firstRange: vscode.Range | undefined;
+    if (addedRanges.length > 0) {
+      firstRange = addedRanges[0];
+    } else if (deletedVirtuals.length > 0) {
+      firstRange = deletedVirtuals[0].range;
+    }
+    if (firstRange !== undefined) {
+      editor.revealRange(firstRange, vscode.TextEditorRevealType.InCenter);
+    }
+  }
+  private _handleOpenFileDiff = async (file?: string): Promise<void> => {
+    try {
+      if (typeof file !== 'string' || file.length === 0) {
+        throw new Error(ERROR_MESSAGES.INVALID_FILE_PATH);
+      }
+      const workspaceRoot = this._configService.getWorkspaceRoot();
+      if (workspaceRoot && !file.startsWith(`${workspaceRoot}/`) && file !== workspaceRoot) {
+        throw new Error('Opening files outside the workspace is not allowed');
+      }
+
+      const absFile = file;
+
+      // Open the real file
+      const uri = vscode.Uri.file(absFile);
+      const doc = await vscode.workspace.openTextDocument(uri);
+      const editor = await vscode.window.showTextDocument(doc, {preview: false});
+
+      // Apply decorations based on the latest session diff snapshot
+      this._refreshInlineDiffDecorationsFor(editor);
+    } catch (err: unknown) {
+      const msg = getErrorMessage(err, `Failed to open diff: ${String(file)}`);
+      vscode.window.showErrorMessage(msg);
+    }
+  };
   private _handleWebviewReady = async (): Promise<void> => {
     try {
       const dialogId = await this._historyService.resolveCurrentDialogId();
@@ -525,11 +727,16 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
   private _updateSessionStatus = async (dialogId: string): Promise<void> => {
     try {
       const status = await this._apiService.getSessionStatus(dialogId);
+      // Cache changed files so we can open diffs without Git
+      this._lastChangedFiles = status.changed_files;
       this._postMessage({
         type: WEBVIEW_OUT_MSG.SESSION_STATUS_UPDATE,
         hasUnapproved: status.has_unapproved,
         changedFiles: status.changed_files,
       });
+
+      // Refresh decorations for the currently active editor to reflect new session diffs
+      this._refreshInlineDiffDecorationsFor(vscode.window.activeTextEditor);
     } catch {
       // Silent fail - session status is not critical
     }

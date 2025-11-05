@@ -1,6 +1,7 @@
 export const WEBVIEW_IN_MSG = {
   SEND_MESSAGE: 'sendMessage',
   OPEN_FILE: 'openFile',
+  OPEN_FILE_DIFF: 'openFileDiff',
   STOP_PROCESSING: 'stopProcessing',
   READY: 'ready',
   LOAD_MORE_HISTORY: 'loadMoreHistory',

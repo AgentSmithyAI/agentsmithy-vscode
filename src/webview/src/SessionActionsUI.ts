@@ -20,6 +20,14 @@ export class SessionActionsUI {
   private canAct = false; // reflects hasUnapproved from backend
   private activeOp: 'approve' | 'reset' | null = null;
 
+  // Resize state
+  private resizeState: {dragging: boolean; startY: number; startHeight: number; origin: 'top' | 'bottom'} = {
+    dragging: false,
+    startY: 0,
+    startHeight: 0,
+    origin: 'bottom',
+  };
+
   constructor(private readonly vscode: VSCodeAPI) {
     this.panel = document.getElementById('sessionActions')!;
     this.approveBtn = document.getElementById('sessionApproveBtn') as HTMLButtonElement;
@@ -37,6 +45,10 @@ export class SessionActionsUI {
   private setupEventListeners(): void {
     this.approveBtn.addEventListener('click', () => this.onApprove());
     this.resetBtn.addEventListener('click', () => this.onReset());
+
+    // Global listeners for resize drag
+    document.addEventListener('mousemove', (e) => this.onResizeMove(e));
+    document.addEventListener('mouseup', () => this.onResizeEnd());
   }
 
   // Public API
@@ -164,7 +176,102 @@ export class SessionActionsUI {
       })
       .join('');
 
-    this.changesPanel.innerHTML = `<div class="session-changes-header">Unapproved changes</div>${itemsHtml}`;
+    // Place resizer at the top so user can stretch upwards
+    this.changesPanel.innerHTML = `
+      <div class="session-changes-resizer top" title="Drag to resize"></div>
+      <div class="session-changes-header">Unapproved changes</div>
+      ${itemsHtml}
+    `;
     this.changesPanel.classList.remove('hidden');
+
+    // Apply initial sizing or restore persisted height
+    this.applyInitialOrPersistedHeight();
+
+    // Delegate clicks to open file with diff
+    this.changesPanel.querySelectorAll('.file-link').forEach((a) => {
+      a.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const el = e.currentTarget as HTMLElement;
+        const file = el.getAttribute('data-file') || '';
+        if (file) {
+          this.vscode.postMessage({type: WEBVIEW_IN_MSG.OPEN_FILE_DIFF, file: decodeURIComponent(file)});
+        }
+      });
+    });
+
+    // Hook resizer drag
+    const topResizer = this.changesPanel.querySelector('.session-changes-resizer.top');
+    if (topResizer) {
+      topResizer.addEventListener('mousedown', (e) => this.onResizeStart(e, 'top'));
+    }
+  }
+
+  private applyInitialOrPersistedHeight(): void {
+    // Try to restore from VS Code webview state
+    let state: unknown;
+    try {
+      state = this.vscode.getState?.();
+    } catch {}
+    const saved = (state as any)?.sessionChangesHeight as number | undefined;
+
+    if (typeof saved === 'number' && saved > 40) {
+      // Explicit height overrides max-height
+      this.changesPanel.style.height = `${saved}px`;
+      this.changesPanel.style.maxHeight = 'none';
+      this.changesPanel.style.overflowY = 'auto';
+      return;
+    }
+
+    // No saved height — compute max height for 5 rows
+    try {
+      const header = this.changesPanel.querySelector('.session-changes-header') as HTMLElement | null;
+      const firstItem = this.changesPanel.querySelector('.session-change-item') as HTMLElement | null;
+      const headerH = header ? header.offsetHeight : 16;
+      const rowH = firstItem ? firstItem.offsetHeight : 22;
+      const targetMax = Math.max(40, headerH + rowH * 5);
+      this.changesPanel.style.removeProperty('height');
+      this.changesPanel.style.maxHeight = `${targetMax}px`;
+      this.changesPanel.style.overflowY = 'auto';
+    } catch {
+      // Fallback constant
+      this.changesPanel.style.maxHeight = '140px';
+      this.changesPanel.style.overflowY = 'auto';
+    }
+  }
+
+  private onResizeStart(e: MouseEvent, origin: 'top' | 'bottom' = 'bottom'): void {
+    e.preventDefault();
+    this.resizeState.dragging = true;
+    this.resizeState.startY = e.clientY;
+    this.resizeState.startHeight = this.changesPanel.getBoundingClientRect().height;
+    this.resizeState.origin = origin;
+    // Disable text selection while resizing
+    (document.body as HTMLElement).style.userSelect = 'none';
+  }
+
+  private onResizeMove(e: MouseEvent): void {
+    if (!this.resizeState.dragging) return;
+    const dy = e.clientY - this.resizeState.startY;
+    // If resizing from top, dragging up (negative dy) should increase height
+    const newH =
+      this.resizeState.origin === 'top' ? this.resizeState.startHeight - dy : this.resizeState.startHeight + dy;
+    const minH = 40; // at least header + ~1 row
+    const clamped = Math.max(minH, Math.min(window.innerHeight * 0.8, newH));
+    this.changesPanel.style.height = `${Math.round(clamped)}px`;
+    this.changesPanel.style.maxHeight = 'none';
+    this.changesPanel.style.overflowY = 'auto';
+  }
+
+  private onResizeEnd(): void {
+    if (!this.resizeState.dragging) return;
+    this.resizeState.dragging = false;
+    (document.body as HTMLElement).style.userSelect = '';
+    // Persist height
+    const rect = this.changesPanel.getBoundingClientRect();
+    try {
+      const prev = (this.vscode.getState?.() as any) || {};
+      this.vscode.setState?.({...prev, sessionChangesHeight: Math.round(rect.height)});
+    } catch {}
   }
 }
