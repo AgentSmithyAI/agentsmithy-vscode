@@ -762,6 +762,45 @@ body {
   fill: currentColor;
 }
 
+/* Session Changes Panel */
+.session-changes {
+  padding: 6px 8px;
+  background-color: var(--vscode-sideBar-background);
+  border-top: 1px solid var(--vscode-widget-border);
+  border-bottom: 1px solid var(--vscode-widget-border);
+}
+.session-changes-header {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--vscode-descriptionForeground);
+  margin-bottom: 4px;
+}
+.session-change-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+}
+.session-change-item .file-link {
+  color: var(--vscode-textLink-foreground);
+  text-decoration: none;
+}
+.session-change-item .file-link:hover {
+  text-decoration: underline;
+}
+.session-change-meta {
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
+  white-space: nowrap;
+}
+.session-change-meta .added {
+  color: var(--vscode-gitDecoration-addedResourceForeground);
+}
+.session-change-meta .removed {
+  color: var(--vscode-gitDecoration-deletedResourceForeground);
+}
+
 /* Session Actions Panel */
 .session-actions {
   display: flex;

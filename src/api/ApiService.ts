@@ -45,11 +45,22 @@ interface RestoreCheckpointResponse {
   new_checkpoint: string;
 }
 
+export type FileChangeStatus = 'added' | 'modified' | 'deleted';
+
+export interface ChangedFile {
+  path: string;
+  status: FileChangeStatus;
+  additions: number;
+  deletions: number;
+  diff: string | null;
+}
+
 export interface SessionStatus {
   active_session: string | null;
   session_ref: string | null;
   has_unapproved: boolean;
   last_approved_at: string | null;
+  changed_files: ChangedFile[];
 }
 
 interface ApproveSessionResponse {
@@ -407,11 +418,23 @@ export class ApiService {
       throw new Error('Malformed session status response');
     }
 
+    const changedRaw = Array.isArray(data.changed_files) ? (data.changed_files as unknown[]) : [];
+    const changed_files: ChangedFile[] = changedRaw
+      .filter((x): x is Record<string, unknown> => isRecord(x))
+      .map((x) => ({
+        path: typeof x.path === 'string' ? x.path : '',
+        status: (typeof x.status === 'string' ? x.status : 'modified') as FileChangeStatus,
+        additions: typeof x.additions === 'number' ? x.additions : 0,
+        deletions: typeof x.deletions === 'number' ? x.deletions : 0,
+        diff: typeof x.diff === 'string' ? x.diff : null,
+      }));
+
     return {
       active_session: typeof data.active_session === 'string' ? data.active_session : null,
       session_ref: typeof data.session_ref === 'string' ? data.session_ref : null,
       has_unapproved: Boolean(data.has_unapproved),
       last_approved_at: typeof data.last_approved_at === 'string' ? data.last_approved_at : null,
+      changed_files,
     };
   }
 

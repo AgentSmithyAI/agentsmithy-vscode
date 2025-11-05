@@ -746,6 +746,46 @@ body {
   fill: currentColor;
 }
 
+/* Session Changes Panel */
+.session-changes {
+  padding: 6px 8px;
+  background-color: var(--vscode-sideBar-background);
+  border-top: 1px solid var(--vscode-widget-border);
+  border-bottom: 1px solid var(--vscode-widget-border);
+}
+.session-changes-header {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--vscode-descriptionForeground);
+  margin-bottom: 4px;
+}
+.session-change-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px;
+  align-items: center;
+  padding: 2px 0;
+}
+.session-change-item .file-link {
+  color: var(--vscode-textLink-foreground);
+  text-decoration: none;
+  cursor: pointer;
+}
+.session-change-item .file-link:hover {
+  text-decoration: underline;
+}
+.session-change-item .session-change-meta {
+  font-size: 12px;
+  color: var(--vscode-descriptionForeground);
+}
+/* Colorize additions/deletions like git decorations */
+.session-change-meta .added {
+  color: var(--vscode-gitDecoration-addedResourceForeground);
+}
+.session-change-meta .removed {
+  color: var(--vscode-gitDecoration-deletedResourceForeground);
+}
+
 /* Session Actions Panel */
 .session-actions {
   display: flex;

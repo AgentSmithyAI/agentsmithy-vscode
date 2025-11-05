@@ -9,6 +9,7 @@ export class SessionActionsUI {
   private panel: HTMLElement;
   private approveBtn: HTMLButtonElement;
   private resetBtn: HTMLButtonElement;
+  private changesPanel: HTMLElement;
   private approveLoading: LoadingButton;
   private resetLoading: LoadingButton;
 
@@ -23,6 +24,7 @@ export class SessionActionsUI {
     this.panel = document.getElementById('sessionActions')!;
     this.approveBtn = document.getElementById('sessionApproveBtn') as HTMLButtonElement;
     this.resetBtn = document.getElementById('sessionResetBtn') as HTMLButtonElement;
+    this.changesPanel = document.getElementById('sessionChanges') as HTMLElement;
 
     this.approveLoading = new LoadingButton(this.approveBtn);
     this.resetLoading = new LoadingButton(this.resetBtn);
@@ -46,10 +48,14 @@ export class SessionActionsUI {
     this.updateUI();
   }
 
-  updateSessionStatus(hasUnapproved: boolean): void {
+  updateSessionStatus(
+    hasUnapproved: boolean,
+    changedFiles?: Array<{path: string; status: string; additions: number; deletions: number; diff: string | null}>,
+  ): void {
     // Backend completed an operation or provided state; update flags
     this.canAct = !!hasUnapproved;
     this.finishOperation();
+    this.renderChangedFiles(changedFiles);
     this.updateUI();
   }
 
@@ -124,5 +130,41 @@ export class SessionActionsUI {
     const disabled = !this.canAct || this.isProcessing;
     this.approveBtn.disabled = disabled;
     this.resetBtn.disabled = disabled;
+  }
+
+  private renderChangedFiles(
+    changed?: Array<{path: string; status: string; additions: number; deletions: number; diff: string | null}>,
+  ): void {
+    if (!this.changesPanel) return;
+    if (!changed || changed.length === 0) {
+      this.changesPanel.classList.add('hidden');
+      this.changesPanel.innerHTML = '';
+      return;
+    }
+
+    const itemsHtml = changed
+      .map((f) => {
+        const statsHtml =
+          f.status === 'modified'
+            ? `<span class="added">+${f.additions}</span> <span class="removed">−${f.deletions}</span>`
+            : f.status === 'added'
+              ? `<span class="added">added</span>`
+              : f.status === 'deleted'
+                ? `<span class="removed">deleted</span>`
+                : `<span>${f.status}</span>`;
+        const displayPath = f.path.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+        const root = (window as unknown as {WORKSPACE_ROOT?: string}).WORKSPACE_ROOT || '';
+        const absolutePath =
+          f.path.startsWith('/') || /^\w:\\/.test(f.path) ? f.path : root ? `${root}/${f.path}` : f.path;
+        const dataFile = encodeURIComponent(absolutePath);
+        return `<div class="session-change-item">
+          <a href="#" class="file-link" data-file="${dataFile}">${displayPath}</a>
+          <span class="session-change-meta">${statsHtml}</span>
+        </div>`;
+      })
+      .join('');
+
+    this.changesPanel.innerHTML = `<div class="session-changes-header">Unapproved changes</div>${itemsHtml}`;
+    this.changesPanel.classList.remove('hidden');
   }
 }

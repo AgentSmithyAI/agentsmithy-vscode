@@ -344,6 +344,11 @@ class ChatWebview {
         this.handleDialogSwitch(message.dialogId, message.title);
         break;
 
+      case WEBVIEW_OUT_MSG.SESSION_STATUS_UPDATE:
+        // Forward to SessionActionsUI for buttons and changes panel
+        this.sessionActionsUI.updateSessionStatus(message.hasUnapproved, message.changedFiles);
+        break;
+
       case WEBVIEW_OUT_MSG.GET_VISIBLE_FIRST_IDX: {
         const activeView = this.dialogViewManager.getActiveView();
         if (activeView) {

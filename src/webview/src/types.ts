@@ -70,7 +70,17 @@ export type WebviewOutMessage =
   | {type: typeof WEBVIEW_OUT_MSG.DIALOGS_LOADING}
   | {type: typeof WEBVIEW_OUT_MSG.DIALOGS_ERROR; error: string}
   | {type: typeof WEBVIEW_OUT_MSG.DIALOG_SWITCHED; dialogId: string | null; title: string}
-  | {type: typeof WEBVIEW_OUT_MSG.SESSION_STATUS_UPDATE; hasUnapproved: boolean}
+  | {
+      type: typeof WEBVIEW_OUT_MSG.SESSION_STATUS_UPDATE;
+      hasUnapproved: boolean;
+      changedFiles?: Array<{
+        path: string;
+        status: string;
+        additions: number;
+        deletions: number;
+        diff: string | null;
+      }>;
+    }
   | {type: typeof WEBVIEW_OUT_MSG.SESSION_OPERATION_CANCELLED};
 
 export interface HistoryEvent {

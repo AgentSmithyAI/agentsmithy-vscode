@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type {HistoryEvent} from './api/ApiService';
+import type {HistoryEvent, ChangedFile} from './api/ApiService';
 import {ApiService} from './api/ApiService';
 import {StreamService, type ChatContext} from './api/StreamService';
 import {CSS_CLASSES, DOM_IDS, SSE_EVENT_TYPES as E, ERROR_MESSAGES, ERROR_NAMES, VIEWS} from './constants';
@@ -60,7 +60,7 @@ type WebviewOutMessage =
   | {type: typeof WEBVIEW_OUT_MSG.DIALOGS_LOADING}
   | {type: typeof WEBVIEW_OUT_MSG.DIALOGS_ERROR; error: string}
   | {type: typeof WEBVIEW_OUT_MSG.DIALOG_SWITCHED; dialogId: string | null; title: string}
-  | {type: typeof WEBVIEW_OUT_MSG.SESSION_STATUS_UPDATE; hasUnapproved: boolean}
+  | {type: typeof WEBVIEW_OUT_MSG.SESSION_STATUS_UPDATE; hasUnapproved: boolean; changedFiles?: ChangedFile[]}
   | {type: typeof WEBVIEW_OUT_MSG.SESSION_OPERATION_CANCELLED}
   | {type: typeof WEBVIEW_OUT_MSG.FOCUS_INPUT};
 export class ChatWebviewProvider implements vscode.WebviewViewProvider {
@@ -528,6 +528,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
       this._postMessage({
         type: WEBVIEW_OUT_MSG.SESSION_STATUS_UPDATE,
         hasUnapproved: status.has_unapproved,
+        changedFiles: status.changed_files,
       });
     } catch {
       // Silent fail - session status is not critical
@@ -677,6 +678,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
                 Type a message to start...
             </div>
         </div>
+        <div class="session-changes hidden" id="sessionChanges"></div>
         <div class="session-actions" id="sessionActions">
             <button class="session-action-btn settings-btn" id="settingsBtn" title="Open Settings" aria-label="Open Settings">
                 <span class="codicon codicon-gear" aria-hidden="true"></span>
