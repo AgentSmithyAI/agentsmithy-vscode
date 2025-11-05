@@ -237,6 +237,13 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
       if (typeof file !== 'string' || file.length === 0) {
         throw new Error(ERROR_MESSAGES.INVALID_FILE_PATH);
       }
+
+      // Security: only allow opening files within the current workspace (if any)
+      const workspaceRoot = this._configService.getWorkspaceRoot();
+      if (workspaceRoot && !file.startsWith(`${workspaceRoot}/`) && file !== workspaceRoot) {
+        throw new Error('Opening files outside the workspace is not allowed');
+      }
+
       const uri = vscode.Uri.file(file);
       const doc = await vscode.workspace.openTextDocument(uri);
       await vscode.window.showTextDocument(doc, {preview: false});

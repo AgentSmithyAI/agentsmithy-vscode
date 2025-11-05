@@ -16,7 +16,11 @@
     "AI",
     "Chat"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "onView:agentsmithy.chatView",
+    "onCommand:agentsmithy.openChat",
+    "onCommand:agentsmithy.sendSelection"
+  ],
   "main": "./out/extension.js",
   "contributes": {
     "viewsContainers": {
