@@ -120,6 +120,14 @@ class ChatWebview {
       });
     }
 
+    // Diff view toggle button
+    const diffToggleBtn = document.getElementById(DOM_IDS.DIFF_VIEW_TOGGLE_BTN);
+    if (diffToggleBtn) {
+      diffToggleBtn.addEventListener('click', () => {
+        this.vscode.postMessage({type: WEBVIEW_IN_MSG.TOGGLE_DIFF_VIEW});
+      });
+    }
+
     // Model selector dropdown
     const modelSelectorBtn = document.getElementById(DOM_IDS.MODEL_SELECTOR_BTN);
     const modelDropdown = document.getElementById(DOM_IDS.MODEL_DROPDOWN);

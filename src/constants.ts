@@ -62,6 +62,7 @@ export const DOM_IDS = {
   SEND_BUTTON: 'sendButton',
   DIALOG_VIEWS: 'dialogViews',
   SETTINGS_BTN: 'settingsBtn',
+  DIFF_VIEW_TOGGLE_BTN: 'diffViewToggleBtn',
   MODEL_SELECTOR_BTN: 'modelSelectorBtn',
   MODEL_DROPDOWN: 'modelDropdown',
   MODEL_SELECTOR_TEXT: 'modelSelectorText',

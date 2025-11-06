@@ -16,6 +16,7 @@ export const WEBVIEW_IN_MSG = {
   APPROVE_SESSION: 'approveSession',
   RESET_TO_APPROVED: 'resetToApproved',
   OPEN_SETTINGS: 'openSettings',
+  TOGGLE_DIFF_VIEW: 'toggleDiffView',
 } as const;
 
 export type WebviewInMessageType = (typeof WEBVIEW_IN_MSG)[keyof typeof WEBVIEW_IN_MSG];

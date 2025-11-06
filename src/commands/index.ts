@@ -4,6 +4,7 @@ import {ICommand} from './BaseCommand';
 import {MoveToSecondarySidebarCommand} from './MoveToSecondarySidebarCommand';
 import {OpenChatCommand} from './OpenChatCommand';
 import {SendSelectionCommand} from './SendSelectionCommand';
+import {SetDiffViewModeCommand} from './SetDiffViewModeCommand';
 
 /**
  * Register all commands in the extension
@@ -13,6 +14,7 @@ export const registerCommands = (context: vscode.ExtensionContext, chatProvider:
     new OpenChatCommand(),
     new SendSelectionCommand(chatProvider),
     new MoveToSecondarySidebarCommand(),
+    new SetDiffViewModeCommand(),
   ];
 
   commands.forEach((cmd) => {

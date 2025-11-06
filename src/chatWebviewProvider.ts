@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import * as path from 'path';
 import type {HistoryEvent, ChangedFile} from './api/ApiService';
 import {ApiService} from './api/ApiService';
 import {StreamService, type ChatContext} from './api/StreamService';
@@ -28,7 +29,8 @@ type WebviewInMessage =
   | {type: typeof WEBVIEW_IN_MSG.RESTORE_CHECKPOINT; dialogId: string; checkpointId: string}
   | {type: typeof WEBVIEW_IN_MSG.APPROVE_SESSION; dialogId: string}
   | {type: typeof WEBVIEW_IN_MSG.RESET_TO_APPROVED; dialogId: string}
-  | {type: typeof WEBVIEW_IN_MSG.OPEN_SETTINGS};
+  | {type: typeof WEBVIEW_IN_MSG.OPEN_SETTINGS}
+  | {type: typeof WEBVIEW_IN_MSG.TOGGLE_DIFF_VIEW};
 // Messages sent from the extension to the webview
 type WebviewOutMessage =
   | {
@@ -237,9 +239,23 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
         case WEBVIEW_IN_MSG.OPEN_SETTINGS:
           await vscode.commands.executeCommand('workbench.action.openSettings', 'agentsmithy');
           break;
+        case WEBVIEW_IN_MSG.TOGGLE_DIFF_VIEW:
+          await this._handleToggleDiffView();
+          break;
       }
     });
   }
+
+  _handleToggleDiffView = async (): Promise<void> => {
+    try {
+      const config = vscode.workspace.getConfiguration('diffEditor');
+      const current = config.get<boolean>('renderSideBySide', true);
+      await config.update('renderSideBySide', !current, vscode.ConfigurationTarget.Global);
+      void vscode.window.showInformationMessage(`Diff view: ${!current ? 'two‑pane (side‑by‑side)' : 'inline'}`);
+    } catch {
+      // Non-fatal
+    }
+  };
 
   private _handleOpenFile = async (file?: string): Promise<void> => {
     try {
@@ -507,7 +523,22 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
       const leftUri = vscode.Uri.parse(`agentsmithy-diff://${leftKey}`);
       const rightUri = vscode.Uri.parse(`agentsmithy-diff://${rightKey}`);
 
-      const title = `Compare: ${file}`;
+      // Concise tab titles as requested
+      const basename = path.posix.basename(file.replace(/\\/g, '/'));
+      let title: string;
+      switch (cf.status) {
+        case 'modified':
+          title = `diff ${basename}`;
+          break;
+        case 'added':
+          title = `new ${basename}`;
+          break;
+        case 'deleted':
+          title = `delete ${basename}`;
+          break;
+        default:
+          title = `diff ${basename}`;
+      }
       await vscode.commands.executeCommand('vscode.diff', leftUri, rightUri, title);
     } catch (err: unknown) {
       const context = typeof file === 'string' ? `Failed to compare: ${file}` : 'Failed to compare';
@@ -949,6 +980,9 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
         <div class="session-actions" id="sessionActions">
             <button class="session-action-btn settings-btn" id="settingsBtn" title="Open Settings" aria-label="Open Settings">
                 <span class="codicon codicon-gear" aria-hidden="true"></span>
+            </button>
+            <button class="session-action-btn" id="diffViewToggleBtn" title="Toggle diff view (inline/two‑pane)" aria-label="Toggle diff view">
+                <span class="codicon codicon-diff" aria-hidden="true"></span>
             </button>
             <div class="model-selector">
                 <button class="model-selector-btn" id="modelSelectorBtn" aria-label="Select model">

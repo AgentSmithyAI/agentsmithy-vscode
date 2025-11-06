@@ -59,6 +59,12 @@
         "command": "agentsmithy.moveToSecondarySidebar",
         "title": "Move to Secondary Sidebar (Instructions)",
         "category": "AgentSmithy"
+      },
+      {
+        "command": "agentsmithy.setDiffViewMode",
+        "title": "Set Diff View Mode",
+        "category": "AgentSmithy",
+        "icon": "$(split-horizontal)"
       }
     ],
     "menus": {
@@ -76,6 +82,9 @@
         {
           "command": "agentsmithy.sendSelection",
           "when": "editorHasSelection"
+        },
+        {
+          "command": "agentsmithy.setDiffViewMode"
         }
       ]
     },
