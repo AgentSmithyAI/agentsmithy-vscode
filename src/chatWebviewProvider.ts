@@ -87,7 +87,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
       });
     });
 
-    // Re-apply inline diff decorations when user switches active editor
+    // Listen to editor switches to clear any inline decorations we might have left
     vscode.window.onDidChangeActiveTextEditor((ed) => {
       this._refreshInlineDiffDecorationsFor(ed ?? undefined);
     });
@@ -249,7 +249,12 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
 
       // Security: only allow opening files within the current workspace (if any)
       const workspaceRoot = this._configService.getWorkspaceRoot();
-      if (workspaceRoot && !file.startsWith(`${workspaceRoot}/`) && file !== workspaceRoot) {
+      if (
+        typeof workspaceRoot === 'string' &&
+        workspaceRoot.length > 0 &&
+        !file.startsWith(`${workspaceRoot}/`) &&
+        file !== workspaceRoot
+      ) {
         throw new Error('Opening files outside the workspace is not allowed');
       }
 
@@ -257,8 +262,9 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
       const doc = await vscode.workspace.openTextDocument(uri);
       await vscode.window.showTextDocument(doc, {preview: false});
     } catch (err: unknown) {
-      const msg = getErrorMessage(err, `Failed to open file: ${String(file)}`);
-      vscode.window.showErrorMessage(msg);
+      const context = typeof file === 'string' ? `Failed to open file: ${file}` : 'Failed to open file';
+      const msg = getErrorMessage(err, context);
+      void vscode.window.showErrorMessage(msg);
     }
   };
 
@@ -275,8 +281,9 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     const scheme = 'agentsmithy-diff';
     this._diffContentProvider = {
       provideTextDocumentContent: (uri) => {
-        // Compose a stable key from authority + path to avoid encoding/decoding mismatches
-        const key = `${uri.authority}${uri.path}`;
+        // Compose a stable key from authority + path + query to match how we store entries
+        // Note: VS Code exposes the query separately from the path, but our map key may include it (e.g., ?v=ts)
+        const key = `${uri.authority}${uri.path}${uri.query ? `?${uri.query}` : ''}`;
         return this._diffContentMap.get(key) ?? '';
       },
     };
@@ -327,15 +334,8 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     if (!editor) {
       return;
     }
-    // Try to find a changed file matching the active editor
-    const absPath = editor.document.fileName;
-    const match = this._lastChangedFiles.find((cf) => this._resolveAbsPath(cf.path) === absPath);
-
-    // Always clear first, then re-apply if we have a diff
+    // Only clear any previous inline decorations; do not auto-apply
     this._clearInlineDiff(editor);
-    if (match?.diff) {
-      this._applyInlineDiff(editor, match.diff);
-    }
   }
 
   private _applyInlineDiff(editor: vscode.TextEditor, unifiedDiff: string): void {
@@ -437,22 +437,82 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
         throw new Error(ERROR_MESSAGES.INVALID_FILE_PATH);
       }
       const workspaceRoot = this._configService.getWorkspaceRoot();
-      if (workspaceRoot && !file.startsWith(`${workspaceRoot}/`) && file !== workspaceRoot) {
+      if (workspaceRoot?.length && !file.startsWith(`${workspaceRoot}/`) && file !== workspaceRoot) {
         throw new Error('Opening files outside the workspace is not allowed');
       }
 
-      const absFile = file;
+      // Find changed file meta (to get diff/status)
+      const cf = this._lastChangedFiles.find((x) => this._resolveAbsPath(x.path) === file || x.path === file);
 
-      // Open the real file
-      const uri = vscode.Uri.file(absFile);
-      const doc = await vscode.workspace.openTextDocument(uri);
-      const editor = await vscode.window.showTextDocument(doc, {preview: false});
+      // Ensure provider once
+      this._ensureDiffProvider();
 
-      // Apply decorations based on the latest session diff snapshot
-      this._refreshInlineDiffDecorationsFor(editor);
+      // Prepare left/right contents
+      let leftContent = '';
+      let rightContent = '';
+
+      if (!cf) {
+        throw new Error('Unknown changed file');
+      }
+
+      // New server contract: for modified files we may get base_content + diff; for added/deleted may lack diff/base.
+      if (cf.is_binary || cf.is_too_large) {
+        throw new Error('Cannot compare: file is binary or too large');
+      }
+      switch (cf.status) {
+        case 'modified': {
+          // Stop using unified diffs entirely. Compare full base blob from API vs current disk content.
+          leftContent = typeof cf.base_content === 'string' ? cf.base_content : '';
+          // Read current file from disk; if missing, fallback to empty
+          try {
+            const uri = vscode.Uri.file(file);
+            const doc = await vscode.workspace.openTextDocument(uri);
+            rightContent = doc.getText();
+          } catch {
+            rightContent = '';
+          }
+          break;
+        }
+        case 'added': {
+          leftContent = '';
+          // Try to read current file from disk to show full blob; if fails, leave empty
+          try {
+            const uri = vscode.Uri.file(file);
+            const doc = await vscode.workspace.openTextDocument(uri);
+            rightContent = doc.getText();
+          } catch {
+            rightContent = '';
+          }
+          break;
+        }
+        case 'deleted': {
+          rightContent = '';
+          leftContent = typeof cf.base_content === 'string' ? cf.base_content : '';
+          break;
+        }
+        default: {
+          const _never: never = cf.status;
+          void _never;
+          throw new Error('Unsupported status');
+        }
+      }
+
+      // Unique keys for provider map
+      const stamp = Date.now();
+      const leftKey = `left/${file}?v=${stamp}`;
+      const rightKey = `right/${file}?v=${stamp}`;
+      this._diffContentMap.set(leftKey, leftContent);
+      this._diffContentMap.set(rightKey, rightContent);
+
+      const leftUri = vscode.Uri.parse(`agentsmithy-diff://${leftKey}`);
+      const rightUri = vscode.Uri.parse(`agentsmithy-diff://${rightKey}`);
+
+      const title = `Compare: ${file}`;
+      await vscode.commands.executeCommand('vscode.diff', leftUri, rightUri, title);
     } catch (err: unknown) {
-      const msg = getErrorMessage(err, `Failed to open diff: ${String(file)}`);
-      vscode.window.showErrorMessage(msg);
+      const context = typeof file === 'string' ? `Failed to compare: ${file}` : 'Failed to compare';
+      const msg = getErrorMessage(err, context);
+      void vscode.window.showErrorMessage(msg);
     }
   };
   private _handleWebviewReady = async (): Promise<void> => {
@@ -575,7 +635,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
       if (!hasReceivedEvents) {
         eventHandlers.handleNoResponse();
       }
-    } catch (error) {
+    } catch (error: unknown) {
       if (error instanceof Error && error.name === ERROR_NAMES.ABORT) {
         eventHandlers.handleAbort();
       } else if (error instanceof Error) {
@@ -735,7 +795,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
         changedFiles: status.changed_files,
       });
 
-      // Refresh decorations for the currently active editor to reflect new session diffs
+      // Do not auto-apply inline decorations; only clear if any present on current editor
       this._refreshInlineDiffDecorationsFor(vscode.window.activeTextEditor);
     } catch {
       // Silent fail - session status is not critical

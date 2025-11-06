@@ -35,6 +35,7 @@ describe('ApiService - Session status and approve', () => {
         session_ref: 'refs/heads/feature-x',
         has_unapproved: true,
         last_approved_at: '2024-01-01T00:00:00Z',
+        changed_files: [],
       });
     });
 

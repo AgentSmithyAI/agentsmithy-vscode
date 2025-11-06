@@ -53,6 +53,9 @@ export interface ChangedFile {
   additions: number;
   deletions: number;
   diff: string | null;
+  base_content: string | null;
+  is_binary: boolean;
+  is_too_large: boolean;
 }
 
 export interface SessionStatus {
@@ -427,6 +430,9 @@ export class ApiService {
         additions: typeof x.additions === 'number' ? x.additions : 0,
         deletions: typeof x.deletions === 'number' ? x.deletions : 0,
         diff: typeof x.diff === 'string' ? x.diff : null,
+        base_content: typeof x.base_content === 'string' ? x.base_content : null,
+        is_binary: Boolean((x as any).is_binary),
+        is_too_large: Boolean((x as any).is_too_large),
       }));
 
     return {

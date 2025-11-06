@@ -62,7 +62,16 @@ export class SessionActionsUI {
 
   updateSessionStatus(
     hasUnapproved: boolean,
-    changedFiles?: Array<{path: string; status: string; additions: number; deletions: number; diff: string | null}>,
+    changedFiles?: Array<{
+      path: string;
+      status: string;
+      additions: number;
+      deletions: number;
+      diff: string | null;
+      base_content?: string | null;
+      is_binary?: boolean;
+      is_too_large?: boolean;
+    }>,
   ): void {
     // Backend completed an operation or provided state; update flags
     this.canAct = !!hasUnapproved;
@@ -145,7 +154,16 @@ export class SessionActionsUI {
   }
 
   private renderChangedFiles(
-    changed?: Array<{path: string; status: string; additions: number; deletions: number; diff: string | null}>,
+    changed?: Array<{
+      path: string;
+      status: string;
+      additions: number;
+      deletions: number;
+      diff: string | null;
+      base_content?: string | null;
+      is_binary?: boolean;
+      is_too_large?: boolean;
+    }>,
   ): void {
     if (!this.changesPanel) return;
     if (!changed || changed.length === 0) {
@@ -160,9 +178,9 @@ export class SessionActionsUI {
           f.status === 'modified'
             ? `<span class="added">+${f.additions}</span> <span class="removed">−${f.deletions}</span>`
             : f.status === 'added'
-              ? `<span class="added">added</span>`
+              ? '<span class="added">added</span>'
               : f.status === 'deleted'
-                ? `<span class="removed">deleted</span>`
+                ? '<span class="removed">deleted</span>'
                 : `<span>${f.status}</span>`;
         const displayPath = f.path.replace(/&/g, '&amp;').replace(/</g, '&lt;');
         const root = (window as unknown as {WORKSPACE_ROOT?: string}).WORKSPACE_ROOT || '';

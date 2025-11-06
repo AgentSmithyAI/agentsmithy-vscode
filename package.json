@@ -115,6 +115,7 @@
   "devDependencies": {
     "@eslint/js": "^9.39.1",
     "@stylistic/eslint-plugin": "^5.5.0",
+    "@types/diff": "^7.0.2",
     "@types/node": "^24.10.0",
     "@types/vscode": "^1.100.0",
     "@vitest/coverage-v8": "^4.0.7",
@@ -134,6 +135,7 @@
   },
   "dependencies": {
     "@vscode/codicons": "^0.0.36",
+    "diff": "^6.0.0",
     "marked": "^16.3.0"
   }
 }

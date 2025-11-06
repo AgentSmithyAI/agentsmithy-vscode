@@ -20,6 +20,7 @@ export interface VSCodeAPI {
 export type WebviewInMessage =
   | {type: typeof WEBVIEW_IN_MSG.SEND_MESSAGE; text?: string}
   | {type: typeof WEBVIEW_IN_MSG.OPEN_FILE; file?: string}
+  | {type: typeof WEBVIEW_IN_MSG.OPEN_FILE_DIFF; file?: string}
   | {type: typeof WEBVIEW_IN_MSG.STOP_PROCESSING}
   | {type: typeof WEBVIEW_IN_MSG.READY}
   | {type: typeof WEBVIEW_IN_MSG.LOAD_MORE_HISTORY}
@@ -79,6 +80,9 @@ export type WebviewOutMessage =
         additions: number;
         deletions: number;
         diff: string | null;
+        base_content?: string | null;
+        is_binary?: boolean;
+        is_too_large?: boolean;
       }>;
     }
   | {type: typeof WEBVIEW_OUT_MSG.SESSION_OPERATION_CANCELLED};
