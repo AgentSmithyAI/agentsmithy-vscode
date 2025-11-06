@@ -748,26 +748,51 @@ body {
 
 /* Session Changes Panel */
 .session-changes {
-  padding: 6px 8px;
+  padding: 0; /* header/body define their own padding */
   background-color: var(--vscode-sideBar-background);
   border-top: 1px solid var(--vscode-widget-border);
   border-bottom: 1px solid var(--vscode-widget-border);
-  overflow-y: auto;
-  /* initial max-height calculated in JS to 5 rows; allow CSS fallback */
-  max-height: 140px;
-  position: relative; /* for resizer positioning */
+  /* Container has a fixed height; only the body scrolls */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden; /* prevent header from scrolling */
+  max-height: 40vh; /* limit overall panel height by default */
+  flex: 0 0 auto; /* keep own height and not stretch */
 }
 .session-changes-header {
+  /* Non-sticky header that stays at the top of the panel */
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 6px 8px; /* header padding */
+  background-color: var(--vscode-sideBar-background);
+  border-bottom: 1px solid var(--vscode-widget-border);
+  flex: 0 0 auto;
   font-size: 12px;
   font-weight: 600;
   color: var(--vscode-descriptionForeground);
-  margin-bottom: 4px;
+}
+.session-changes-body {
+  /* Body is the only scrollable area */
+  flex: 1 1 auto;
+  min-height: 0; /* allow flex child to shrink for scrolling */
+  overflow: auto;
+  padding: 6px 8px; /* content padding */
+}
+.session-changes__actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
 }
 .session-change-item {
   display: grid;
   grid-template-columns: 1fr auto;
-  gap: 6px;
   align-items: center;
+  gap: 6px;
   padding: 2px 0;
 }
 .session-change-item .file-link {
@@ -778,10 +803,10 @@ body {
 .session-change-item .file-link:hover {
   text-decoration: underline;
 }
-.session-change-item .session-change-meta {
+.session-change-meta {
   font-size: 12px;
   color: var(--vscode-descriptionForeground);
-  justify-self: end;
+  white-space: nowrap;
 }
 /* Colorize additions/deletions like git decorations */
 .session-change-meta .added {
@@ -791,12 +816,9 @@ body {
   color: var(--vscode-gitDecoration-deletedResourceForeground);
 }
 
-/* Drag handle for changes panel (top) */
+/* Drag handle for changes panel (below header) */
 .session-changes-resizer.top {
-  position: sticky;
-  top: 0;
-  left: 0;
-  right: 0;
+  position: relative; /* not sticky */
   height: 6px;
   cursor: ns-resize;
   background: linear-gradient(to top, transparent 0%, rgba(128, 128, 128, 0.15) 50%, transparent 100%);

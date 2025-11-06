@@ -251,9 +251,8 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
       const config = vscode.workspace.getConfiguration('diffEditor');
       const current = config.get<boolean>('renderSideBySide', true);
       await config.update('renderSideBySide', !current, vscode.ConfigurationTarget.Global);
-      void vscode.window.showInformationMessage(`Diff view: ${!current ? 'two‑pane (side‑by‑side)' : 'inline'}`);
     } catch {
-      // Non-fatal
+      // swallow
     }
   };
 
@@ -981,9 +980,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
             <button class="session-action-btn settings-btn" id="settingsBtn" title="Open Settings" aria-label="Open Settings">
                 <span class="codicon codicon-gear" aria-hidden="true"></span>
             </button>
-            <button class="session-action-btn" id="diffViewToggleBtn" title="Toggle diff view (inline/two‑pane)" aria-label="Toggle diff view">
-                <span class="codicon codicon-diff" aria-hidden="true"></span>
-            </button>
+
             <div class="model-selector">
                 <button class="model-selector-btn" id="modelSelectorBtn" aria-label="Select model">
                     <span class="model-selector-text" id="modelSelectorText">GPT-5</span>

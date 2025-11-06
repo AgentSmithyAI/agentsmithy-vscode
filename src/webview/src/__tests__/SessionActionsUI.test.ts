@@ -18,6 +18,12 @@ describe('SessionActionsUI', () => {
     panel.id = 'sessionActions';
     document.body.appendChild(panel);
 
+    // Changes panel container
+    const changes = document.createElement('div');
+    changes.id = 'sessionChanges';
+    changes.className = 'session-changes';
+    document.body.appendChild(changes);
+
     approveBtn = document.createElement('button');
     approveBtn.id = 'sessionApproveBtn';
     document.body.appendChild(approveBtn);
@@ -35,7 +41,6 @@ describe('SessionActionsUI', () => {
 
     sessionActionsUI = new SessionActionsUI(mockVscode);
   });
-
   afterEach(() => {
     document.body.innerHTML = '';
   });
@@ -185,6 +190,44 @@ describe('SessionActionsUI', () => {
         type: WEBVIEW_IN_MSG.RESET_TO_APPROVED,
         dialogId,
       });
+    });
+  });
+
+  describe('changed files panel visibility', () => {
+    it('collapses and frees height when there are no changes', () => {
+      sessionActionsUI.setCurrentDialogId('d1');
+      // First show with one change to ensure panel becomes visible
+      sessionActionsUI.updateSessionStatus(true, [
+        {path: 'a.txt', status: 'added', additions: 0, deletions: 0, diff: null},
+      ] as any);
+      const panelEl = document.getElementById('sessionChanges') as HTMLElement;
+      expect(panelEl).toBeTruthy();
+      expect(panelEl.classList.contains('hidden')).toBe(false);
+      expect(panelEl.style.display).not.toBe('none');
+      // Now update with no changes -> should fully hide and clear sizing
+      sessionActionsUI.updateSessionStatus(false, []);
+      expect(panelEl.classList.contains('hidden')).toBe(true);
+      expect(panelEl.style.display).toBe('none');
+      expect(panelEl.style.height).toBe('');
+      expect(panelEl.style.maxHeight).toBe('');
+      expect(panelEl.innerHTML).toBe('');
+    });
+
+    it('shows panel again when changes appear after being empty', () => {
+      sessionActionsUI.setCurrentDialogId('d1');
+      sessionActionsUI.updateSessionStatus(false, []);
+      const panelEl = document.getElementById('sessionChanges') as HTMLElement;
+      expect(panelEl.classList.contains('hidden')).toBe(true);
+      expect(panelEl.style.display).toBe('none');
+      // Then changes arrive
+      sessionActionsUI.updateSessionStatus(true, [
+        {path: 'b.txt', status: 'modified', additions: 2, deletions: 1, diff: null},
+      ] as any);
+      expect(panelEl.classList.contains('hidden')).toBe(false);
+      expect(panelEl.style.display).toBe('');
+      // header/body rendered
+      expect(panelEl.querySelector('.session-changes-header')).toBeTruthy();
+      expect(panelEl.querySelector('.session-changes-body')).toBeTruthy();
     });
   });
 

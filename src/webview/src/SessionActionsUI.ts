@@ -167,7 +167,13 @@ export class SessionActionsUI {
   ): void {
     if (!this.changesPanel) return;
     if (!changed || changed.length === 0) {
+      // Fully collapse the panel when no changes:
+      // - hide via display none (in addition to .hidden for safety)
+      // - remove any previously persisted inline sizes
       this.changesPanel.classList.add('hidden');
+      this.changesPanel.style.display = 'none';
+      this.changesPanel.style.removeProperty('height');
+      this.changesPanel.style.removeProperty('maxHeight');
       this.changesPanel.innerHTML = '';
       return;
     }
@@ -196,11 +202,22 @@ export class SessionActionsUI {
 
     // Place resizer at the top so user can stretch upwards
     this.changesPanel.innerHTML = `
+      <div class="session-changes-header">
+        <div class="session-changes__title">Pending changes</div>
+        <div class="session-changes__actions">
+          <button class="session-action-btn" id="diffViewToggleBtn" title="Toggle diff view (inline/two‑pane)" aria-label="Toggle diff view">
+            <span class="codicon codicon-diff" aria-hidden="true"></span>
+          </button>
+        </div>
+      </div>
       <div class="session-changes-resizer top" title="Drag to resize"></div>
-      <div class="session-changes-header">Unapproved changes</div>
-      ${itemsHtml}
+      <div class="session-changes-body">
+        ${itemsHtml}
+      </div>
     `;
+    // Make sure the container is visible and uses flex layout as defined in CSS
     this.changesPanel.classList.remove('hidden');
+    this.changesPanel.style.display = '';
 
     // Apply initial sizing or restore persisted height
     this.applyInitialOrPersistedHeight();
@@ -223,9 +240,20 @@ export class SessionActionsUI {
     if (topResizer) {
       topResizer.addEventListener('mousedown', (e) => this.onResizeStart(e, 'top'));
     }
+
+    // Wire diff view toggle (button is rendered with the header)
+    const diffBtn = this.changesPanel.querySelector('#diffViewToggleBtn') as HTMLButtonElement | null;
+    if (diffBtn) {
+      diffBtn.addEventListener('click', () => {
+        this.vscode.postMessage({type: WEBVIEW_IN_MSG.TOGGLE_DIFF_VIEW});
+      });
+    }
   }
 
   private applyInitialOrPersistedHeight(): void {
+    const panelEl = this.changesPanel;
+    if (!panelEl) return;
+
     // Try to restore from VS Code webview state
     let state: unknown;
     try {
@@ -234,35 +262,35 @@ export class SessionActionsUI {
     const saved = (state as any)?.sessionChangesHeight as number | undefined;
 
     if (typeof saved === 'number' && saved > 40) {
-      // Explicit height overrides max-height
-      this.changesPanel.style.height = `${saved}px`;
-      this.changesPanel.style.maxHeight = 'none';
-      this.changesPanel.style.overflowY = 'auto';
+      // Explicit height overrides max-height on the container so it resizes
+      panelEl.style.height = `${saved}px`;
+      panelEl.style.maxHeight = 'none';
       return;
     }
 
-    // No saved height — compute max height for 5 rows
+    // No saved height — compute max height for ~5 rows
     try {
-      const header = this.changesPanel.querySelector('.session-changes-header') as HTMLElement | null;
-      const firstItem = this.changesPanel.querySelector('.session-change-item') as HTMLElement | null;
+      const header = panelEl.querySelector('.session-changes-header') as HTMLElement | null;
+      const firstItem = panelEl.querySelector('.session-change-item') as HTMLElement | null;
       const headerH = header ? header.offsetHeight : 16;
       const rowH = firstItem ? firstItem.offsetHeight : 22;
       const targetMax = Math.max(40, headerH + rowH * 5);
-      this.changesPanel.style.removeProperty('height');
-      this.changesPanel.style.maxHeight = `${targetMax}px`;
-      this.changesPanel.style.overflowY = 'auto';
+      panelEl.style.removeProperty('height');
+      panelEl.style.maxHeight = `${targetMax}px`;
     } catch {
       // Fallback constant
-      this.changesPanel.style.maxHeight = '140px';
-      this.changesPanel.style.overflowY = 'auto';
+      panelEl.style.maxHeight = '140px';
     }
   }
 
   private onResizeStart(e: MouseEvent, origin: 'top' | 'bottom' = 'bottom'): void {
     e.preventDefault();
+    const panelEl = this.changesPanel;
+    if (!panelEl) return;
+
     this.resizeState.dragging = true;
     this.resizeState.startY = e.clientY;
-    this.resizeState.startHeight = this.changesPanel.getBoundingClientRect().height;
+    this.resizeState.startHeight = panelEl.getBoundingClientRect().height;
     this.resizeState.origin = origin;
     // Disable text selection while resizing
     (document.body as HTMLElement).style.userSelect = 'none';
@@ -270,23 +298,29 @@ export class SessionActionsUI {
 
   private onResizeMove(e: MouseEvent): void {
     if (!this.resizeState.dragging) return;
+    const panelEl = this.changesPanel;
+    if (!panelEl) return;
+
     const dy = e.clientY - this.resizeState.startY;
     // If resizing from top, dragging up (negative dy) should increase height
     const newH =
       this.resizeState.origin === 'top' ? this.resizeState.startHeight - dy : this.resizeState.startHeight + dy;
     const minH = 40; // at least header + ~1 row
     const clamped = Math.max(minH, Math.min(window.innerHeight * 0.8, newH));
-    this.changesPanel.style.height = `${Math.round(clamped)}px`;
-    this.changesPanel.style.maxHeight = 'none';
-    this.changesPanel.style.overflowY = 'auto';
+    panelEl.style.height = `${Math.round(clamped)}px`;
+    panelEl.style.maxHeight = 'none';
   }
 
   private onResizeEnd(): void {
     if (!this.resizeState.dragging) return;
     this.resizeState.dragging = false;
     (document.body as HTMLElement).style.userSelect = '';
+
+    const panelEl = this.changesPanel;
+    if (!panelEl) return;
+
     // Persist height
-    const rect = this.changesPanel.getBoundingClientRect();
+    const rect = panelEl.getBoundingClientRect();
     try {
       const prev = (this.vscode.getState?.() as any) || {};
       this.vscode.setState?.({...prev, sessionChangesHeight: Math.round(rect.height)});

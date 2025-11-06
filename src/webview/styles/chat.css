@@ -764,16 +764,52 @@ body {
 
 /* Session Changes Panel */
 .session-changes {
-  padding: 6px 8px;
+  padding: 0; /* header/body define their own padding */
   background-color: var(--vscode-sideBar-background);
   border-top: 1px solid var(--vscode-widget-border);
   border-bottom: 1px solid var(--vscode-widget-border);
+  /* Container has a fixed height; only the body scrolls */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden; /* prevent header from scrolling */
+  max-height: 40vh; /* limit overall panel height */
+  flex: 0 0 auto; /* keep own height and not stretch */
 }
 .session-changes-header {
+  /* Non-sticky header that stays at the top of the panel */
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 6px 8px; /* header padding */
+  background-color: var(--vscode-sideBar-background);
+  border-bottom: 1px solid var(--vscode-widget-border);
+  flex: 0 0 auto;
+}
+.session-changes-body {
+  /* Body is the only scrollable area */
+  flex: 1 1 auto;
+  min-height: 0; /* allow flex child to shrink for scrolling */
+  overflow: auto;
+  padding: 6px 8px; /* content padding */
+}
+.session-changes__title {
   font-size: 12px;
   font-weight: 600;
   color: var(--vscode-descriptionForeground);
-  margin-bottom: 4px;
+  flex: 1 1 auto; /* take remaining space */
+  min-width: 0; /* enable ellipsis */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.session-changes__actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0; /* keep on the same row */
 }
 .session-change-item {
   display: grid;
