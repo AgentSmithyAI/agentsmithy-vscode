@@ -49,6 +49,12 @@ export const createVSCodeMock = () => ({
       fsPath: path,
       toString: () => path,
     }),
+    joinPath: (base: any, ...pathSegments: string[]) => ({
+      scheme: base.scheme || 'file',
+      path: [base.path, ...pathSegments].join('/'),
+      fsPath: [base.path, ...pathSegments].join('/'),
+      toString: () => [base.path, ...pathSegments].join('/'),
+    }),
   },
   commands: {
     executeCommand: vi.fn(),
@@ -58,6 +64,7 @@ export const createVSCodeMock = () => ({
     showInformationMessage: vi.fn(),
     showErrorMessage: vi.fn(),
     showWarningMessage: vi.fn(),
+    onDidChangeActiveTextEditor: vi.fn(() => ({dispose: vi.fn()})),
     // Will be set by tests when needed
     activeTextEditor: undefined as any,
   },
@@ -67,6 +74,13 @@ export const createVSCodeMock = () => ({
       update: vi.fn(),
       has: vi.fn(),
       inspect: vi.fn(),
+    })),
+    onDidChangeConfiguration: vi.fn(() => ({dispose: vi.fn()})),
+    createFileSystemWatcher: vi.fn(() => ({
+      onDidChange: vi.fn(() => ({dispose: vi.fn()})),
+      onDidCreate: vi.fn(() => ({dispose: vi.fn()})),
+      onDidDelete: vi.fn(() => ({dispose: vi.fn()})),
+      dispose: vi.fn(),
     })),
     // Optional helpers used by some extension paths; safe defaults
     openTextDocument: vi.fn(),

@@ -693,6 +693,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     try {
       let hasReceivedEvents = false;
       let currentDialogId = this._historyService.currentDialogId;
+      let hasError = false;
 
       for await (const event of this._stream.streamChat(request)) {
         hasReceivedEvents = true;
@@ -702,13 +703,21 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
           currentDialogId = event.dialog_id;
         }
 
+        // Track if an error occurred in the stream
+        if (event.type === E.ERROR) {
+          hasError = true;
+        }
+
         if (this._shouldUpdateSession(event.type) && currentDialogId) {
           await this._safeUpdateSession(currentDialogId);
         }
 
         if (event.type === E.DONE && event.dialog_id) {
           this._historyService.currentDialogId = event.dialog_id;
-          await this._safeReloadLatest(event.dialog_id);
+          // Don't reload history if there was an error - it would overwrite the error message
+          if (!hasError) {
+            await this._safeReloadLatest(event.dialog_id);
+          }
         }
       }
 
@@ -892,7 +901,9 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     // 1) Visible text editors (active group panes)
     for (const ed of vscode.window.visibleTextEditors) {
       const uri = ed.document.uri;
-      if (uri.scheme !== 'agentsmithy-diff') {continue;}
+      if (uri.scheme !== 'agentsmithy-diff') {
+        continue;
+      }
       const side = uri.authority;
       if (side === 'left' || side === 'right') {
         const filePath = uri.path.replace(/^\/+/, '/');
