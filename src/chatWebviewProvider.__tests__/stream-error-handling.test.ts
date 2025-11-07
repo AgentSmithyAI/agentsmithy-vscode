@@ -8,6 +8,8 @@ import {DialogService} from '../services/DialogService';
 import {ConfigService} from '../services/ConfigService';
 import {WEBVIEW_IN_MSG, WEBVIEW_OUT_MSG} from '../shared/messages';
 import {SSE_EVENT_TYPES as E} from '../constants';
+import {normalizeSSEEvent} from '../shared/sseNormalizer';
+import {bootWebview, mockWorkspaceMethods} from './test-helpers';
 
 describe('ChatWebviewProvider - stream error handling', () => {
   let provider: ChatWebviewProvider;
@@ -17,64 +19,12 @@ describe('ChatWebviewProvider - stream error handling', () => {
   let postMessage: ReturnType<typeof vi.fn>;
   let sendMessage: (msg: unknown) => void;
 
-  const bootWebview = (prov: ChatWebviewProvider) => {
-    type WebviewLike = {
-      postMessage: (message: unknown) => Promise<boolean>;
-      onDidReceiveMessage?: (cb: (msg: unknown) => void) => void;
-      asWebviewUri?: (uri: any) => any;
-      options?: any;
-      html?: string;
-    };
-    type DisposableLike = {dispose: () => void};
-    type WebviewViewLike = {
-      webview: WebviewLike;
-      onDidChangeVisibility: (cb: () => void) => DisposableLike;
-      onDidDispose: (cb: () => void) => void;
-    };
-
-    const pm = vi.fn(async () => true);
-    const webview: WebviewLike = {
-      postMessage: pm,
-      asWebviewUri: vi.fn((uri) => uri),
-    };
-
-    let handler: ((msg: unknown) => void) | undefined;
-    webview.onDidReceiveMessage = (cb: (msg: unknown) => void) => {
-      handler = cb;
-    };
-
-    (vscode.workspace as any).openTextDocument = vi.fn();
-
-    const webviewView: WebviewViewLike = {
-      webview,
-      onDidChangeVisibility: () => ({dispose: vi.fn()}),
-      onDidDispose: (cb: () => void) => cb(),
-    };
-
-    prov.resolveWebviewView(webviewView as unknown as any, {} as any, {} as any);
-    return {postMessage: pm, send: (msg: unknown) => handler?.(msg)};
-  };
-
   beforeEach(() => {
     vi.restoreAllMocks();
+    mockWorkspaceMethods();
 
-    // Mock workspace methods
-    (vscode.workspace as any).onDidChangeConfiguration = vi.fn(() => ({dispose: vi.fn()}));
-    (vscode.workspace as any).getConfiguration = vi.fn(() => ({
-      get: vi.fn((key: string) => {
-        if (key === 'serverUrl') return 'http://localhost:8000';
-        return undefined;
-      }),
-    }));
-    (vscode.workspace as any).createFileSystemWatcher = vi.fn(() => ({
-      onDidChange: vi.fn(() => ({dispose: vi.fn()})),
-      onDidCreate: vi.fn(() => ({dispose: vi.fn()})),
-      onDidDelete: vi.fn(() => ({dispose: vi.fn()})),
-      dispose: vi.fn(),
-    }));
-
-    api = new ApiService({} as any);
-    stream = new StreamService({} as any);
+    api = new ApiService('http://localhost');
+    stream = new StreamService('http://localhost', normalizeSSEEvent);
     history = new HistoryService(api);
     const dialog = new DialogService(api);
     const config = new ConfigService();

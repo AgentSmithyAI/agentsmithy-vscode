@@ -136,11 +136,7 @@ export class HistoryService {
       // Update cursors directly from server response
       this._serverCursor = resp.first_idx ?? undefined;
       this._historyCursor = this._serverCursor;
-      if (!resp.has_more) {
-        this._lastExhaustedBefore = this._historyCursor;
-      } else {
-        this._lastExhaustedBefore = undefined;
-      }
+      this._lastExhaustedBefore = !resp.has_more ? this._historyCursor : undefined;
       this._onDidChangeState.fire();
 
       return {

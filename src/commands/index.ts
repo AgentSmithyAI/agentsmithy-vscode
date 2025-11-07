@@ -17,7 +17,7 @@ export const registerCommands = (context: vscode.ExtensionContext, chatProvider:
     new SetDiffViewModeCommand(),
   ];
 
-  commands.forEach((cmd) => {
+  for (const cmd of commands) {
     context.subscriptions.push(vscode.commands.registerCommand(cmd.id, () => cmd.execute()));
-  });
+  }
 };

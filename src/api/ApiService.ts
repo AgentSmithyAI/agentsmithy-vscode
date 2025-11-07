@@ -181,7 +181,9 @@ export class ApiService {
     if (typeof before === 'number') {
       params.set('before', String(before));
     }
-    const url = `${this.baseUrl}${this.endpoints.history(dialogId)}${params.toString() ? `?${params.toString()}` : ''}`;
+    const queryString = params.toString();
+    const suffix = queryString ? `?${queryString}` : '';
+    const url = `${this.baseUrl}${this.endpoints.history(dialogId)}${suffix}`;
 
     const resp = await fetch(url, {headers: {Accept: 'application/json'}});
     if (!resp.ok) {

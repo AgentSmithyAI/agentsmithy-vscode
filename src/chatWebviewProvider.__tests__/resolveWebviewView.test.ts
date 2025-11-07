@@ -7,11 +7,12 @@ import {HistoryService} from '../services/HistoryService';
 import {DialogService} from '../services/DialogService';
 import {ConfigService} from '../services/ConfigService';
 import {WEBVIEW_IN_MSG} from '../shared/messages';
+import {normalizeSSEEvent} from '../shared/sseNormalizer';
 
 // Build minimal fakes for dependencies
 class FakeStream extends StreamService {
   constructor() {
-    super({} as any);
+    super('http://localhost', normalizeSSEEvent);
   }
 }
 

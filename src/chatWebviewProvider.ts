@@ -11,6 +11,11 @@ import {HistoryService} from './services/HistoryService';
 import {WEBVIEW_IN_MSG, WEBVIEW_OUT_MSG} from './shared/messages';
 import {getErrorMessage} from './utils/typeGuards';
 
+// Constants
+const DIFF_SCHEME = 'agentsmithy-diff' as const;
+const DIFF_SIDE_LEFT = 'left' as const;
+const DIFF_SIDE_RIGHT = 'right' as const;
+
 // Messages sent from the webview to the extension
 type WebviewInMessage =
   | {type: typeof WEBVIEW_IN_MSG.SEND_MESSAGE; text?: string}
@@ -162,7 +167,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
   public sendMessage(content: string): void {
     if (this._view) {
       // Don't show user message immediately - wait for SSE event with checkpoint
-      this._handleSendMessage(content);
+      void this._handleSendMessage(content);
     }
   }
 
@@ -294,7 +299,6 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     if (this._diffContentProvider) {
       return;
     }
-    const scheme = 'agentsmithy-diff';
     this._diffContentEmitter = new vscode.EventEmitter<vscode.Uri>();
     this._diffContentProvider = {
       onDidChange: this._diffContentEmitter.event,
@@ -304,7 +308,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
         return this._diffContentMap.get(key) ?? '';
       },
     };
-    vscode.workspace.registerTextDocumentContentProvider(scheme, this._diffContentProvider);
+    vscode.workspace.registerTextDocumentContentProvider(DIFF_SCHEME, this._diffContentProvider);
   }
 
   private _resolveAbsPath(p: string): string {
@@ -382,7 +386,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
         }
         case '-': {
           const anchorIdx = Math.min(newLine0, Math.max(0, docLineCount - 1));
-          changes.push({kind: 'del', line0: anchorIdx, text: l.substring(1)});
+          changes.push({kind: 'del', line0: anchorIdx, text: l.slice(1)});
           i++;
           break;
         }
@@ -686,38 +690,51 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     await this._runStream(request, eventHandlers);
   };
 
+  private _handleStreamEvent = async (
+    event: import('./api/StreamService').SSEEvent,
+    eventHandlers: StreamEventHandlers,
+    state: {currentDialogId?: string; hasError: boolean},
+  ): Promise<void> => {
+    await eventHandlers.handleEvent(event);
+
+    if (event.dialog_id) {
+      state.currentDialogId = event.dialog_id;
+    }
+
+    if (event.type === E.ERROR) {
+      state.hasError = true;
+    }
+
+    if (this._shouldUpdateSession(event.type) && state.currentDialogId) {
+      await this._safeUpdateSession(state.currentDialogId);
+    }
+  };
+
+  private _handleStreamDone = async (dialogId: string, hasError: boolean): Promise<void> => {
+    this._historyService.currentDialogId = dialogId;
+    // Don't reload history if there was an error - it would overwrite the error message
+    if (!hasError) {
+      await this._safeReloadLatest(dialogId);
+    }
+  };
+
   private _runStream = async (
     request: import('./api/StreamService').ChatRequest,
     eventHandlers: StreamEventHandlers,
   ): Promise<void> => {
     try {
       let hasReceivedEvents = false;
-      let currentDialogId = this._historyService.currentDialogId;
-      let hasError = false;
+      const state = {
+        currentDialogId: this._historyService.currentDialogId,
+        hasError: false,
+      };
 
       for await (const event of this._stream.streamChat(request)) {
         hasReceivedEvents = true;
-        await eventHandlers.handleEvent(event);
-
-        if (event.dialog_id) {
-          currentDialogId = event.dialog_id;
-        }
-
-        // Track if an error occurred in the stream
-        if (event.type === E.ERROR) {
-          hasError = true;
-        }
-
-        if (this._shouldUpdateSession(event.type) && currentDialogId) {
-          await this._safeUpdateSession(currentDialogId);
-        }
+        await this._handleStreamEvent(event, eventHandlers, state);
 
         if (event.type === E.DONE && event.dialog_id) {
-          this._historyService.currentDialogId = event.dialog_id;
-          // Don't reload history if there was an error - it would overwrite the error message
-          if (!hasError) {
-            await this._safeReloadLatest(event.dialog_id);
-          }
+          await this._handleStreamDone(event.dialog_id, state.hasError);
         }
       }
 
@@ -730,7 +747,6 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
       } else if (error instanceof Error) {
         eventHandlers.handleConnectionError(error);
       }
-      // endAssistantMessage is sent inside eventHandlers for errors; avoid duplicate messages here
     } finally {
       eventHandlers.finalize();
     }
@@ -894,47 +910,50 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     }
   };
 
-  _detectOpenDiffFiles = (): string[] => {
-    // Find files that currently have our custom diff open (either side visible)
-    const files = new Set<string>();
-
-    // 1) Visible text editors (active group panes)
+  private _collectVisibleDiffFiles = (files: Set<string>): void => {
     for (const ed of vscode.window.visibleTextEditors) {
       const uri = ed.document.uri;
-      if (uri.scheme !== 'agentsmithy-diff') {
+      if (uri.scheme !== DIFF_SCHEME) {
         continue;
       }
-      const side = uri.authority;
-      if (side === 'left' || side === 'right') {
+      if (uri.authority === DIFF_SIDE_LEFT || uri.authority === DIFF_SIDE_RIGHT) {
         const filePath = uri.path.replace(/^\/+/, '/');
         files.add(filePath);
       }
     }
+  };
 
-    // 2) All open tabs (includes background/inactive diffs)
+  private _collectTabGroupDiffFiles = (files: Set<string>): void => {
     try {
       for (const group of vscode.window.tabGroups.all) {
         for (const tab of group.tabs) {
           const input = tab.input;
           if (input instanceof vscode.TabInputTextDiff) {
-            const {original, modified} = input;
-            if (original.scheme === 'agentsmithy-diff' && original.authority === 'left') {
-              files.add(original.path.replace(/^\/+/, '/'));
-            }
-            if (modified.scheme === 'agentsmithy-diff' && modified.authority === 'right') {
-              files.add(modified.path.replace(/^\/+/, '/'));
-            }
+            this._addDiffFileIfMatches(files, input.original);
+            this._addDiffFileIfMatches(files, input.modified);
           }
         }
       }
     } catch {
       // Tab API might not exist in older VS Code - ignore
     }
+  };
 
+  private _addDiffFileIfMatches = (files: Set<string>, uri: vscode.Uri): void => {
+    if (uri.scheme === DIFF_SCHEME && (uri.authority === DIFF_SIDE_LEFT || uri.authority === DIFF_SIDE_RIGHT)) {
+      files.add(uri.path.replace(/^\/+/, '/'));
+    }
+  };
+
+  _detectOpenDiffFiles = (): string[] => {
+    // Find files that currently have our custom diff open (either side visible)
+    const files = new Set<string>();
+    this._collectVisibleDiffFiles(files);
+    this._collectTabGroupDiffFiles(files);
     return Array.from(files);
   };
   _uriForSide = (file: string, side: 'left' | 'right'): vscode.Uri =>
-    vscode.Uri.parse(`agentsmithy-diff://${side}/${file}`);
+    vscode.Uri.parse(`${DIFF_SCHEME}://${side}/${file}`);
 
   private async _refreshOpenDiffEditorsFromStatus(): Promise<void> {
     this._ensureDiffProvider();
@@ -971,8 +990,8 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
             const modified = input.modified;
             // Match either side to our URIs
             const matches =
-              (original.scheme === 'agentsmithy-diff' && original.toString() === leftUri.toString()) ||
-              (modified.scheme === 'agentsmithy-diff' && modified.toString() === rightUri.toString());
+              (original.scheme === DIFF_SCHEME && original.toString() === leftUri.toString()) ||
+              (modified.scheme === DIFF_SCHEME && modified.toString() === rightUri.toString());
             if (matches) {
               await vscode.window.tabGroups.close(tab, true);
             }
