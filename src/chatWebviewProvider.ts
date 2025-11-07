@@ -129,10 +129,12 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
         canLoad: this._historyService.hasMore,
         dialogId,
       });
-    } 
+    }
   };
 
-  private _loadPreviousHistoryPage = async (dialogId: string): Promise<void> => {    if (!this._view) {      return;
+  private _loadPreviousHistoryPage = async (dialogId: string): Promise<void> => {
+    if (!this._view) {
+      return;
     }
 
     this._postMessage({type: WEBVIEW_OUT_MSG.HISTORY_SET_CAN_LOAD, canLoad: false, dialogId});
@@ -282,7 +284,8 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
   };
 
   // In-memory content provider for virtual documents used in diffs
-  private _diffContentProvider?: vscode.TextDocumentContentProvider;
+  private _diffContentProvider?: vscode.TextDocumentContentProvider & {onDidChange?: vscode.Event<vscode.Uri>};
+  private _diffContentEmitter?: vscode.EventEmitter<vscode.Uri>;
   private _diffContentMap: Map<string, string> = new Map();
   // Cache of last session changed files to resolve diffs from API (no Git dependency)
   private _lastChangedFiles: ChangedFile[] = [];
@@ -292,11 +295,12 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
       return;
     }
     const scheme = 'agentsmithy-diff';
+    this._diffContentEmitter = new vscode.EventEmitter<vscode.Uri>();
     this._diffContentProvider = {
+      onDidChange: this._diffContentEmitter.event,
       provideTextDocumentContent: (uri) => {
-        // Compose a stable key from authority + path + query to match how we store entries
-        // Note: VS Code exposes the query separately from the path, but our map key may include it (e.g., ?v=ts)
-        const key = `${uri.authority}${uri.path}${uri.query ? `?${uri.query}` : ''}`;
+        // Compose a stable key from authority + path
+        const key = `${uri.authority}${uri.path}`;
         return this._diffContentMap.get(key) ?? '';
       },
     };
@@ -393,10 +397,10 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     return {nextIndex: i, changes};
   };
 
-  private _computeInlineDiffChanges = (unifiedDiff: string, docLineCount: number): Array<
-    | {kind: 'add'; line0: number}
-    | {kind: 'del'; line0: number; text: string}
-  > => {
+  private _computeInlineDiffChanges = (
+    unifiedDiff: string,
+    docLineCount: number,
+  ): Array<{kind: 'add'; line0: number} | {kind: 'del'; line0: number; text: string}> => {
     const allChanges: Array<{kind: 'add' | 'del'; line0: number; text?: string}> = [];
     const lines = unifiedDiff.split(/\r?\n/);
     let i = 0;
@@ -455,7 +459,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
       editor.revealRange(candidate, vscode.TextEditorRevealType.InCenter);
     }
   };
- 
+
   private _applyInlineDiff(editor: vscode.TextEditor, unifiedDiff: string): void {
     this._ensureDiffDecorations();
 
@@ -470,7 +474,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     }
 
     this._revealFirstDecoration(editor, added, deleted);
-  };
+  }
 
   private _handleOpenFileDiff = async (file?: string): Promise<void> => {
     try {
@@ -570,16 +574,26 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     }
   };
 
-  private _openVsCodeDiff = async (file: string, leftContent: string, rightContent: string, title: string): Promise<void> => {
-    const stamp = Date.now();
-    const leftKey = `left/${file}?v=${stamp}`;
-    const rightKey = `right/${file}?v=${stamp}`;
+  private _openVsCodeDiff = async (
+    file: string,
+    leftContent: string,
+    rightContent: string,
+    title: string,
+  ): Promise<void> => {
+    // Use stable URIs so we can refresh content in-place via onDidChange
+    const leftKey = `left/${file}`;
+    const rightKey = `right/${file}`;
     this._diffContentMap.set(leftKey, leftContent);
     this._diffContentMap.set(rightKey, rightContent);
 
     const leftUri = vscode.Uri.parse(`agentsmithy-diff://${leftKey}`);
     const rightUri = vscode.Uri.parse(`agentsmithy-diff://${rightKey}`);
+
     await vscode.commands.executeCommand('vscode.diff', leftUri, rightUri, title);
+
+    // Fire change to ensure editors pick up initial content (in case already open)
+    this._diffContentEmitter?.fire(leftUri);
+    this._diffContentEmitter?.fire(rightUri);
   };
   private _handleWebviewReady = async (): Promise<void> => {
     try {
@@ -608,7 +622,8 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     }
   };
 
-  private _handleLoadMoreHistory = async (): Promise<void> => {    const dialogId = this._historyService.currentDialogId;
+  private _handleLoadMoreHistory = async (): Promise<void> => {
+    const dialogId = this._historyService.currentDialogId;
     if (dialogId && this._historyService.hasMore && !this._historyService.isLoading) {
       this._loadPreviousHistoryPage(dialogId).catch((err: unknown) => {
         const msg = getErrorMessage(err, ERROR_MESSAGES.LOAD_HISTORY);
@@ -862,10 +877,101 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
 
       // Do not auto-apply inline decorations; only clear if any present on current editor
       this._refreshInlineDiffDecorationsFor(vscode.window.activeTextEditor);
+
+      // Refresh any open diff editors to reflect latest base/current state
+      await this._refreshOpenDiffEditorsFromStatus();
     } catch {
       // Silent fail - session status is not critical
     }
   };
+
+  _detectOpenDiffFiles = (): string[] => {
+    // Find files that currently have our custom diff open (either side visible)
+    const files = new Set<string>();
+
+    // 1) Visible text editors (active group panes)
+    for (const ed of vscode.window.visibleTextEditors) {
+      const uri = ed.document.uri;
+      if (uri.scheme !== 'agentsmithy-diff') {continue;}
+      const side = uri.authority;
+      if (side === 'left' || side === 'right') {
+        const filePath = uri.path.replace(/^\/+/, '/');
+        files.add(filePath);
+      }
+    }
+
+    // 2) All open tabs (includes background/inactive diffs)
+    try {
+      for (const group of vscode.window.tabGroups.all) {
+        for (const tab of group.tabs) {
+          const input = tab.input;
+          if (input instanceof vscode.TabInputTextDiff) {
+            const {original, modified} = input;
+            if (original.scheme === 'agentsmithy-diff' && original.authority === 'left') {
+              files.add(original.path.replace(/^\/+/, '/'));
+            }
+            if (modified.scheme === 'agentsmithy-diff' && modified.authority === 'right') {
+              files.add(modified.path.replace(/^\/+/, '/'));
+            }
+          }
+        }
+      }
+    } catch {
+      // Tab API might not exist in older VS Code - ignore
+    }
+
+    return Array.from(files);
+  };
+  _uriForSide = (file: string, side: 'left' | 'right'): vscode.Uri =>
+    vscode.Uri.parse(`agentsmithy-diff://${side}/${file}`);
+
+  private async _refreshOpenDiffEditorsFromStatus(): Promise<void> {
+    this._ensureDiffProvider();
+    const files = this._detectOpenDiffFiles();
+    for (const file of files) {
+      const cf = this._lastChangedFiles.find((x) => this._resolveAbsPath(x.path) === file || x.path === file);
+
+      if (cf && !cf.is_binary && !cf.is_too_large) {
+        // Update contents for files that still exist in the new session
+        const {leftContent, rightContent} = await this._resolveDiffContents(cf, file);
+        const leftKey = `left/${file}`;
+        const rightKey = `right/${file}`;
+        this._diffContentMap.set(leftKey, leftContent);
+        this._diffContentMap.set(rightKey, rightContent);
+        this._diffContentEmitter?.fire(this._uriForSide(file, 'left'));
+        this._diffContentEmitter?.fire(this._uriForSide(file, 'right'));
+      } else {
+        // File is no longer part of the new session changes – close its diff tab to avoid stale view
+        await this._closeDiffTabsForFile(file);
+      }
+    }
+  }
+
+  private async _closeDiffTabsForFile(file: string): Promise<void> {
+    try {
+      const leftUri = this._uriForSide(file, 'left');
+      const rightUri = this._uriForSide(file, 'right');
+      const groups = vscode.window.tabGroups.all;
+      for (const group of groups) {
+        for (const tab of group.tabs) {
+          const input = tab.input;
+          if (input instanceof vscode.TabInputTextDiff) {
+            const original = input.original;
+            const modified = input.modified;
+            // Match either side to our URIs
+            const matches =
+              (original.scheme === 'agentsmithy-diff' && original.toString() === leftUri.toString()) ||
+              (modified.scheme === 'agentsmithy-diff' && modified.toString() === rightUri.toString());
+            if (matches) {
+              await vscode.window.tabGroups.close(tab, true);
+            }
+          }
+        }
+      }
+    } catch {
+      // Best-effort: ignore if Tab API not available
+    }
+  }
 
   private _handleRestoreCheckpoint = async (dialogId: string, checkpointId: string): Promise<void> => {
     try {
