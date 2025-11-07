@@ -99,7 +99,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     this._view?.webview.postMessage(msg);
   }
 
-  private async _loadLatestHistoryPage(dialogId: string, replace = false): Promise<void> {
+  private _loadLatestHistoryPage = async (dialogId: string, replace = false): Promise<void> => {
     if (!this._view) {
       return;
     }
@@ -129,12 +129,10 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
         canLoad: this._historyService.hasMore,
         dialogId,
       });
-    }
-  }
+    } 
+  };
 
-  private async _loadPreviousHistoryPage(dialogId: string): Promise<void> {
-    if (!this._view) {
-      return;
+  private _loadPreviousHistoryPage = async (dialogId: string): Promise<void> => {    if (!this._view) {      return;
     }
 
     this._postMessage({type: WEBVIEW_OUT_MSG.HISTORY_SET_CAN_LOAD, canLoad: false, dialogId});
@@ -157,7 +155,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
         dialogId,
       });
     }
-  }
+  };
 
   public sendMessage(content: string): void {
     if (this._view) {
@@ -353,197 +351,235 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     this._clearInlineDiff(editor);
   }
 
-  private _applyInlineDiff(editor: vscode.TextEditor, unifiedDiff: string): void {
-    this._ensureDiffDecorations();
+  private _scanHunkBody = (
+    lines: string[],
+    startIndex: number,
+    docLineCount: number,
+    newStart0: number,
+  ): {nextIndex: number; changes: Array<{kind: 'add' | 'del'; line0: number; text?: string}>} => {
+    const changes: Array<{kind: 'add' | 'del'; line0: number; text?: string}> = [];
+    let i = startIndex;
+    let newLine0 = newStart0;
 
-    const addedRanges: vscode.Range[] = [];
-    const deletedVirtuals: vscode.DecorationOptions[] = [];
+    while (i < lines.length && !lines[i].startsWith('@@')) {
+      const l = lines[i];
+      if (l.startsWith('+++') || l.startsWith('---') || l.startsWith('\\ No newline at end of file')) {
+        i++;
+        continue;
+      }
+      const ch0 = l[0];
+      switch (ch0) {
+        case '+': {
+          const lineIdx = Math.min(newLine0 + 1, Math.max(0, docLineCount - 1));
+          changes.push({kind: 'add', line0: lineIdx});
+          newLine0++;
+          i++;
+          break;
+        }
+        case '-': {
+          const anchorIdx = Math.min(newLine0, Math.max(0, docLineCount - 1));
+          changes.push({kind: 'del', line0: anchorIdx, text: l.substring(1)});
+          i++;
+          break;
+        }
+        default: {
+          // context or unknown -> treat as context
+          newLine0++;
+          i++;
+          break;
+        }
+      }
+    }
+    return {nextIndex: i, changes};
+  };
 
+  private _computeInlineDiffChanges = (unifiedDiff: string, docLineCount: number): Array<
+    | {kind: 'add'; line0: number}
+    | {kind: 'del'; line0: number; text: string}
+  > => {
+    const allChanges: Array<{kind: 'add' | 'del'; line0: number; text?: string}> = [];
     const lines = unifiedDiff.split(/\r?\n/);
-
     let i = 0;
-    // Use 0-based counters internally to avoid off-by-one mistakes
-    let newStart0 = 0; // 0-based start line for new file in current hunk
-
     const hunkHeaderRe = /^@@\s+-\d+(?:,\d+)?\s+\+(\d+)(?:,(\d+))?\s+@@/;
 
     while (i < lines.length) {
       const header = hunkHeaderRe.exec(lines[i]);
-      if (header) {
-        // parse new file hunk start (header is 1-based -> convert to 0-based)
-        newStart0 = Math.max(0, parseInt(header[1], 10) - 1);
+      if (!header) {
         i++;
-        let newLine0 = newStart0;
-        // iterate hunk body until next header or EOF
-        while (i < lines.length && !lines[i].startsWith('@@')) {
-          const l = lines[i];
-
-          // Skip file headers and non-content markers within a hunk
-          if (l.startsWith('+++') || l.startsWith('---')) {
-            i++;
-            continue;
-          }
-          // Special marker: do not advance counters
-          if (l.startsWith('\\ No newline at end of file')) {
-            i++;
-            continue;
-          }
-
-          if (l.startsWith('+')) {
-            // Added line occupies a new line in the new file; decorate at the resulting visual line
-            // Shift by +1 to align with VS Code SCM gutter behavior
-            const lineIdx = Math.min(newLine0 + 1, Math.max(0, editor.document.lineCount - 1));
-            const lineRange = editor.document.lineAt(lineIdx).range;
-            addedRanges.push(lineRange);
-            newLine0++;
-            i++;
-            continue;
-          }
-          if (l.startsWith('-')) {
-            // Deleted line does not advance new file counter; anchor virtual text to the current visual line
-            const anchorIdx = Math.min(newLine0, Math.max(0, editor.document.lineCount - 1));
-            const range = new vscode.Range(anchorIdx, 0, anchorIdx, 0);
-            const text = l.substring(1);
-            deletedVirtuals.push({
-              range,
-              renderOptions: {
-                after: {
-                  contentText: `- ${text}`,
-                  color: new vscode.ThemeColor('diffEditor.removedTextForeground'),
-                  backgroundColor: new vscode.ThemeColor('diffEditor.removedTextBackground'),
-                  fontStyle: 'italic',
-                },
-              },
-            });
-            i++;
-            continue;
-          }
-          // Context line (starts with space) advances both old and new; here we keep only new
-          newLine0++;
-          i++;
-        }
         continue;
       }
+      const newStart0 = Math.max(0, parseInt(header[1], 10) - 1);
       i++;
+      const {nextIndex, changes} = this._scanHunkBody(lines, i, docLineCount, newStart0);
+      allChanges.push(...changes);
+      i = nextIndex;
+    }
+    return allChanges as Array<{kind: 'add'; line0: number} | {kind: 'del'; line0: number; text: string}>;
+  };
+  private _collectInlineDiffDecorations = (
+    editor: vscode.TextEditor,
+    changes: Array<{kind: 'add'; line0: number} | {kind: 'del'; line0: number; text: string}>,
+  ): {added: vscode.Range[]; deleted: vscode.DecorationOptions[]} => {
+    const added: vscode.Range[] = [];
+    const deleted: vscode.DecorationOptions[] = [];
+
+    for (const ch of changes) {
+      if (ch.kind === 'add') {
+        added.push(editor.document.lineAt(ch.line0).range);
+        continue;
+      }
+      const range = new vscode.Range(ch.line0, 0, ch.line0, 0);
+      deleted.push({
+        range,
+        renderOptions: {
+          after: {
+            contentText: `- ${ch.text}`,
+            color: new vscode.ThemeColor('diffEditor.removedTextForeground'),
+            backgroundColor: new vscode.ThemeColor('diffEditor.removedTextBackground'),
+            fontStyle: 'italic',
+          },
+        },
+      });
     }
 
-    // Apply decorations
+    return {added, deleted};
+  };
+
+  private _revealFirstDecoration = (
+    editor: vscode.TextEditor,
+    added: vscode.Range[],
+    deleted: vscode.DecorationOptions[],
+  ): void => {
+    const candidate = added.length > 0 ? added[0] : deleted.length > 0 ? deleted[0].range : undefined;
+    if (candidate) {
+      editor.revealRange(candidate, vscode.TextEditorRevealType.InCenter);
+    }
+  };
+ 
+  private _applyInlineDiff(editor: vscode.TextEditor, unifiedDiff: string): void {
+    this._ensureDiffDecorations();
+
+    const changes = this._computeInlineDiffChanges(unifiedDiff, editor.document.lineCount);
+    const {added, deleted} = this._collectInlineDiffDecorations(editor, changes);
+
     if (this._addedLineDecoration) {
-      editor.setDecorations(this._addedLineDecoration, addedRanges);
+      editor.setDecorations(this._addedLineDecoration, added);
     }
     if (this._deletedVirtualDecoration) {
-      editor.setDecorations(this._deletedVirtualDecoration, deletedVirtuals);
+      editor.setDecorations(this._deletedVirtualDecoration, deleted);
     }
 
-    // Reveal first change if any
-    let firstRange: vscode.Range | undefined;
-    if (addedRanges.length > 0) {
-      firstRange = addedRanges[0];
-    } else if (deletedVirtuals.length > 0) {
-      firstRange = deletedVirtuals[0].range;
-    }
-    if (firstRange !== undefined) {
-      editor.revealRange(firstRange, vscode.TextEditorRevealType.InCenter);
-    }
-  }
+    this._revealFirstDecoration(editor, added, deleted);
+  };
+
   private _handleOpenFileDiff = async (file?: string): Promise<void> => {
     try {
-      if (typeof file !== 'string' || file.length === 0) {
-        throw new Error(ERROR_MESSAGES.INVALID_FILE_PATH);
-      }
-      const workspaceRoot = this._configService.getWorkspaceRoot();
-      if (workspaceRoot?.length && !file.startsWith(`${workspaceRoot}/`) && file !== workspaceRoot) {
-        throw new Error('Opening files outside the workspace is not allowed');
-      }
-
-      // Find changed file meta (to get diff/status)
-      const cf = this._lastChangedFiles.find((x) => this._resolveAbsPath(x.path) === file || x.path === file);
-
-      // Ensure provider once
+      const target = this._validateDiffRequest(file);
+      const cf = this._findChangedFileMeta(target);
       this._ensureDiffProvider();
-
-      // Prepare left/right contents
-      let leftContent = '';
-      let rightContent = '';
-
-      if (!cf) {
-        throw new Error('Unknown changed file');
-      }
-
-      // New server contract: for modified files we may get base_content + diff; for added/deleted may lack diff/base.
-      if (cf.is_binary || cf.is_too_large) {
-        throw new Error('Cannot compare: file is binary or too large');
-      }
-      switch (cf.status) {
-        case 'modified': {
-          // Stop using unified diffs entirely. Compare full base blob from API vs current disk content.
-          leftContent = typeof cf.base_content === 'string' ? cf.base_content : '';
-          // Read current file from disk; if missing, fallback to empty
-          try {
-            const uri = vscode.Uri.file(file);
-            const doc = await vscode.workspace.openTextDocument(uri);
-            rightContent = doc.getText();
-          } catch {
-            rightContent = '';
-          }
-          break;
-        }
-        case 'added': {
-          leftContent = '';
-          // Try to read current file from disk to show full blob; if fails, leave empty
-          try {
-            const uri = vscode.Uri.file(file);
-            const doc = await vscode.workspace.openTextDocument(uri);
-            rightContent = doc.getText();
-          } catch {
-            rightContent = '';
-          }
-          break;
-        }
-        case 'deleted': {
-          rightContent = '';
-          leftContent = typeof cf.base_content === 'string' ? cf.base_content : '';
-          break;
-        }
-        default: {
-          const _never: never = cf.status;
-          void _never;
-          throw new Error('Unsupported status');
-        }
-      }
-
-      // Unique keys for provider map
-      const stamp = Date.now();
-      const leftKey = `left/${file}?v=${stamp}`;
-      const rightKey = `right/${file}?v=${stamp}`;
-      this._diffContentMap.set(leftKey, leftContent);
-      this._diffContentMap.set(rightKey, rightContent);
-
-      const leftUri = vscode.Uri.parse(`agentsmithy-diff://${leftKey}`);
-      const rightUri = vscode.Uri.parse(`agentsmithy-diff://${rightKey}`);
-
-      // Concise tab titles as requested
-      const basename = path.posix.basename(file.replace(/\\/g, '/'));
-      let title: string;
-      switch (cf.status) {
-        case 'modified':
-          title = `diff ${basename}`;
-          break;
-        case 'added':
-          title = `new ${basename}`;
-          break;
-        case 'deleted':
-          title = `delete ${basename}`;
-          break;
-        default:
-          title = `diff ${basename}`;
-      }
-      await vscode.commands.executeCommand('vscode.diff', leftUri, rightUri, title);
+      const {leftContent, rightContent} = await this._resolveDiffContents(cf, target);
+      const title = this._formatDiffTitle(cf.status, target);
+      await this._openVsCodeDiff(target, leftContent, rightContent, title);
     } catch (err: unknown) {
       const context = typeof file === 'string' ? `Failed to compare: ${file}` : 'Failed to compare';
       const msg = getErrorMessage(err, context);
       void vscode.window.showErrorMessage(msg);
     }
+  };
+
+  private _validateDiffRequest(file?: string): string {
+    if (typeof file !== 'string' || file.length === 0) {
+      throw new Error(ERROR_MESSAGES.INVALID_FILE_PATH);
+    }
+    const workspaceRoot = this._configService.getWorkspaceRoot();
+    if (
+      typeof workspaceRoot === 'string' &&
+      workspaceRoot.length > 0 &&
+      !file.startsWith(`${workspaceRoot}/`) &&
+      file !== workspaceRoot
+    ) {
+      throw new Error('Opening files outside the workspace is not allowed');
+    }
+    return file;
+  }
+
+  private _findChangedFileMeta(target: string): ChangedFile {
+    const cf = this._lastChangedFiles.find((x) => this._resolveAbsPath(x.path) === target || x.path === target);
+    if (!cf) {
+      throw new Error('Unknown changed file');
+    }
+    if (cf.is_binary || cf.is_too_large) {
+      throw new Error('Cannot compare: file is binary or too large');
+    }
+    return cf;
+  }
+
+  private _resolveDiffContents = async (
+    cf: ChangedFile,
+    file: string,
+  ): Promise<{leftContent: string; rightContent: string}> => {
+    switch (cf.status) {
+      case 'modified': {
+        const leftContent = typeof cf.base_content === 'string' ? cf.base_content : '';
+        let rightContent = '';
+        try {
+          const uri = vscode.Uri.file(file);
+          const doc = await vscode.workspace.openTextDocument(uri);
+          rightContent = doc.getText();
+        } catch {
+          rightContent = '';
+        }
+        return {leftContent, rightContent};
+      }
+      case 'added': {
+        const leftContent = '';
+        let rightContent = '';
+        try {
+          const uri = vscode.Uri.file(file);
+          const doc = await vscode.workspace.openTextDocument(uri);
+          rightContent = doc.getText();
+        } catch {
+          rightContent = '';
+        }
+        return {leftContent, rightContent};
+      }
+      case 'deleted': {
+        const rightContent = '';
+        const leftContent = typeof cf.base_content === 'string' ? cf.base_content : '';
+        return {leftContent, rightContent};
+      }
+      default: {
+        const _never: never = cf.status;
+        void _never;
+        throw new Error('Unsupported status');
+      }
+    }
+  };
+
+  private _formatDiffTitle = (status: ChangedFile['status'], file: string): string => {
+    const basename = path.posix.basename(file.replace(/\\/g, '/'));
+    switch (status) {
+      case 'modified':
+        return `diff ${basename}`;
+      case 'added':
+        return `new ${basename}`;
+      case 'deleted':
+        return `delete ${basename}`;
+      default:
+        return `diff ${basename}`;
+    }
+  };
+
+  private _openVsCodeDiff = async (file: string, leftContent: string, rightContent: string, title: string): Promise<void> => {
+    const stamp = Date.now();
+    const leftKey = `left/${file}?v=${stamp}`;
+    const rightKey = `right/${file}?v=${stamp}`;
+    this._diffContentMap.set(leftKey, leftContent);
+    this._diffContentMap.set(rightKey, rightContent);
+
+    const leftUri = vscode.Uri.parse(`agentsmithy-diff://${leftKey}`);
+    const rightUri = vscode.Uri.parse(`agentsmithy-diff://${rightKey}`);
+    await vscode.commands.executeCommand('vscode.diff', leftUri, rightUri, title);
   };
   private _handleWebviewReady = async (): Promise<void> => {
     try {
@@ -572,8 +608,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     }
   };
 
-  private _handleLoadMoreHistory = async (): Promise<void> => {
-    const dialogId = this._historyService.currentDialogId;
+  private _handleLoadMoreHistory = async (): Promise<void> => {    const dialogId = this._historyService.currentDialogId;
     if (dialogId && this._historyService.hasMore && !this._historyService.isLoading) {
       this._loadPreviousHistoryPage(dialogId).catch((err: unknown) => {
         const msg = getErrorMessage(err, ERROR_MESSAGES.LOAD_HISTORY);
@@ -593,7 +628,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     );
   };
 
-  private async _safeUpdateSession(dialogId?: string): Promise<void> {
+  private _safeUpdateSession = async (dialogId?: string): Promise<void> => {
     if (!dialogId) {
       return;
     }
@@ -602,9 +637,9 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     } catch {
       // non-blocking
     }
-  }
+  };
 
-  private async _safeReloadLatest(dialogId?: string): Promise<void> {
+  private _safeReloadLatest = async (dialogId?: string): Promise<void> => {
     if (!dialogId) {
       return;
     }
@@ -613,7 +648,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     } catch {
       // non-blocking
     }
-  }
+  };
 
   private _handleSendMessage = async (text: string): Promise<void> => {
     if (!this._view) {
@@ -636,10 +671,10 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     await this._runStream(request, eventHandlers);
   };
 
-  private async _runStream(
+  private _runStream = async (
     request: import('./api/StreamService').ChatRequest,
     eventHandlers: StreamEventHandlers,
-  ): Promise<void> {
+  ): Promise<void> => {
     try {
       let hasReceivedEvents = false;
       let currentDialogId = this._historyService.currentDialogId;
@@ -675,7 +710,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     } finally {
       eventHandlers.finalize();
     }
-  }
+  };
 
   /**
    * Switch to a dialog - common logic used across multiple operations

@@ -172,8 +172,9 @@ export class SessionActionsUI {
       // - remove any previously persisted inline sizes
       this.changesPanel.classList.add('hidden');
       this.changesPanel.style.display = 'none';
-      this.changesPanel.style.removeProperty('height');
-      this.changesPanel.style.removeProperty('maxHeight');
+      // Clear any inline sizing to fully collapse
+      this.changesPanel.style.height = '';
+      this.changesPanel.style.maxHeight = '';
       this.changesPanel.innerHTML = '';
       return;
     }
