@@ -13,6 +13,35 @@ export class SessionActionsUI {
   private approveLoading: LoadingButton;
   private resetLoading: LoadingButton;
 
+  /**
+   * Compute min height that still shows exactly one row of the list (header + 1 item).
+   */
+  private getMinOneRowHeight(): number {
+    const panelEl = this.changesPanel;
+    if (!panelEl) return 40;
+    try {
+      const header = panelEl.querySelector('.session-changes-header') as HTMLElement | null;
+      const body = panelEl.querySelector('.session-changes-body') as HTMLElement | null;
+      const firstItem = panelEl.querySelector('.session-change-item') as HTMLElement | null;
+
+      const headerH = header ? header.getBoundingClientRect().height : 16;
+      const itemH = firstItem ? firstItem.getBoundingClientRect().height : 22;
+
+      // Include body vertical padding in minimum height so one full row is never clipped
+      let bodyPad = 0;
+      if (body) {
+        const cs = getComputedStyle(body);
+        const pt = parseFloat(cs.paddingTop || '0');
+        const pb = parseFloat(cs.paddingBottom || '0');
+        bodyPad = (isFinite(pt) ? pt : 0) + (isFinite(pb) ? pb : 0);
+      }
+
+      return Math.max(24, Math.ceil(headerH + bodyPad + itemH));
+    } catch {
+      return 40;
+    }
+  }
+
   private currentDialogId: string | null = null;
 
   // Single source of truth for processing and availability
@@ -21,11 +50,20 @@ export class SessionActionsUI {
   private activeOp: 'approve' | 'reset' | null = null;
 
   // Resize state
-  private resizeState: {dragging: boolean; startY: number; startHeight: number; origin: 'top' | 'bottom'} = {
+  private resizeState: {
+    dragging: boolean;
+    startY: number;
+    startHeight: number;
+    origin: 'top' | 'bottom';
+    defaultHAtDrag?: number; // freeze snap target for the whole drag to avoid jitter
+    snappedLatched?: boolean; // true once we snapped; requires hysteresis to unsnap
+  } = {
     dragging: false,
     startY: 0,
     startHeight: 0,
     origin: 'bottom',
+    defaultHAtDrag: undefined,
+    snappedLatched: false,
   };
 
   constructor(private readonly vscode: VSCodeAPI) {
@@ -251,6 +289,49 @@ export class SessionActionsUI {
     }
   }
 
+  /**
+   * Compute the default target height for the changes panel used for "snap" behavior.
+   *
+   * Rules:
+   * - Minimum height is exactly one list row + header (so one visible item row at least).
+   * - Default snap height depends on the list fill: 1 row -> snap to 1 row, 2 rows -> snap to 2, etc.
+   * - The snap target will never exceed 80% of the viewport height to avoid covering the whole webview.
+   */
+  private getDefaultMaxHeight(): number {
+    const panelEl = this.changesPanel;
+    if (!panelEl) return 140;
+    try {
+      const header = panelEl.querySelector('.session-changes-header') as HTMLElement | null;
+      const body = panelEl.querySelector('.session-changes-body') as HTMLElement | null;
+
+      const headerH = header ? header.getBoundingClientRect().height : 16;
+
+      // Prefer exact content height: full scrollHeight of the list body
+      // This accounts for row gaps, borders, and padding to avoid half‑hidden rows.
+      let bodyContentH = 0;
+      if (body) {
+        bodyContentH = body.scrollHeight; // includes padding and gaps
+      } else {
+        // Fallback to estimating via first item height * count
+        const items = panelEl.querySelectorAll('.session-change-item');
+        const firstItem = items.item(0) as HTMLElement | null;
+        const rowH = firstItem ? firstItem.getBoundingClientRect().height : 22;
+        const count = Math.max(1, items.length);
+        bodyContentH = rowH * count;
+      }
+
+      const desired = Math.ceil(headerH + bodyContentH);
+      const viewportLimit = Math.floor(window.innerHeight * 0.8);
+
+      // Never below one-row minimum
+      const minOneRow = this.getMinOneRowHeight();
+
+      return Math.max(minOneRow, Math.min(viewportLimit, desired));
+    } catch {
+      return 140;
+    }
+  }
+
   private applyInitialOrPersistedHeight(): void {
     const panelEl = this.changesPanel;
     if (!panelEl) return;
@@ -262,26 +343,19 @@ export class SessionActionsUI {
     } catch {}
     const saved = (state as any)?.sessionChangesHeight as number | undefined;
 
-    if (typeof saved === 'number' && saved > 40) {
+    const minOneRow = this.getMinOneRowHeight();
+
+    if (typeof saved === 'number' && saved > minOneRow) {
       // Explicit height overrides max-height on the container so it resizes
       panelEl.style.height = `${saved}px`;
       panelEl.style.maxHeight = 'none';
       return;
     }
 
-    // No saved height — compute max height for ~5 rows
-    try {
-      const header = panelEl.querySelector('.session-changes-header') as HTMLElement | null;
-      const firstItem = panelEl.querySelector('.session-change-item') as HTMLElement | null;
-      const headerH = header ? header.offsetHeight : 16;
-      const rowH = firstItem ? firstItem.offsetHeight : 22;
-      const targetMax = Math.max(40, headerH + rowH * 5);
-      panelEl.style.removeProperty('height');
-      panelEl.style.maxHeight = `${targetMax}px`;
-    } catch {
-      // Fallback constant
-      panelEl.style.maxHeight = '140px';
-    }
+    // No saved height — compute default snap height based on list fill (1..N rows)
+    const targetMax = this.getDefaultMaxHeight();
+    panelEl.style.removeProperty('height');
+    panelEl.style.maxHeight = `${targetMax}px`;
   }
 
   private onResizeStart(e: MouseEvent, origin: 'top' | 'bottom' = 'bottom'): void {
@@ -293,6 +367,9 @@ export class SessionActionsUI {
     this.resizeState.startY = e.clientY;
     this.resizeState.startHeight = panelEl.getBoundingClientRect().height;
     this.resizeState.origin = origin;
+    // Freeze default snap target for the whole drag session
+    this.resizeState.defaultHAtDrag = this.getDefaultMaxHeight();
+    this.resizeState.snappedLatched = false;
     // Disable text selection while resizing
     (document.body as HTMLElement).style.userSelect = 'none';
   }
@@ -306,9 +383,39 @@ export class SessionActionsUI {
     // If resizing from top, dragging up (negative dy) should increase height
     const newH =
       this.resizeState.origin === 'top' ? this.resizeState.startHeight - dy : this.resizeState.startHeight + dy;
-    const minH = 40; // at least header + ~1 row
-    const clamped = Math.max(minH, Math.min(window.innerHeight * 0.8, newH));
-    panelEl.style.height = `${Math.round(clamped)}px`;
+
+    // Enforce minimum height: header + exactly one row
+    const minOneRow = this.getMinOneRowHeight();
+    const clamped = Math.max(minOneRow, Math.min(window.innerHeight * 0.8, newH));
+
+    // Use frozen default target to avoid oscillation while dragging
+    const defaultH = this.resizeState.defaultHAtDrag ?? this.getDefaultMaxHeight();
+    const SNAP_PX = 8;
+    const UNSNAP_PX = SNAP_PX * 2; // hysteresis: require larger delta to leave snap zone once latched
+
+    let applied = Math.round(clamped);
+
+    if (this.resizeState.snappedLatched) {
+      // Stay snapped until the handle moves far enough away
+      if (Math.abs(applied - defaultH) > UNSNAP_PX) {
+        this.resizeState.snappedLatched = false;
+        delete (panelEl as any).dataset.snapped;
+      } else {
+        applied = defaultH;
+        (panelEl as any).dataset.snapped = '1';
+      }
+    } else {
+      // Not yet snapped; snap when entering the tight zone
+      if (Math.abs(applied - defaultH) <= SNAP_PX) {
+        applied = defaultH;
+        this.resizeState.snappedLatched = true;
+        (panelEl as any).dataset.snapped = '1';
+      } else {
+        delete (panelEl as any).dataset.snapped;
+      }
+    }
+
+    panelEl.style.height = `${applied}px`;
     panelEl.style.maxHeight = 'none';
   }
 
@@ -320,11 +427,33 @@ export class SessionActionsUI {
     const panelEl = this.changesPanel;
     if (!panelEl) return;
 
-    // Persist height
     const rect = panelEl.getBoundingClientRect();
+    const defaultH = this.resizeState.defaultHAtDrag ?? this.getDefaultMaxHeight();
+    const SNAP_PX = 8;
+    const isSnapped = (panelEl as any).dataset?.snapped === '1' || Math.abs(rect.height - defaultH) <= SNAP_PX;
+
     try {
       const prev = (this.vscode.getState?.() as any) || {};
-      this.vscode.setState?.({...prev, sessionChangesHeight: Math.round(rect.height)});
+      if (isSnapped) {
+        // Clear explicit height and reset persisted size so default applies next time
+        // Remove stored override
+        const {sessionChangesHeight, ...rest} = prev;
+        this.vscode.setState?.(rest);
+        // Apply default visual sizing
+        panelEl.style.removeProperty('height');
+        panelEl.style.maxHeight = `${defaultH}px`;
+      } else {
+        // Persist explicit height but never below one-row min
+        const minOneRow = this.getMinOneRowHeight();
+        const target = Math.max(minOneRow, Math.round(rect.height));
+        this.vscode.setState?.({...prev, sessionChangesHeight: target});
+        panelEl.style.maxHeight = 'none';
+      }
     } catch {}
+
+    // Cleanup snap marker and drag-state flags
+    if ((panelEl as any).dataset) delete (panelEl as any).dataset.snapped;
+    this.resizeState.defaultHAtDrag = undefined;
+    this.resizeState.snappedLatched = false;
   }
 }
