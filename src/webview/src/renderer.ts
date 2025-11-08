@@ -1,6 +1,7 @@
 import {formatToolCallWithPath} from './toolFormatter';
 import {HistoryEvent, ReasoningBlock} from './types';
 import {escapeHtml, formatDiff, linkifyUrls, stripProjectPrefix} from './utils';
+import DOMPurify from 'dompurify';
 
 declare const marked: {
   parse: (text: string, options?: {breaks?: boolean; gfm?: boolean}) => string;
@@ -105,7 +106,44 @@ export class MessageRenderer {
   renderMarkdown(text: string): string {
     const t = text === undefined || text === null ? '' : String(text);
     if (typeof marked !== 'undefined') {
-      return marked.parse(t, {breaks: true, gfm: true});
+      const parsed = marked.parse(t, {breaks: true, gfm: true});
+      // Security: Use DOMPurify to sanitize HTML and prevent XSS attacks
+      return DOMPurify.sanitize(parsed, {
+        ALLOWED_TAGS: [
+          'p',
+          'br',
+          'code',
+          'pre',
+          'strong',
+          'em',
+          'b',
+          'i',
+          'ul',
+          'ol',
+          'li',
+          'a',
+          'blockquote',
+          'h1',
+          'h2',
+          'h3',
+          'h4',
+          'h5',
+          'h6',
+          'hr',
+          'img',
+          'table',
+          'thead',
+          'tbody',
+          'tr',
+          'th',
+          'td',
+          'span',
+          'div',
+          'del',
+        ],
+        ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'class', 'id'],
+        ALLOW_DATA_ATTR: false,
+      });
     }
     return escapeHtml(t).replace(/\n/g, '<br>');
   }

@@ -1,6 +1,7 @@
 import {WEBVIEW_IN_MSG} from '../../shared/messages';
 import {VSCodeAPI} from './types';
 import {LoadingButton} from './LoadingButton';
+import {escapeHtml} from './utils';
 
 interface WebviewState {
   sessionChangesHeight?: number;
@@ -229,13 +230,13 @@ export class SessionActionsUI {
       .map((f) => {
         const statsHtml =
           f.status === 'modified'
-            ? `<span class="added">+${f.additions}</span> <span class="removed">-${f.deletions}</span>`
+            ? `<span class="added">+${Math.max(0, f.additions)}</span> <span class="removed">-${Math.max(0, f.deletions)}</span>`
             : f.status === 'added'
               ? '<span class="added">added</span>'
               : f.status === 'deleted'
                 ? '<span class="removed">deleted</span>'
-                : `<span>${f.status}</span>`;
-        const displayPath = f.path.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+                : `<span>${escapeHtml(f.status)}</span>`;
+        const displayPath = escapeHtml(f.path);
         const root = (window as unknown as {WORKSPACE_ROOT?: string}).WORKSPACE_ROOT || '';
         const absolutePath =
           f.path.startsWith('/') || /^\w:\\/.test(f.path) ? f.path : root ? `${root}/${f.path}` : f.path;
@@ -285,7 +286,7 @@ export class SessionActionsUI {
     // Hook resizer drag
     const topResizer = this.changesPanel.querySelector('.session-changes-resizer.top');
     if (topResizer) {
-      topResizer.addEventListener('mousedown', (e) => this.onResizeStart(e, 'top'));
+      topResizer.addEventListener('mousedown', (e) => this.onResizeStart(e as MouseEvent, 'top'));
     }
 
     // Wire diff view toggle (button is rendered with the header)
