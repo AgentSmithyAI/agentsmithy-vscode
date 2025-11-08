@@ -79,6 +79,73 @@ export class ServerManager {
   };
 
   /**
+   * Verify installed binary integrity
+   */
+  private verifyInstalledBinary = async (
+    version: string,
+    expectedSize: number,
+    expectedSHA: string,
+  ): Promise<boolean> => {
+    // Check size first (fast check)
+    const isValidSize = this.downloadManager.verifyIntegrity(version, expectedSize);
+    if (!isValidSize) {
+      this.outputChannel.appendLine(`Binary size check failed`);
+      return false;
+    }
+
+    // Check SHA256 if available (thorough check)
+    if (expectedSHA) {
+      this.outputChannel.appendLine('Verifying SHA256...');
+      const isValidSHA = await this.downloadManager.verifySHA256(version, expectedSHA);
+      if (!isValidSHA) {
+        this.outputChannel.appendLine(`SHA256 check failed`);
+        return false;
+      }
+    }
+
+    return true;
+  };
+
+  /**
+   * Handle installed version checks
+   */
+  private handleInstalledVersion = async (
+    installedVersion: string,
+    latestVersionTag: string,
+    latestVersion: string,
+    expectedSize: number,
+    expectedSHA: string,
+  ): Promise<boolean> => {
+    this.outputChannel.appendLine(`Installed version: ${installedVersion}`);
+
+    const comparison = this.downloadManager.compareVersions(latestVersion, installedVersion);
+
+    if (comparison === 0) {
+      // Same version - verify integrity
+      const isValid = await this.verifyInstalledBinary(installedVersion, expectedSize, expectedSHA);
+
+      if (!isValid) {
+        this.outputChannel.appendLine(`Re-downloading corrupted binary...`);
+        await this.downloadWithLock(latestVersionTag, latestVersion, 'Re-downloading');
+        return true;
+      }
+
+      this.outputChannel.appendLine('Server is up to date and valid');
+      return true;
+    }
+
+    if (comparison > 0) {
+      this.outputChannel.appendLine(`New version available: ${latestVersion}`);
+      return false;
+    }
+
+    this.outputChannel.appendLine(
+      `Warning: Installed version ${installedVersion} is newer than latest ${latestVersion}`,
+    );
+    return true;
+  };
+
+  /**
    * Ensure server binary is available, download/update if necessary
    */
   private ensureServer = async (): Promise<void> => {
@@ -86,8 +153,8 @@ export class ServerManager {
       this.outputChannel.appendLine('Fetching latest release info from GitHub...');
       const latestRelease = await this.downloadManager.fetchLatestRelease();
       const {version: latestVersionTag, size: expectedSize, sha256: expectedSHA} = latestRelease;
-      // Keep version with 'v' for GitHub URLs, remove for filenames
       const latestVersion = latestVersionTag.replace(/^v/, '');
+
       this.outputChannel.appendLine(`Latest available version: ${latestVersion} (size: ${expectedSize} bytes)`);
       if (expectedSHA) {
         this.outputChannel.appendLine(`Expected SHA256: ${expectedSHA}`);
@@ -96,46 +163,14 @@ export class ServerManager {
       const installedVersion = this.downloadManager.getLatestInstalled();
 
       if (installedVersion) {
-        this.outputChannel.appendLine(`Installed version: ${installedVersion}`);
-
-        const isSameVersion = this.downloadManager.compareVersions(latestVersion, installedVersion) === 0;
-
-        if (isSameVersion) {
-          // Check size first (fast check)
-          const isValidSize = this.downloadManager.verifyIntegrity(installedVersion, expectedSize);
-
-          if (!isValidSize) {
-            this.outputChannel.appendLine(`Binary size check failed, re-downloading...`);
-            await this.downloadWithLock(latestVersionTag, latestVersion, 'Re-downloading');
-            return;
-          }
-
-          // Check SHA256 if available (thorough check)
-          if (expectedSHA) {
-            this.outputChannel.appendLine('Verifying SHA256...');
-            const isValidSHA = await this.downloadManager.verifySHA256(installedVersion, expectedSHA);
-
-            if (!isValidSHA) {
-              this.outputChannel.appendLine(`SHA256 check failed, re-downloading...`);
-              await this.downloadWithLock(latestVersionTag, latestVersion, 'Re-downloading');
-              return;
-            }
-          }
-
-          this.outputChannel.appendLine('Server is up to date and valid');
-          if (!this.serverExists()) {
-            this.outputChannel.appendLine('Recreating symlink...');
-            // Symlink will be created during download, for now just log
-          }
-          return;
-        }
-
-        if (this.downloadManager.compareVersions(latestVersion, installedVersion) > 0) {
-          this.outputChannel.appendLine(`New version available: ${latestVersion}`);
-        } else {
-          this.outputChannel.appendLine(
-            `Warning: Installed version ${installedVersion} is newer than latest ${latestVersion}`,
-          );
+        const handled = await this.handleInstalledVersion(
+          installedVersion,
+          latestVersionTag,
+          latestVersion,
+          expectedSize,
+          expectedSHA,
+        );
+        if (handled) {
           return;
         }
       }

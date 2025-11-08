@@ -27,33 +27,57 @@ export class ProcessManager {
   };
 
   /**
+   * Parse and validate status.json
+   */
+  private parseStatusFile = (statusPath: string): {valid: boolean; pid?: number} => {
+    if (!fs.existsSync(statusPath)) {
+      return {valid: false};
+    }
+
+    try {
+      const content = fs.readFileSync(statusPath, 'utf8');
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      const status = JSON.parse(content);
+
+      if (typeof status.port !== 'number') {
+        return {valid: false};
+      }
+
+      const statusPid = status.server_pid as number | undefined;
+      return {valid: true, pid: statusPid};
+    } catch {
+      return {valid: false};
+    }
+  };
+
+  /**
+   * Check if PID in status matches our process
+   */
+  private isPidValid = (statusPid: number | undefined): boolean => {
+    if (statusPid === undefined) {
+      return true; // No PID check needed
+    }
+
+    if (this.process?.pid === statusPid || this.isProcessAlive(statusPid)) {
+      this.serverPid = statusPid;
+      return true;
+    }
+
+    this.outputChannel.appendLine(`Status file contains stale PID ${statusPid}, waiting...`);
+    return false;
+  };
+
+  /**
    * Wait for status.json to appear with valid PID
    */
   waitForStatusFile = async (workspaceRoot: string, maxAttempts = 30): Promise<boolean> => {
     const statusPath = path.join(workspaceRoot, '.agentsmithy', 'status.json');
 
     for (let i = 0; i < maxAttempts; i++) {
-      try {
-        if (fs.existsSync(statusPath)) {
-          const content = fs.readFileSync(statusPath, 'utf8');
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-          const status = JSON.parse(content);
-          if (typeof status.port === 'number') {
-            const statusPid = status.server_pid as number | undefined;
+      const parsed = this.parseStatusFile(statusPath);
 
-            if (statusPid !== undefined) {
-              if (this.process?.pid === statusPid || this.isProcessAlive(statusPid)) {
-                this.serverPid = statusPid;
-                return true;
-              }
-              this.outputChannel.appendLine(`Status file contains stale PID ${statusPid}, waiting...`);
-            } else {
-              return true;
-            }
-          }
-        }
-      } catch {
-        // Ignore parse errors
+      if (parsed.valid && this.isPidValid(parsed.pid)) {
+        return true;
       }
 
       await new Promise((resolve) => {
