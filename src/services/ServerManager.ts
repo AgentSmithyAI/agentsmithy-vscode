@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
-import {getBinaryName, getPlatformInfo} from '../utils/platform';
+import {getBinaryName, getPlatformInfo, getVersionedBinaryName, createFileLink} from '../utils/platform';
 import {DownloadManager} from './server/DownloadManager';
 import {ProcessManager} from './server/ProcessManager';
 
@@ -16,6 +16,8 @@ export class ServerManager {
   private readyPromise: Promise<void> | null = null;
   private readyResolve: (() => void) | null = null;
   private readyReject: ((error: Error) => void) | null = null;
+  private readonly _onServerReady = new vscode.EventEmitter<void>();
+  public readonly onServerReady = this._onServerReady.event;
 
   constructor(
     context: vscode.ExtensionContext,
@@ -131,6 +133,16 @@ export class ServerManager {
       }
 
       this.outputChannel.appendLine('Server is up to date and valid');
+
+      // Ensure symlink exists (might have been deleted)
+      if (!this.serverExists()) {
+        this.outputChannel.appendLine('Symlink missing, recreating...');
+        const versionedPath = path.join(this.serverDir, getVersionedBinaryName(latestVersion));
+        const linkPath = this.getServerPath();
+        createFileLink(versionedPath, linkPath);
+        this.outputChannel.appendLine('Symlink recreated');
+      }
+
       return true;
     }
 
@@ -264,12 +276,15 @@ export class ServerManager {
           // On ready callback
           const serverUrl = this.configService.getServerUrl();
           this.outputChannel.appendLine(`Server is ready! URL: ${serverUrl}`);
-          void vscode.window.showInformationMessage('AgentSmithy server started successfully');
 
           if (this.readyResolve) {
             this.readyResolve();
             this.readyResolve = null;
+            this.readyPromise = null;
           }
+
+          // Fire ready event for listeners
+          this._onServerReady.fire();
         },
         (error: Error) => {
           // On error callback
@@ -345,5 +360,6 @@ export class ServerManager {
   dispose = (): void => {
     void this.stopServer();
     this.outputChannel.dispose();
+    this._onServerReady.dispose();
   };
 }

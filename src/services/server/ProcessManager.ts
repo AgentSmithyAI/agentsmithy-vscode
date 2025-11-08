@@ -51,19 +51,32 @@ export class ProcessManager {
   };
 
   /**
-   * Check if PID in status matches our process
+   * Check if PID in status is valid (alive and different from old PID)
    */
-  private isPidValid = (statusPid: number | undefined): boolean => {
+  private isPidValid = (statusPid: number | undefined, oldPid: number | null): boolean => {
     if (statusPid === undefined) {
-      return true; // No PID check needed
+      // No PID in status, not ready yet
+      return false;
     }
 
-    if (this.process?.pid === statusPid || this.isProcessAlive(statusPid)) {
+    // If we already captured this PID, it's valid
+    if (this.serverPid === statusPid) {
+      return true;
+    }
+
+    // Check if it's a new alive process (not the old one)
+    if (statusPid !== oldPid && this.isProcessAlive(statusPid)) {
+      this.outputChannel.appendLine(`Found new server PID ${statusPid}`);
       this.serverPid = statusPid;
       return true;
     }
 
-    this.outputChannel.appendLine(`Status file contains stale PID ${statusPid}, waiting...`);
+    if (statusPid === oldPid) {
+      this.outputChannel.appendLine(`Status still has old PID ${statusPid}, waiting...`);
+    } else if (!this.isProcessAlive(statusPid)) {
+      this.outputChannel.appendLine(`PID ${statusPid} is dead, waiting...`);
+    }
+
     return false;
   };
 
@@ -73,10 +86,24 @@ export class ProcessManager {
   waitForStatusFile = async (workspaceRoot: string, maxAttempts = 30): Promise<boolean> => {
     const statusPath = path.join(workspaceRoot, '.agentsmithy', 'status.json');
 
+    // Remember old PID to detect when it changes
+    let oldPid: number | null = null;
+    try {
+      if (fs.existsSync(statusPath)) {
+        const content = fs.readFileSync(statusPath, 'utf8');
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        const status = JSON.parse(content);
+
+        oldPid = (status.server_pid as number | undefined) ?? null;
+      }
+    } catch {
+      // Ignore
+    }
+
     for (let i = 0; i < maxAttempts; i++) {
       const parsed = this.parseStatusFile(statusPath);
 
-      if (parsed.valid && this.isPidValid(parsed.pid)) {
+      if (parsed.valid && this.isPidValid(parsed.pid, oldPid)) {
         return true;
       }
 
@@ -84,6 +111,33 @@ export class ProcessManager {
         setTimeout(resolve, 1000);
       });
     }
+    return false;
+  };
+
+  /**
+   * Check if server is already running by checking status.json
+   */
+  private checkExistingServer = (workspaceRoot: string): boolean => {
+    const statusPath = path.join(workspaceRoot, '.agentsmithy', 'status.json');
+
+    try {
+      if (fs.existsSync(statusPath)) {
+        const content = fs.readFileSync(statusPath, 'utf8');
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        const status = JSON.parse(content);
+
+        const existingPid = status.server_pid as number | undefined;
+
+        if (existingPid !== undefined && this.isProcessAlive(existingPid)) {
+          this.outputChannel.appendLine(`Found existing server process (PID ${existingPid})`);
+          this.serverPid = existingPid;
+          return true;
+        }
+      }
+    } catch {
+      // Ignore errors
+    }
+
     return false;
   };
 
@@ -98,6 +152,15 @@ export class ProcessManager {
   ): Promise<void> => {
     this.outputChannel.appendLine(`Starting server from: ${serverPath}`);
     this.outputChannel.appendLine(`Workspace: ${workspaceRoot}`);
+
+    // Check if server is already running
+    if (this.checkExistingServer(workspaceRoot)) {
+      this.outputChannel.appendLine('Server is already running, not spawning new process');
+      onReady();
+      return;
+    }
+
+    this.outputChannel.appendLine('No existing server found, spawning new process...');
 
     this.process = spawn(serverPath, ['--workdir', workspaceRoot, '--ide', 'vscode'], {
       cwd: path.dirname(serverPath),

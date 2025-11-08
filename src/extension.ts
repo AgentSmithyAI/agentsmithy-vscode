@@ -20,51 +20,25 @@ export const activate = async (context: vscode.ExtensionContext) => {
 
   // Create API services
   const serverUrl = configService.getServerUrl();
-  const apiServiceImpl = new ApiService(serverUrl);
-
-  // Wrap ApiService with Proxy to wait for server readiness
-  const apiService = new Proxy(apiServiceImpl, {
-    get: (target, prop) => {
-      const value = target[prop as keyof ApiService];
-      if (typeof value === 'function') {
-        return async (...args: unknown[]) => {
-          await serverManager.waitForReady();
-
-          return (value as (...args: unknown[]) => unknown).apply(target, args);
-        };
-      }
-      return value;
-    },
-  });
-
-  const streamServiceImpl = new StreamService(serverUrl, normalizeSSEEvent);
-
-  // Wrap StreamService with Proxy to wait for server readiness
-  const streamService = new Proxy(streamServiceImpl, {
-    get: (target, prop) => {
-      const value = target[prop as keyof StreamService];
-      if (typeof value === 'function') {
-        return async (...args: unknown[]) => {
-          await serverManager.waitForReady();
-
-          return (value as (...args: unknown[]) => unknown).apply(target, args);
-        };
-      }
-      return value;
-    },
-  });
-
+  const apiService = new ApiService(serverUrl);
+  const streamService = new StreamService(serverUrl, normalizeSSEEvent);
   const historyService = new HistoryService(apiService);
   const dialogService = new DialogService(apiService);
 
   // Auto-start server if configured
   if (configService.getAutoStartServer()) {
     // Start server in background, don't block activation
-    void serverManager.startServer().catch(() => {
-      void vscode.window.showWarningMessage(
-        'Failed to start AgentSmithy server automatically. You can start it manually from the Command Palette.',
-      );
-    });
+    void serverManager
+      .startServer()
+      .then(async () => {
+        // After server is ready, trigger webview refresh if it's already open
+        await provider.refreshAfterServerStart();
+      })
+      .catch(() => {
+        void vscode.window.showWarningMessage(
+          'Failed to start AgentSmithy server automatically. You can start it manually from the Command Palette.',
+        );
+      });
   }
 
   // Note: When server URL changes, we recreate service instances,
@@ -80,6 +54,23 @@ export const activate = async (context: vscode.ExtensionContext) => {
     configService,
     apiService,
   );
+
+  // Subscribe to server ready event
+  const serverReadyDisposable = serverManager.onServerReady(() => {
+    const outputChannel = vscode.window.createOutputChannel('AgentSmithy Events');
+    outputChannel.appendLine('[onServerReady callback] Event received!');
+    outputChannel.appendLine(`[onServerReady callback] Provider has view: ${provider['_view'] !== undefined}`);
+    outputChannel.appendLine('[onServerReady callback] Calling refreshAfterServerStart...');
+    void provider
+      .refreshAfterServerStart()
+      .then(() => {
+        outputChannel.appendLine('[onServerReady callback] Refresh complete');
+      })
+      .catch((error) => {
+        outputChannel.appendLine(`[onServerReady callback] Refresh error: ${error}`);
+      });
+  });
+  context.subscriptions.push(serverReadyDisposable);
 
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(VIEWS.CHAT, provider, {
