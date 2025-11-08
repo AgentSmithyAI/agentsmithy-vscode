@@ -88,7 +88,48 @@ export class SessionActionsUI {
     this.resetLoading = new LoadingButton(this.resetBtn);
 
     this.setupEventListeners();
+    this.setupChangesPanelDelegation();
     this.updateUI();
+  }
+
+  // Event delegation for changes panel to avoid memory leaks
+  // This listener is set once and handles all clicks, even for dynamically rendered elements
+  private setupChangesPanelDelegation(): void {
+    if (!this.changesPanel) {
+      return; // Panel might not exist in some test scenarios
+    }
+
+    this.changesPanel.addEventListener('click', (e) => {
+      const target = e.target as HTMLElement;
+
+      // Handle file link clicks
+      const fileLink = target.closest('.file-link') as HTMLElement | null;
+      if (fileLink) {
+        e.preventDefault();
+        e.stopPropagation();
+        const file = fileLink.getAttribute('data-file') || '';
+        if (file) {
+          this.vscode.postMessage({type: WEBVIEW_IN_MSG.OPEN_FILE_DIFF, file: decodeURIComponent(file)});
+        }
+        return;
+      }
+
+      // Handle diff view toggle button
+      const diffBtn = target.closest('#diffViewToggleBtn') as HTMLElement | null;
+      if (diffBtn) {
+        this.vscode.postMessage({type: WEBVIEW_IN_MSG.TOGGLE_DIFF_VIEW});
+        return;
+      }
+    });
+
+    // Resizer needs mousedown, so use delegation on changesPanel
+    this.changesPanel.addEventListener('mousedown', (e) => {
+      const target = e.target as HTMLElement;
+      const resizer = target.closest('.session-changes-resizer.top') as HTMLElement | null;
+      if (resizer) {
+        this.onResizeStart(e as MouseEvent, 'top');
+      }
+    });
   }
 
   // Event wiring
@@ -276,32 +317,8 @@ export class SessionActionsUI {
     // Apply initial sizing or restore persisted height
     this.applyInitialOrPersistedHeight();
 
-    // Delegate clicks to open file with diff
-    this.changesPanel.querySelectorAll('.file-link').forEach((a) => {
-      a.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        const el = e.currentTarget as HTMLElement;
-        const file = el.getAttribute('data-file') || '';
-        if (file) {
-          this.vscode.postMessage({type: WEBVIEW_IN_MSG.OPEN_FILE_DIFF, file: decodeURIComponent(file)});
-        }
-      });
-    });
-
-    // Hook resizer drag
-    const topResizer = this.changesPanel.querySelector('.session-changes-resizer.top');
-    if (topResizer) {
-      topResizer.addEventListener('mousedown', (e) => this.onResizeStart(e as MouseEvent, 'top'));
-    }
-
-    // Wire diff view toggle (button is rendered with the header)
-    const diffBtn = this.changesPanel.querySelector('#diffViewToggleBtn') as HTMLButtonElement | null;
-    if (diffBtn) {
-      diffBtn.addEventListener('click', () => {
-        this.vscode.postMessage({type: WEBVIEW_IN_MSG.TOGGLE_DIFF_VIEW});
-      });
-    }
+    // Note: Event listeners are NOT added here to avoid memory leaks.
+    // They are set up once in constructor via setupChangesPanelDelegation() using event delegation.
   }
 
   /**

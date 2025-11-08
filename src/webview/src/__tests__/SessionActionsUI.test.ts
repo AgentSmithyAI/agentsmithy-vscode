@@ -420,4 +420,61 @@ describe('SessionActionsUI', () => {
       expect(decodeURIComponent(dataFile!)).toBe('src/test.js');
     });
   });
+
+  describe('event delegation prevents memory leaks', () => {
+    it('uses event delegation so listeners are not re-added on re-render', () => {
+      // Verify that re-rendering doesn't add duplicate listeners
+      sessionActionsUI.setCurrentDialogId('d1');
+
+      // Render once
+      sessionActionsUI.updateSessionStatus(true, [
+        {path: 'file1.ts', status: 'modified', additions: 1, deletions: 0, diff: null} as any,
+      ]);
+
+      const panelEl = document.getElementById('sessionChanges') as HTMLElement;
+      const fileLink1 = panelEl.querySelector('.file-link') as HTMLAnchorElement;
+      expect(fileLink1).toBeTruthy();
+
+      // Click and verify postMessage called once
+      fileLink1.click();
+      expect(mockVscode.postMessage).toHaveBeenCalledTimes(1);
+      expect(mockVscode.postMessage).toHaveBeenCalledWith({
+        type: WEBVIEW_IN_MSG.OPEN_FILE_DIFF,
+        file: expect.any(String),
+      });
+
+      mockVscode.postMessage = vi.fn(); // Reset
+
+      // Re-render with new files
+      sessionActionsUI.updateSessionStatus(true, [
+        {path: 'file2.ts', status: 'added', additions: 5, deletions: 0, diff: null} as any,
+      ]);
+
+      const fileLink2 = panelEl.querySelector('.file-link') as HTMLAnchorElement;
+      expect(fileLink2).toBeTruthy();
+
+      // Click new link - should still work (event delegation)
+      fileLink2.click();
+      expect(mockVscode.postMessage).toHaveBeenCalledTimes(1);
+      // No duplicate calls = no memory leak from accumulated listeners
+    });
+
+    it('diff toggle button works through event delegation', () => {
+      sessionActionsUI.setCurrentDialogId('d1');
+      sessionActionsUI.updateSessionStatus(true, [
+        {path: 'test.ts', status: 'modified', additions: 1, deletions: 1, diff: null} as any,
+      ]);
+
+      const panelEl = document.getElementById('sessionChanges') as HTMLElement;
+      const diffBtn = panelEl.querySelector('#diffViewToggleBtn') as HTMLButtonElement;
+      expect(diffBtn).toBeTruthy();
+
+      mockVscode.postMessage = vi.fn(); // Reset
+      diffBtn.click();
+
+      expect(mockVscode.postMessage).toHaveBeenCalledWith({
+        type: WEBVIEW_IN_MSG.TOGGLE_DIFF_VIEW,
+      });
+    });
+  });
 });
