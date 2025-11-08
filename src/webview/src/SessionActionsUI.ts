@@ -66,6 +66,10 @@ export class SessionActionsUI {
     snappedLatched: false,
   };
 
+  // Snap behavior constants
+  private static readonly SNAP_PX = 8;
+  private static readonly UNSNAP_PX = SessionActionsUI.SNAP_PX * 2;
+
   constructor(private readonly vscode: VSCodeAPI) {
     this.panel = document.getElementById('sessionActions')!;
     this.approveBtn = document.getElementById('sessionApproveBtn') as HTMLButtonElement;
@@ -390,14 +394,12 @@ export class SessionActionsUI {
 
     // Use frozen default target to avoid oscillation while dragging
     const defaultH = this.resizeState.defaultHAtDrag ?? this.getDefaultMaxHeight();
-    const SNAP_PX = 8;
-    const UNSNAP_PX = SNAP_PX * 2; // hysteresis: require larger delta to leave snap zone once latched
 
     let applied = Math.round(clamped);
 
     if (this.resizeState.snappedLatched) {
       // Stay snapped until the handle moves far enough away
-      if (Math.abs(applied - defaultH) > UNSNAP_PX) {
+      if (Math.abs(applied - defaultH) > SessionActionsUI.UNSNAP_PX) {
         this.resizeState.snappedLatched = false;
         delete (panelEl as any).dataset.snapped;
       } else {
@@ -406,7 +408,7 @@ export class SessionActionsUI {
       }
     } else {
       // Not yet snapped; snap when entering the tight zone
-      if (Math.abs(applied - defaultH) <= SNAP_PX) {
+      if (Math.abs(applied - defaultH) <= SessionActionsUI.SNAP_PX) {
         applied = defaultH;
         this.resizeState.snappedLatched = true;
         (panelEl as any).dataset.snapped = '1';
@@ -429,8 +431,8 @@ export class SessionActionsUI {
 
     const rect = panelEl.getBoundingClientRect();
     const defaultH = this.resizeState.defaultHAtDrag ?? this.getDefaultMaxHeight();
-    const SNAP_PX = 8;
-    const isSnapped = (panelEl as any).dataset?.snapped === '1' || Math.abs(rect.height - defaultH) <= SNAP_PX;
+    const isSnapped =
+      (panelEl as any).dataset?.snapped === '1' || Math.abs(rect.height - defaultH) <= SessionActionsUI.SNAP_PX;
 
     try {
       const prev = (this.vscode.getState?.() as any) || {};
