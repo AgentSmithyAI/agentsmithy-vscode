@@ -10,7 +10,7 @@ export class SetDiffViewModeCommand implements ICommand {
 
     const pick = await vscode.window.showQuickPick(
       [
-        {label: 'Two‑pane (side‑by‑side)', description: current ? 'current' : undefined, value: true},
+        {label: 'Two-pane (side-by-side)', description: current ? 'current' : undefined, value: true},
         {label: 'Inline', description: !current ? 'current' : undefined, value: false},
       ],
       {title: 'Choose diff view mode', placeHolder: 'Select how to display diffs'},
@@ -21,6 +21,6 @@ export class SetDiffViewModeCommand implements ICommand {
     }
 
     await config.update('renderSideBySide', pick.value, vscode.ConfigurationTarget.Global);
-    vscode.window.showInformationMessage(`Diff view mode set to ${pick.value ? 'two‑pane (side‑by‑side)' : 'inline'}.`);
+    vscode.window.showInformationMessage(`Diff view mode set to ${pick.value ? 'two-pane (side-by-side)' : 'inline'}.`);
   };
 }

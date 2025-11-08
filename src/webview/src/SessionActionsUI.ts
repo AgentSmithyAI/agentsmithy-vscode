@@ -221,7 +221,7 @@ export class SessionActionsUI {
       .map((f) => {
         const statsHtml =
           f.status === 'modified'
-            ? `<span class="added">+${f.additions}</span> <span class="removed">−${f.deletions}</span>`
+            ? `<span class="added">+${f.additions}</span> <span class="removed">-${f.deletions}</span>`
             : f.status === 'added'
               ? '<span class="added">added</span>'
               : f.status === 'deleted'
@@ -244,7 +244,7 @@ export class SessionActionsUI {
       <div class="session-changes-header">
         <div class="session-changes__title">Pending changes</div>
         <div class="session-changes__actions">
-          <button class="session-action-btn" id="diffViewToggleBtn" title="Toggle diff view (inline/two‑pane)" aria-label="Toggle diff view">
+          <button class="session-action-btn" id="diffViewToggleBtn" title="Toggle diff view (inline/two-pane)" aria-label="Toggle diff view">
             <span class="codicon codicon-diff" aria-hidden="true"></span>
           </button>
         </div>
@@ -307,7 +307,7 @@ export class SessionActionsUI {
       const headerH = header ? header.getBoundingClientRect().height : 16;
 
       // Prefer exact content height: full scrollHeight of the list body
-      // This accounts for row gaps, borders, and padding to avoid half‑hidden rows.
+      // This accounts for row gaps, borders, and padding to avoid half-hidden rows.
       let bodyContentH = 0;
       if (body) {
         bodyContentH = body.scrollHeight; // includes padding and gaps

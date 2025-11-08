@@ -43,7 +43,7 @@ Resizing behavior
   - While dragging, if the current height is within 8px of the default target, the panel “snaps”.
   - On mouseup within snap zone, the persisted explicit height (sessionChangesHeight) is cleared from webview state, effectively resetting user overrides so the dynamic default is used next time.
 - Persistence rules
-  - If not snapped on release, the explicit height is saved (never below one‑row minimum) and restored on next render with maxHeight removed.
+  - If not snapped on release, the explicit height is saved (never below one-row minimum) and restored on next render with maxHeight removed.
   - When the list is empty, the panel collapses and inline sizing is cleared (so no stale height is applied when content reappears).
 
 Edge cases and guarantees
