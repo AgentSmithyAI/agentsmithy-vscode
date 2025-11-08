@@ -93,11 +93,6 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
         canLoad,
       });
     });
-
-    // Listen to editor switches to clear any inline decorations we might have left
-    vscode.window.onDidChangeActiveTextEditor((ed) => {
-      this._refreshInlineDiffDecorationsFor(ed ?? undefined);
-    });
   }
 
   private _postMessage(msg: WebviewOutMessage): void {
@@ -322,167 +317,6 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
       return p;
     }
     return workspaceRoot ? `${workspaceRoot}/${p}` : p;
-  }
-
-  // Decorations for inline diff highlighting
-  private _addedLineDecoration?: vscode.TextEditorDecorationType;
-  private _deletedVirtualDecoration?: vscode.TextEditorDecorationType;
-
-  private _ensureDiffDecorations(): void {
-    if (!this._addedLineDecoration) {
-      this._addedLineDecoration = vscode.window.createTextEditorDecorationType({
-        isWholeLine: true,
-        backgroundColor: new vscode.ThemeColor('diffEditor.insertedTextBackground'),
-        overviewRulerColor: new vscode.ThemeColor('diffEditor.insertedTextBackground'),
-      });
-    }
-    if (!this._deletedVirtualDecoration) {
-      this._deletedVirtualDecoration = vscode.window.createTextEditorDecorationType({
-        after: {
-          margin: '0 0 0 8px',
-        },
-        rangeBehavior: vscode.DecorationRangeBehavior.ClosedOpen,
-      });
-    }
-  }
-
-  private _clearInlineDiff(editor: vscode.TextEditor): void {
-    if (this._addedLineDecoration) {
-      editor.setDecorations(this._addedLineDecoration, []);
-    }
-    if (this._deletedVirtualDecoration) {
-      editor.setDecorations(this._deletedVirtualDecoration, []);
-    }
-  }
-
-  // Re-apply (or clear) inline diff decorations for the given editor
-  private _refreshInlineDiffDecorationsFor(editor?: vscode.TextEditor): void {
-    if (!editor) {
-      return;
-    }
-    // Only clear any previous inline decorations; do not auto-apply
-    this._clearInlineDiff(editor);
-  }
-
-  private _scanHunkBody = (
-    lines: string[],
-    startIndex: number,
-    docLineCount: number,
-    newStart0: number,
-  ): {nextIndex: number; changes: Array<{kind: 'add' | 'del'; line0: number; text?: string}>} => {
-    const changes: Array<{kind: 'add' | 'del'; line0: number; text?: string}> = [];
-    let i = startIndex;
-    let newLine0 = newStart0;
-
-    while (i < lines.length && !lines[i].startsWith('@@')) {
-      const l = lines[i];
-      if (l.startsWith('+++') || l.startsWith('---') || l.startsWith('\\ No newline at end of file')) {
-        i++;
-        continue;
-      }
-      const ch0 = l[0];
-      switch (ch0) {
-        case '+': {
-          const lineIdx = Math.min(newLine0 + 1, Math.max(0, docLineCount - 1));
-          changes.push({kind: 'add', line0: lineIdx});
-          newLine0++;
-          i++;
-          break;
-        }
-        case '-': {
-          const anchorIdx = Math.min(newLine0, Math.max(0, docLineCount - 1));
-          changes.push({kind: 'del', line0: anchorIdx, text: l.slice(1)});
-          i++;
-          break;
-        }
-        default: {
-          // context or unknown -> treat as context
-          newLine0++;
-          i++;
-          break;
-        }
-      }
-    }
-    return {nextIndex: i, changes};
-  };
-
-  private _computeInlineDiffChanges = (
-    unifiedDiff: string,
-    docLineCount: number,
-  ): Array<{kind: 'add'; line0: number} | {kind: 'del'; line0: number; text: string}> => {
-    const allChanges: Array<{kind: 'add' | 'del'; line0: number; text?: string}> = [];
-    const lines = unifiedDiff.split(/\r?\n/);
-    let i = 0;
-    const hunkHeaderRe = /^@@\s+-\d+(?:,\d+)?\s+\+(\d+)(?:,(\d+))?\s+@@/;
-
-    while (i < lines.length) {
-      const header = hunkHeaderRe.exec(lines[i]);
-      if (!header) {
-        i++;
-        continue;
-      }
-      const newStart0 = Math.max(0, parseInt(header[1], 10) - 1);
-      i++;
-      const {nextIndex, changes} = this._scanHunkBody(lines, i, docLineCount, newStart0);
-      allChanges.push(...changes);
-      i = nextIndex;
-    }
-    return allChanges as Array<{kind: 'add'; line0: number} | {kind: 'del'; line0: number; text: string}>;
-  };
-  private _collectInlineDiffDecorations = (
-    editor: vscode.TextEditor,
-    changes: Array<{kind: 'add'; line0: number} | {kind: 'del'; line0: number; text: string}>,
-  ): {added: vscode.Range[]; deleted: vscode.DecorationOptions[]} => {
-    const added: vscode.Range[] = [];
-    const deleted: vscode.DecorationOptions[] = [];
-
-    for (const ch of changes) {
-      if (ch.kind === 'add') {
-        added.push(editor.document.lineAt(ch.line0).range);
-        continue;
-      }
-      const range = new vscode.Range(ch.line0, 0, ch.line0, 0);
-      deleted.push({
-        range,
-        renderOptions: {
-          after: {
-            contentText: `- ${ch.text}`,
-            color: new vscode.ThemeColor('diffEditor.removedTextForeground'),
-            backgroundColor: new vscode.ThemeColor('diffEditor.removedTextBackground'),
-            fontStyle: 'italic',
-          },
-        },
-      });
-    }
-
-    return {added, deleted};
-  };
-
-  private _revealFirstDecoration = (
-    editor: vscode.TextEditor,
-    added: vscode.Range[],
-    deleted: vscode.DecorationOptions[],
-  ): void => {
-    const candidate = added.length > 0 ? added[0] : deleted.length > 0 ? deleted[0].range : undefined;
-    if (candidate) {
-      editor.revealRange(candidate, vscode.TextEditorRevealType.InCenter);
-    }
-  };
-
-  private _applyInlineDiff(editor: vscode.TextEditor, unifiedDiff: string): void {
-    this._ensureDiffDecorations();
-
-    const changes = this._computeInlineDiffChanges(unifiedDiff, editor.document.lineCount);
-    const {added, deleted} = this._collectInlineDiffDecorations(editor, changes);
-
-    if (this._addedLineDecoration) {
-      editor.setDecorations(this._addedLineDecoration, added);
-    }
-    if (this._deletedVirtualDecoration) {
-      editor.setDecorations(this._deletedVirtualDecoration, deleted);
-    }
-
-    this._revealFirstDecoration(editor, added, deleted);
   }
 
   private _handleOpenFileDiff = async (file?: string): Promise<void> => {
@@ -900,9 +734,6 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
         hasUnapproved: status.has_unapproved,
         changedFiles: status.changed_files,
       });
-
-      // Do not auto-apply inline decorations; only clear if any present on current editor
-      this._refreshInlineDiffDecorationsFor(vscode.window.activeTextEditor);
 
       // Refresh any open diff editors to reflect latest base/current state
       await this._refreshOpenDiffEditorsFromStatus();
