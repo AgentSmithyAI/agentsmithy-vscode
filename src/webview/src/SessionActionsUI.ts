@@ -2,6 +2,10 @@ import {WEBVIEW_IN_MSG} from '../../shared/messages';
 import {VSCodeAPI} from './types';
 import {LoadingButton} from './LoadingButton';
 
+interface WebviewState {
+  sessionChangesHeight?: number;
+}
+
 /**
  * Manages the session actions panel (approve/reset buttons)
  */
@@ -345,7 +349,7 @@ export class SessionActionsUI {
     try {
       state = this.vscode.getState?.();
     } catch {}
-    const saved = (state as any)?.sessionChangesHeight as number | undefined;
+    const saved = (state as WebviewState)?.sessionChangesHeight;
 
     const minOneRow = this.getMinOneRowHeight();
 
@@ -401,19 +405,19 @@ export class SessionActionsUI {
       // Stay snapped until the handle moves far enough away
       if (Math.abs(applied - defaultH) > SessionActionsUI.UNSNAP_PX) {
         this.resizeState.snappedLatched = false;
-        delete (panelEl as any).dataset.snapped;
+        delete panelEl.dataset.snapped;
       } else {
         applied = defaultH;
-        (panelEl as any).dataset.snapped = '1';
+        panelEl.dataset.snapped = '1';
       }
     } else {
       // Not yet snapped; snap when entering the tight zone
       if (Math.abs(applied - defaultH) <= SessionActionsUI.SNAP_PX) {
         applied = defaultH;
         this.resizeState.snappedLatched = true;
-        (panelEl as any).dataset.snapped = '1';
+        panelEl.dataset.snapped = '1';
       } else {
-        delete (panelEl as any).dataset.snapped;
+        delete panelEl.dataset.snapped;
       }
     }
 
@@ -431,11 +435,10 @@ export class SessionActionsUI {
 
     const rect = panelEl.getBoundingClientRect();
     const defaultH = this.resizeState.defaultHAtDrag ?? this.getDefaultMaxHeight();
-    const isSnapped =
-      (panelEl as any).dataset?.snapped === '1' || Math.abs(rect.height - defaultH) <= SessionActionsUI.SNAP_PX;
+    const isSnapped = panelEl.dataset?.snapped === '1' || Math.abs(rect.height - defaultH) <= SessionActionsUI.SNAP_PX;
 
     try {
-      const prev = (this.vscode.getState?.() as any) || {};
+      const prev = (this.vscode.getState?.() as WebviewState) || {};
       if (isSnapped) {
         // Clear explicit height and reset persisted size so default applies next time
         // Remove stored override
@@ -454,7 +457,7 @@ export class SessionActionsUI {
     } catch {}
 
     // Cleanup snap marker and drag-state flags
-    if ((panelEl as any).dataset) delete (panelEl as any).dataset.snapped;
+    delete panelEl.dataset.snapped;
     this.resizeState.defaultHAtDrag = undefined;
     this.resizeState.snappedLatched = false;
   }

@@ -100,7 +100,7 @@ export class MessageHandler {
 
       case WEBVIEW_OUT_MSG.SESSION_STATUS_UPDATE:
         if (this.sessionActionsUI) {
-          this.sessionActionsUI.updateSessionStatus(message.hasUnapproved, (message as any).changedFiles);
+          this.sessionActionsUI.updateSessionStatus(message.hasUnapproved, message.changedFiles);
         }
         break;
 

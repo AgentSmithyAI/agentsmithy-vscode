@@ -433,8 +433,8 @@ export class ApiService {
         deletions: typeof x.deletions === 'number' ? x.deletions : 0,
         diff: typeof x.diff === 'string' ? x.diff : null,
         base_content: typeof x.base_content === 'string' ? x.base_content : null,
-        is_binary: Boolean((x as any).is_binary),
-        is_too_large: Boolean((x as any).is_too_large),
+        is_binary: Boolean(x.is_binary),
+        is_too_large: Boolean(x.is_too_large),
       }));
 
     return {
