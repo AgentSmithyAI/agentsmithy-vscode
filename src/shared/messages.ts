@@ -1,6 +1,7 @@
 export const WEBVIEW_IN_MSG = {
   SEND_MESSAGE: 'sendMessage',
   OPEN_FILE: 'openFile',
+  OPEN_FILE_DIFF: 'openFileDiff',
   STOP_PROCESSING: 'stopProcessing',
   READY: 'ready',
   LOAD_MORE_HISTORY: 'loadMoreHistory',
@@ -15,6 +16,7 @@ export const WEBVIEW_IN_MSG = {
   APPROVE_SESSION: 'approveSession',
   RESET_TO_APPROVED: 'resetToApproved',
   OPEN_SETTINGS: 'openSettings',
+  TOGGLE_DIFF_VIEW: 'toggleDiffView',
 } as const;
 
 export type WebviewInMessageType = (typeof WEBVIEW_IN_MSG)[keyof typeof WEBVIEW_IN_MSG];

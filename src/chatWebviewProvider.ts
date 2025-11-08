@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
-import type {HistoryEvent} from './api/ApiService';
+import * as path from 'path';
+import type {HistoryEvent, ChangedFile} from './api/ApiService';
 import {ApiService} from './api/ApiService';
 import {StreamService, type ChatContext} from './api/StreamService';
 import {CSS_CLASSES, DOM_IDS, SSE_EVENT_TYPES as E, ERROR_MESSAGES, ERROR_NAMES, VIEWS} from './constants';
@@ -10,10 +11,16 @@ import {HistoryService} from './services/HistoryService';
 import {WEBVIEW_IN_MSG, WEBVIEW_OUT_MSG} from './shared/messages';
 import {getErrorMessage} from './utils/typeGuards';
 
+// Constants
+const DIFF_SCHEME = 'agentsmithy-diff' as const;
+const DIFF_SIDE_LEFT = 'left' as const;
+const DIFF_SIDE_RIGHT = 'right' as const;
+
 // Messages sent from the webview to the extension
 type WebviewInMessage =
   | {type: typeof WEBVIEW_IN_MSG.SEND_MESSAGE; text?: string}
   | {type: typeof WEBVIEW_IN_MSG.OPEN_FILE; file?: string}
+  | {type: typeof WEBVIEW_IN_MSG.OPEN_FILE_DIFF; file?: string}
   | {type: typeof WEBVIEW_IN_MSG.STOP_PROCESSING}
   | {type: typeof WEBVIEW_IN_MSG.READY}
   | {type: typeof WEBVIEW_IN_MSG.LOAD_MORE_HISTORY}
@@ -27,7 +34,8 @@ type WebviewInMessage =
   | {type: typeof WEBVIEW_IN_MSG.RESTORE_CHECKPOINT; dialogId: string; checkpointId: string}
   | {type: typeof WEBVIEW_IN_MSG.APPROVE_SESSION; dialogId: string}
   | {type: typeof WEBVIEW_IN_MSG.RESET_TO_APPROVED; dialogId: string}
-  | {type: typeof WEBVIEW_IN_MSG.OPEN_SETTINGS};
+  | {type: typeof WEBVIEW_IN_MSG.OPEN_SETTINGS}
+  | {type: typeof WEBVIEW_IN_MSG.TOGGLE_DIFF_VIEW};
 // Messages sent from the extension to the webview
 type WebviewOutMessage =
   | {
@@ -60,7 +68,7 @@ type WebviewOutMessage =
   | {type: typeof WEBVIEW_OUT_MSG.DIALOGS_LOADING}
   | {type: typeof WEBVIEW_OUT_MSG.DIALOGS_ERROR; error: string}
   | {type: typeof WEBVIEW_OUT_MSG.DIALOG_SWITCHED; dialogId: string | null; title: string}
-  | {type: typeof WEBVIEW_OUT_MSG.SESSION_STATUS_UPDATE; hasUnapproved: boolean}
+  | {type: typeof WEBVIEW_OUT_MSG.SESSION_STATUS_UPDATE; hasUnapproved: boolean; changedFiles?: ChangedFile[]}
   | {type: typeof WEBVIEW_OUT_MSG.SESSION_OPERATION_CANCELLED}
   | {type: typeof WEBVIEW_OUT_MSG.FOCUS_INPUT};
 export class ChatWebviewProvider implements vscode.WebviewViewProvider {
@@ -91,7 +99,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     this._view?.webview.postMessage(msg);
   }
 
-  private async _loadLatestHistoryPage(dialogId: string, replace = false): Promise<void> {
+  private _loadLatestHistoryPage = async (dialogId: string, replace = false): Promise<void> => {
     if (!this._view) {
       return;
     }
@@ -122,9 +130,9 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
         dialogId,
       });
     }
-  }
+  };
 
-  private async _loadPreviousHistoryPage(dialogId: string): Promise<void> {
+  private _loadPreviousHistoryPage = async (dialogId: string): Promise<void> => {
     if (!this._view) {
       return;
     }
@@ -149,12 +157,12 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
         dialogId,
       });
     }
-  }
+  };
 
   public sendMessage(content: string): void {
     if (this._view) {
       // Don't show user message immediately - wait for SSE event with checkpoint
-      this._handleSendMessage(content);
+      void this._handleSendMessage(content);
     }
   }
 
@@ -185,6 +193,9 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
           break;
         case WEBVIEW_IN_MSG.OPEN_FILE:
           await this._handleOpenFile(message.file);
+          break;
+        case WEBVIEW_IN_MSG.OPEN_FILE_DIFF:
+          await this._handleOpenFileDiff(message.file);
           break;
         case WEBVIEW_IN_MSG.STOP_PROCESSING:
           this._stream.abort();
@@ -228,24 +239,205 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
         case WEBVIEW_IN_MSG.OPEN_SETTINGS:
           await vscode.commands.executeCommand('workbench.action.openSettings', 'agentsmithy');
           break;
+        case WEBVIEW_IN_MSG.TOGGLE_DIFF_VIEW:
+          await this._handleToggleDiffView();
+          break;
       }
     });
   }
+
+  _handleToggleDiffView = async (): Promise<void> => {
+    try {
+      const config = vscode.workspace.getConfiguration('diffEditor');
+      const current = config.get<boolean>('renderSideBySide', true);
+      await config.update('renderSideBySide', !current, vscode.ConfigurationTarget.Global);
+    } catch {
+      // swallow
+    }
+  };
 
   private _handleOpenFile = async (file?: string): Promise<void> => {
     try {
       if (typeof file !== 'string' || file.length === 0) {
         throw new Error(ERROR_MESSAGES.INVALID_FILE_PATH);
       }
+
+      // Security: only allow opening files within the current workspace (if any)
+      // Note: This is defense-in-depth and not critical for local VS Code since the user
+      // already has full filesystem access. However, it provides some protection in edge cases:
+      // 1. Remote scenarios (SSH, Codespaces) where filesystem access is more sensitive
+      // 2. Malicious git repos with crafted filenames like "../../sensitive-file"
+      // 3. Backend bugs that could generate invalid paths
+      // File paths come from backend tool call results, which are typically safe.
+      const workspaceRoot = this._configService.getWorkspaceRoot();
+      if (typeof workspaceRoot === 'string' && workspaceRoot.length > 0) {
+        const resolvedFile = path.resolve(file);
+        const resolvedRoot = path.resolve(workspaceRoot);
+        if (!resolvedFile.startsWith(resolvedRoot + path.sep) && resolvedFile !== resolvedRoot) {
+          throw new Error('Opening files outside the workspace is not allowed');
+        }
+      }
+
       const uri = vscode.Uri.file(file);
       const doc = await vscode.workspace.openTextDocument(uri);
       await vscode.window.showTextDocument(doc, {preview: false});
     } catch (err: unknown) {
-      const msg = getErrorMessage(err, `Failed to open file: ${String(file)}`);
-      vscode.window.showErrorMessage(msg);
+      const context = typeof file === 'string' ? `Failed to open file: ${file}` : 'Failed to open file';
+      const msg = getErrorMessage(err, context);
+      void vscode.window.showErrorMessage(msg);
     }
   };
 
+  // In-memory content provider for virtual documents used in diffs
+  private _diffContentProvider?: vscode.TextDocumentContentProvider & {onDidChange?: vscode.Event<vscode.Uri>};
+  private _diffContentEmitter?: vscode.EventEmitter<vscode.Uri>;
+  private _diffContentMap: Map<string, string> = new Map();
+  // Cache of last session changed files to resolve diffs from API (no Git dependency)
+  private _lastChangedFiles: ChangedFile[] = [];
+
+  private _ensureDiffProvider(): void {
+    if (this._diffContentProvider) {
+      return;
+    }
+    this._diffContentEmitter = new vscode.EventEmitter<vscode.Uri>();
+    this._diffContentProvider = {
+      onDidChange: this._diffContentEmitter.event,
+      provideTextDocumentContent: (uri) => {
+        // Compose stable key from authority and path
+        // authority: always "left" or "right" (DIFF_SIDE_LEFT/DIFF_SIDE_RIGHT)
+        // path: always starts with "/" per URI standard (e.g., "/src/file.ts")
+        // Result: "left/src/file.ts" matches key used in _diffContentMap.set(leftKey, ...)
+        // No collision risk since authority is controlled and path always has leading "/"
+        const key = `${uri.authority}${uri.path}`;
+        return this._diffContentMap.get(key) ?? '';
+      },
+    };
+    vscode.workspace.registerTextDocumentContentProvider(DIFF_SCHEME, this._diffContentProvider);
+  }
+
+  private _resolveAbsPath(p: string): string {
+    const workspaceRoot = this._configService.getWorkspaceRoot();
+    if (p.startsWith('/') || /^\w:\\/.test(p)) {
+      return p;
+    }
+    return workspaceRoot ? `${workspaceRoot}/${p}` : p;
+  }
+
+  private _handleOpenFileDiff = async (file?: string): Promise<void> => {
+    try {
+      const target = this._validateDiffRequest(file);
+      const cf = this._findChangedFileMeta(target);
+      this._ensureDiffProvider();
+      const {leftContent, rightContent} = await this._resolveDiffContents(cf, target);
+      const title = this._formatDiffTitle(cf.status, target);
+      await this._openVsCodeDiff(target, leftContent, rightContent, title);
+    } catch (err: unknown) {
+      const context = typeof file === 'string' ? `Failed to compare: ${file}` : 'Failed to compare';
+      const msg = getErrorMessage(err, context);
+      void vscode.window.showErrorMessage(msg);
+    }
+  };
+
+  private _validateDiffRequest(file?: string): string {
+    if (typeof file !== 'string' || file.length === 0) {
+      throw new Error(ERROR_MESSAGES.INVALID_FILE_PATH);
+    }
+    // Security: Defense-in-depth workspace boundary check
+    // Not critical since file paths come from backend's session.changed_files (git-controlled),
+    // but provides protection against malicious repos with crafted filenames and Remote scenarios.
+    const workspaceRoot = this._configService.getWorkspaceRoot();
+    if (typeof workspaceRoot === 'string' && workspaceRoot.length > 0) {
+      const resolvedFile = path.resolve(file);
+      const resolvedRoot = path.resolve(workspaceRoot);
+      if (!resolvedFile.startsWith(resolvedRoot + path.sep) && resolvedFile !== resolvedRoot) {
+        throw new Error('Opening files outside the workspace is not allowed');
+      }
+    }
+    return file;
+  }
+
+  private _findChangedFileMeta(target: string): ChangedFile {
+    const cf = this._lastChangedFiles.find((x) => this._resolveAbsPath(x.path) === target || x.path === target);
+    if (!cf) {
+      throw new Error('Unknown changed file');
+    }
+    if (cf.is_binary || cf.is_too_large) {
+      throw new Error('Cannot compare: file is binary or too large');
+    }
+    return cf;
+  }
+
+  _readFileContent = async (file: string): Promise<string> => {
+    try {
+      const uri = vscode.Uri.file(file);
+      const doc = await vscode.workspace.openTextDocument(uri);
+      return doc.getText();
+    } catch {
+      return '';
+    }
+  };
+
+  private _resolveDiffContents = async (
+    cf: ChangedFile,
+    file: string,
+  ): Promise<{leftContent: string; rightContent: string}> => {
+    switch (cf.status) {
+      case 'modified': {
+        const leftContent = typeof cf.base_content === 'string' ? cf.base_content : '';
+        const rightContent = await this._readFileContent(file);
+        return {leftContent, rightContent};
+      }
+      case 'added': {
+        const leftContent = '';
+        const rightContent = await this._readFileContent(file);
+        return {leftContent, rightContent};
+      }
+      case 'deleted': {
+        const rightContent = '';
+        const leftContent = typeof cf.base_content === 'string' ? cf.base_content : '';
+        return {leftContent, rightContent};
+      }
+      default: {
+        throw new Error('Unsupported status');
+      }
+    }
+  };
+
+  private _formatDiffTitle = (status: ChangedFile['status'], file: string): string => {
+    const basename = path.posix.basename(file.replace(/\\/g, '/'));
+    switch (status) {
+      case 'modified':
+        return `diff ${basename}`;
+      case 'added':
+        return `new ${basename}`;
+      case 'deleted':
+        return `delete ${basename}`;
+      default:
+        return `diff ${basename}`;
+    }
+  };
+
+  private _openVsCodeDiff = async (
+    file: string,
+    leftContent: string,
+    rightContent: string,
+    title: string,
+  ): Promise<void> => {
+    // Use stable URIs so we can refresh content in-place via onDidChange
+    const leftKey = `left/${file}`;
+    const rightKey = `right/${file}`;
+    this._diffContentMap.set(leftKey, leftContent);
+    this._diffContentMap.set(rightKey, rightContent);
+
+    const leftUri = vscode.Uri.parse(`agentsmithy-diff://${leftKey}`);
+    const rightUri = vscode.Uri.parse(`agentsmithy-diff://${rightKey}`);
+
+    await vscode.commands.executeCommand('vscode.diff', leftUri, rightUri, title);
+
+    // Fire change to ensure editors pick up initial content (in case already open)
+    this._diffContentEmitter?.fire(leftUri);
+    this._diffContentEmitter?.fire(rightUri);
+  };
   private _handleWebviewReady = async (): Promise<void> => {
     try {
       const dialogId = await this._historyService.resolveCurrentDialogId();
@@ -294,7 +486,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     );
   };
 
-  private async _safeUpdateSession(dialogId?: string): Promise<void> {
+  private _safeUpdateSession = async (dialogId?: string): Promise<void> => {
     if (!dialogId) {
       return;
     }
@@ -303,9 +495,9 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     } catch {
       // non-blocking
     }
-  }
+  };
 
-  private async _safeReloadLatest(dialogId?: string): Promise<void> {
+  private _safeReloadLatest = async (dialogId?: string): Promise<void> => {
     if (!dialogId) {
       return;
     }
@@ -314,7 +506,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     } catch {
       // non-blocking
     }
-  }
+  };
 
   private _handleSendMessage = async (text: string): Promise<void> => {
     if (!this._view) {
@@ -337,46 +529,67 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     await this._runStream(request, eventHandlers);
   };
 
-  private async _runStream(
+  private _handleStreamEvent = async (
+    event: import('./api/StreamService').SSEEvent,
+    eventHandlers: StreamEventHandlers,
+    state: {currentDialogId?: string; hasError: boolean},
+  ): Promise<void> => {
+    await eventHandlers.handleEvent(event);
+
+    if (event.dialog_id) {
+      state.currentDialogId = event.dialog_id;
+    }
+
+    if (event.type === E.ERROR) {
+      state.hasError = true;
+    }
+
+    if (this._shouldUpdateSession(event.type) && state.currentDialogId) {
+      await this._safeUpdateSession(state.currentDialogId);
+    }
+  };
+
+  private _handleStreamDone = async (dialogId: string, hasError: boolean): Promise<void> => {
+    this._historyService.currentDialogId = dialogId;
+    // Don't reload history if there was an error - it would overwrite the error message
+    if (!hasError) {
+      await this._safeReloadLatest(dialogId);
+    }
+  };
+
+  private _runStream = async (
     request: import('./api/StreamService').ChatRequest,
     eventHandlers: StreamEventHandlers,
-  ): Promise<void> {
+  ): Promise<void> => {
     try {
       let hasReceivedEvents = false;
-      let currentDialogId = this._historyService.currentDialogId;
+      const state = {
+        currentDialogId: this._historyService.currentDialogId,
+        hasError: false,
+      };
 
       for await (const event of this._stream.streamChat(request)) {
         hasReceivedEvents = true;
-        await eventHandlers.handleEvent(event);
-
-        if (event.dialog_id) {
-          currentDialogId = event.dialog_id;
-        }
-
-        if (this._shouldUpdateSession(event.type) && currentDialogId) {
-          await this._safeUpdateSession(currentDialogId);
-        }
+        await this._handleStreamEvent(event, eventHandlers, state);
 
         if (event.type === E.DONE && event.dialog_id) {
-          this._historyService.currentDialogId = event.dialog_id;
-          await this._safeReloadLatest(event.dialog_id);
+          await this._handleStreamDone(event.dialog_id, state.hasError);
         }
       }
 
       if (!hasReceivedEvents) {
         eventHandlers.handleNoResponse();
       }
-    } catch (error) {
+    } catch (error: unknown) {
       if (error instanceof Error && error.name === ERROR_NAMES.ABORT) {
         eventHandlers.handleAbort();
       } else if (error instanceof Error) {
         eventHandlers.handleConnectionError(error);
       }
-      // endAssistantMessage is sent inside eventHandlers for errors; avoid duplicate messages here
     } finally {
       eventHandlers.finalize();
     }
-  }
+  };
 
   /**
    * Switch to a dialog - common logic used across multiple operations
@@ -518,14 +731,113 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
   private _updateSessionStatus = async (dialogId: string): Promise<void> => {
     try {
       const status = await this._apiService.getSessionStatus(dialogId);
+      // Cache changed files so we can open diffs without Git
+      this._lastChangedFiles = status.changed_files;
       this._postMessage({
         type: WEBVIEW_OUT_MSG.SESSION_STATUS_UPDATE,
         hasUnapproved: status.has_unapproved,
+        changedFiles: status.changed_files,
       });
+
+      // Refresh any open diff editors to reflect latest base/current state
+      await this._refreshOpenDiffEditorsFromStatus();
     } catch {
       // Silent fail - session status is not critical
     }
   };
+
+  private _collectVisibleDiffFiles = (files: Set<string>): void => {
+    for (const ed of vscode.window.visibleTextEditors) {
+      const uri = ed.document.uri;
+      if (uri.scheme !== DIFF_SCHEME) {
+        continue;
+      }
+      if (uri.authority === DIFF_SIDE_LEFT || uri.authority === DIFF_SIDE_RIGHT) {
+        const filePath = uri.path.replace(/^\/+/, '/');
+        files.add(filePath);
+      }
+    }
+  };
+
+  private _collectTabGroupDiffFiles = (files: Set<string>): void => {
+    try {
+      for (const group of vscode.window.tabGroups.all) {
+        for (const tab of group.tabs) {
+          const input = tab.input;
+          if (input instanceof vscode.TabInputTextDiff) {
+            this._addDiffFileIfMatches(files, input.original);
+            this._addDiffFileIfMatches(files, input.modified);
+          }
+        }
+      }
+    } catch {
+      // Tab API might not exist in older VS Code - ignore
+    }
+  };
+
+  private _addDiffFileIfMatches = (files: Set<string>, uri: vscode.Uri): void => {
+    if (uri.scheme === DIFF_SCHEME && (uri.authority === DIFF_SIDE_LEFT || uri.authority === DIFF_SIDE_RIGHT)) {
+      files.add(uri.path.replace(/^\/+/, '/'));
+    }
+  };
+
+  _detectOpenDiffFiles = (): string[] => {
+    // Find files that currently have our custom diff open (either side visible)
+    const files = new Set<string>();
+    this._collectVisibleDiffFiles(files);
+    this._collectTabGroupDiffFiles(files);
+    return Array.from(files);
+  };
+  _uriForSide = (file: string, side: 'left' | 'right'): vscode.Uri =>
+    vscode.Uri.parse(`${DIFF_SCHEME}://${side}/${file}`);
+
+  private async _refreshOpenDiffEditorsFromStatus(): Promise<void> {
+    this._ensureDiffProvider();
+    const files = this._detectOpenDiffFiles();
+    for (const file of files) {
+      const cf = this._lastChangedFiles.find((x) => this._resolveAbsPath(x.path) === file || x.path === file);
+
+      if (cf && !cf.is_binary && !cf.is_too_large) {
+        // Update contents for files that still exist in the new session
+        const {leftContent, rightContent} = await this._resolveDiffContents(cf, file);
+        const leftKey = `left/${file}`;
+        const rightKey = `right/${file}`;
+        this._diffContentMap.set(leftKey, leftContent);
+        this._diffContentMap.set(rightKey, rightContent);
+        this._diffContentEmitter?.fire(this._uriForSide(file, 'left'));
+        this._diffContentEmitter?.fire(this._uriForSide(file, 'right'));
+      } else {
+        // File is no longer part of the new session changes – close its diff tab to avoid stale view
+        await this._closeDiffTabsForFile(file);
+      }
+    }
+  }
+
+  private async _closeDiffTabsForFile(file: string): Promise<void> {
+    try {
+      const leftUri = this._uriForSide(file, 'left');
+      const rightUri = this._uriForSide(file, 'right');
+      const groups = vscode.window.tabGroups.all;
+      for (const group of groups) {
+        for (const tab of group.tabs) {
+          const input = tab.input;
+          if (input instanceof vscode.TabInputTextDiff) {
+            const original = input.original;
+            const modified = input.modified;
+            // Match either side to our URIs
+            const matches =
+              (original.scheme === DIFF_SCHEME && original.toString() === leftUri.toString()) ||
+              (modified.scheme === DIFF_SCHEME && modified.toString() === rightUri.toString());
+            if (matches) {
+              await vscode.window.tabGroups.close(tab, true);
+            }
+          }
+        }
+      }
+    } catch {
+      // Best-effort: ignore if Tab API not available
+    }
+  }
 
   private _handleRestoreCheckpoint = async (dialogId: string, checkpointId: string): Promise<void> => {
     try {
@@ -670,10 +982,12 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
                 Type a message to start...
             </div>
         </div>
+        <div class="session-changes hidden" id="sessionChanges"></div>
         <div class="session-actions" id="sessionActions">
             <button class="session-action-btn settings-btn" id="settingsBtn" title="Open Settings" aria-label="Open Settings">
                 <span class="codicon codicon-gear" aria-hidden="true"></span>
             </button>
+
             <div class="model-selector">
                 <button class="model-selector-btn" id="modelSelectorBtn" aria-label="Select model">
                     <span class="model-selector-text" id="modelSelectorText">GPT-5</span>

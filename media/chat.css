@@ -746,6 +746,98 @@ body {
   fill: currentColor;
 }
 
+/* Session Changes Panel */
+.session-changes {
+  padding: 0; /* header/body define their own padding */
+  background-color: var(--vscode-sideBar-background);
+  border-top: 1px solid var(--vscode-widget-border);
+  border-bottom: 1px solid var(--vscode-widget-border);
+  /* Container has a fixed height; only the body scrolls */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden; /* prevent header from scrolling */
+  max-height: 40vh; /* limit overall panel height by default */
+  flex: 0 0 auto; /* keep own height and not stretch */
+}
+.session-changes-header {
+  /* Non-sticky header that stays at the top of the panel */
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 6px 8px; /* header padding */
+  background-color: var(--vscode-sideBar-background);
+  border-bottom: 1px solid var(--vscode-widget-border);
+  flex: 0 0 auto;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--vscode-descriptionForeground);
+}
+.session-changes-body {
+  /* Body is the only scrollable area */
+  flex: 1 1 auto;
+  min-height: 0; /* allow flex child to shrink for scrolling */
+  overflow: auto;
+  padding: 6px 8px; /* content padding */
+}
+.session-changes__actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.session-change-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+}
+.session-change-item .file-link {
+  color: var(--vscode-textLink-foreground);
+  text-decoration: none;
+  cursor: pointer;
+}
+.session-change-item .file-link:hover {
+  text-decoration: underline;
+}
+.session-change-meta {
+  font-size: 12px;
+  color: var(--vscode-descriptionForeground);
+  white-space: nowrap;
+}
+/* Colorize additions/deletions like git decorations */
+.session-change-meta .added {
+  color: var(--vscode-gitDecoration-addedResourceForeground);
+}
+.session-change-meta .removed {
+  color: var(--vscode-gitDecoration-deletedResourceForeground);
+}
+
+/* Drag handle for changes panel (below header) */
+.session-changes-resizer.top {
+  position: relative; /* not sticky */
+  height: 6px;
+  cursor: ns-resize;
+  background: linear-gradient(to top, transparent 0%, rgba(128, 128, 128, 0.15) 50%, transparent 100%);
+  z-index: 1;
+}
+
+.session-changes-resizer.top::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  top: 1px;
+  width: 24px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--vscode-descriptionForeground);
+  opacity: 0.7;
+}
+
 /* Session Actions Panel */
 .session-actions {
   display: flex;

@@ -20,6 +20,7 @@ export interface VSCodeAPI {
 export type WebviewInMessage =
   | {type: typeof WEBVIEW_IN_MSG.SEND_MESSAGE; text?: string}
   | {type: typeof WEBVIEW_IN_MSG.OPEN_FILE; file?: string}
+  | {type: typeof WEBVIEW_IN_MSG.OPEN_FILE_DIFF; file?: string}
   | {type: typeof WEBVIEW_IN_MSG.STOP_PROCESSING}
   | {type: typeof WEBVIEW_IN_MSG.READY}
   | {type: typeof WEBVIEW_IN_MSG.LOAD_MORE_HISTORY}
@@ -70,7 +71,20 @@ export type WebviewOutMessage =
   | {type: typeof WEBVIEW_OUT_MSG.DIALOGS_LOADING}
   | {type: typeof WEBVIEW_OUT_MSG.DIALOGS_ERROR; error: string}
   | {type: typeof WEBVIEW_OUT_MSG.DIALOG_SWITCHED; dialogId: string | null; title: string}
-  | {type: typeof WEBVIEW_OUT_MSG.SESSION_STATUS_UPDATE; hasUnapproved: boolean}
+  | {
+      type: typeof WEBVIEW_OUT_MSG.SESSION_STATUS_UPDATE;
+      hasUnapproved: boolean;
+      changedFiles?: Array<{
+        path: string;
+        status: string;
+        additions: number;
+        deletions: number;
+        diff: string | null;
+        base_content?: string | null;
+        is_binary?: boolean;
+        is_too_large?: boolean;
+      }>;
+    }
   | {type: typeof WEBVIEW_OUT_MSG.SESSION_OPERATION_CANCELLED};
 
 export interface HistoryEvent {

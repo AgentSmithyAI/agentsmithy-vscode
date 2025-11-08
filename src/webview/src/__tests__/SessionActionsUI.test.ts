@@ -18,6 +18,12 @@ describe('SessionActionsUI', () => {
     panel.id = 'sessionActions';
     document.body.appendChild(panel);
 
+    // Changes panel container
+    const changes = document.createElement('div');
+    changes.id = 'sessionChanges';
+    changes.className = 'session-changes';
+    document.body.appendChild(changes);
+
     approveBtn = document.createElement('button');
     approveBtn.id = 'sessionApproveBtn';
     document.body.appendChild(approveBtn);
@@ -33,9 +39,8 @@ describe('SessionActionsUI', () => {
       setState: vi.fn(),
     };
 
-    sessionActionsUI = new SessionActionsUI(mockVscode);
+    sessionActionsUI = new SessionActionsUI(mockVscode, '/workspace');
   });
-
   afterEach(() => {
     document.body.innerHTML = '';
   });
@@ -188,6 +193,44 @@ describe('SessionActionsUI', () => {
     });
   });
 
+  describe('changed files panel visibility', () => {
+    it('collapses and frees height when there are no changes', () => {
+      sessionActionsUI.setCurrentDialogId('d1');
+      // First show with one change to ensure panel becomes visible
+      sessionActionsUI.updateSessionStatus(true, [
+        {path: 'a.txt', status: 'added', additions: 0, deletions: 0, diff: null},
+      ] as any);
+      const panelEl = document.getElementById('sessionChanges') as HTMLElement;
+      expect(panelEl).toBeTruthy();
+      expect(panelEl.classList.contains('hidden')).toBe(false);
+      expect(panelEl.style.display).not.toBe('none');
+      // Now update with no changes -> should fully hide and clear sizing
+      sessionActionsUI.updateSessionStatus(false, []);
+      expect(panelEl.classList.contains('hidden')).toBe(true);
+      expect(panelEl.style.display).toBe('none');
+      expect(panelEl.style.height).toBe('');
+      expect(panelEl.style.maxHeight).toBe('');
+      expect(panelEl.innerHTML).toBe('');
+    });
+
+    it('shows panel again when changes appear after being empty', () => {
+      sessionActionsUI.setCurrentDialogId('d1');
+      sessionActionsUI.updateSessionStatus(false, []);
+      const panelEl = document.getElementById('sessionChanges') as HTMLElement;
+      expect(panelEl.classList.contains('hidden')).toBe(true);
+      expect(panelEl.style.display).toBe('none');
+      // Then changes arrive
+      sessionActionsUI.updateSessionStatus(true, [
+        {path: 'b.txt', status: 'modified', additions: 2, deletions: 1, diff: null},
+      ] as any);
+      expect(panelEl.classList.contains('hidden')).toBe(false);
+      expect(panelEl.style.display).toBe('');
+      // header/body rendered
+      expect(panelEl.querySelector('.session-changes-header')).toBeTruthy();
+      expect(panelEl.querySelector('.session-changes-body')).toBeTruthy();
+    });
+  });
+
   describe('reset sequence simulation', () => {
     it('should handle full reset flow: enable -> click -> disable -> re-enable', () => {
       const dialogId = 'test-dialog';
@@ -281,6 +324,157 @@ describe('SessionActionsUI', () => {
       // User can click again
       resetBtn.click();
       expect(mockVscode.postMessage).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('workspaceRoot handling for file paths', () => {
+    it('converts relative paths to absolute using workspaceRoot', () => {
+      const workspaceRoot = '/home/user/project';
+      const ui = new SessionActionsUI(mockVscode, workspaceRoot);
+      ui.setCurrentDialogId('d1');
+
+      ui.updateSessionStatus(true, [
+        {path: 'src/index.ts', status: 'modified', additions: 5, deletions: 2, diff: null} as any,
+      ]);
+
+      const panelEl = document.getElementById('sessionChanges') as HTMLElement;
+      const fileLink = panelEl.querySelector('.file-link') as HTMLAnchorElement;
+      expect(fileLink).toBeTruthy();
+
+      const dataFile = fileLink.getAttribute('data-file');
+      expect(dataFile).toBeTruthy();
+
+      const decodedPath = decodeURIComponent(dataFile!);
+      // Relative path should be converted to absolute
+      expect(decodedPath).toBe('/home/user/project/src/index.ts');
+    });
+
+    it('keeps absolute paths unchanged', () => {
+      const workspaceRoot = '/home/user/project';
+      const ui = new SessionActionsUI(mockVscode, workspaceRoot);
+      ui.setCurrentDialogId('d1');
+
+      const absolutePath = '/absolute/path/to/file.ts';
+      ui.updateSessionStatus(true, [
+        {path: absolutePath, status: 'added', additions: 10, deletions: 0, diff: null} as any,
+      ]);
+
+      const panelEl = document.getElementById('sessionChanges') as HTMLElement;
+      const fileLink = panelEl.querySelector('.file-link') as HTMLAnchorElement;
+      const dataFile = fileLink.getAttribute('data-file');
+      const decodedPath = decodeURIComponent(dataFile!);
+
+      // Absolute path should stay as is
+      expect(decodedPath).toBe(absolutePath);
+    });
+
+    it('handles Windows absolute paths (C:\\)', () => {
+      const workspaceRoot = 'C:\\Users\\dev\\project';
+      const ui = new SessionActionsUI(mockVscode, workspaceRoot);
+      ui.setCurrentDialogId('d1');
+
+      const windowsPath = 'C:\\Some\\Other\\File.cs';
+      ui.updateSessionStatus(true, [
+        {path: windowsPath, status: 'modified', additions: 1, deletions: 1, diff: null} as any,
+      ]);
+
+      const panelEl = document.getElementById('sessionChanges') as HTMLElement;
+      const fileLink = panelEl.querySelector('.file-link') as HTMLAnchorElement;
+      const dataFile = fileLink.getAttribute('data-file');
+      const decodedPath = decodeURIComponent(dataFile!);
+
+      // Windows absolute path should stay as is
+      expect(decodedPath).toBe(windowsPath);
+    });
+
+    it('works when workspaceRoot is empty string', () => {
+      const ui = new SessionActionsUI(mockVscode, '');
+      ui.setCurrentDialogId('d1');
+
+      ui.updateSessionStatus(true, [
+        {path: 'relative/file.ts', status: 'added', additions: 5, deletions: 0, diff: null} as any,
+      ]);
+
+      const panelEl = document.getElementById('sessionChanges') as HTMLElement;
+      const fileLink = panelEl.querySelector('.file-link') as HTMLAnchorElement;
+      const dataFile = fileLink.getAttribute('data-file');
+      const decodedPath = decodeURIComponent(dataFile!);
+
+      // Without workspace root, path stays relative
+      expect(decodedPath).toBe('relative/file.ts');
+    });
+
+    it('handles relative paths when workspaceRoot is falsy', () => {
+      const ui = new SessionActionsUI(mockVscode, ''); // Empty workspace root
+      ui.setCurrentDialogId('d1');
+
+      ui.updateSessionStatus(true, [
+        {path: 'src/test.js', status: 'modified', additions: 3, deletions: 1, diff: null} as any,
+      ]);
+
+      const panelEl = document.getElementById('sessionChanges') as HTMLElement;
+      const fileLink = panelEl.querySelector('.file-link') as HTMLAnchorElement;
+      const dataFile = fileLink.getAttribute('data-file');
+
+      // Path should remain as-is without workspace root
+      expect(decodeURIComponent(dataFile!)).toBe('src/test.js');
+    });
+  });
+
+  describe('event delegation prevents memory leaks', () => {
+    it('uses event delegation so listeners are not re-added on re-render', () => {
+      // Verify that re-rendering doesn't add duplicate listeners
+      sessionActionsUI.setCurrentDialogId('d1');
+
+      // Render once
+      sessionActionsUI.updateSessionStatus(true, [
+        {path: 'file1.ts', status: 'modified', additions: 1, deletions: 0, diff: null} as any,
+      ]);
+
+      const panelEl = document.getElementById('sessionChanges') as HTMLElement;
+      const fileLink1 = panelEl.querySelector('.file-link') as HTMLAnchorElement;
+      expect(fileLink1).toBeTruthy();
+
+      // Click and verify postMessage called once
+      fileLink1.click();
+      expect(mockVscode.postMessage).toHaveBeenCalledTimes(1);
+      expect(mockVscode.postMessage).toHaveBeenCalledWith({
+        type: WEBVIEW_IN_MSG.OPEN_FILE_DIFF,
+        file: expect.any(String),
+      });
+
+      mockVscode.postMessage = vi.fn(); // Reset
+
+      // Re-render with new files
+      sessionActionsUI.updateSessionStatus(true, [
+        {path: 'file2.ts', status: 'added', additions: 5, deletions: 0, diff: null} as any,
+      ]);
+
+      const fileLink2 = panelEl.querySelector('.file-link') as HTMLAnchorElement;
+      expect(fileLink2).toBeTruthy();
+
+      // Click new link - should still work (event delegation)
+      fileLink2.click();
+      expect(mockVscode.postMessage).toHaveBeenCalledTimes(1);
+      // No duplicate calls = no memory leak from accumulated listeners
+    });
+
+    it('diff toggle button works through event delegation', () => {
+      sessionActionsUI.setCurrentDialogId('d1');
+      sessionActionsUI.updateSessionStatus(true, [
+        {path: 'test.ts', status: 'modified', additions: 1, deletions: 1, diff: null} as any,
+      ]);
+
+      const panelEl = document.getElementById('sessionChanges') as HTMLElement;
+      const diffBtn = panelEl.querySelector('#diffViewToggleBtn') as HTMLButtonElement;
+      expect(diffBtn).toBeTruthy();
+
+      mockVscode.postMessage = vi.fn(); // Reset
+      diffBtn.click();
+
+      expect(mockVscode.postMessage).toHaveBeenCalledWith({
+        type: WEBVIEW_IN_MSG.TOGGLE_DIFF_VIEW,
+      });
     });
   });
 });

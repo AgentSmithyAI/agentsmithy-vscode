@@ -16,7 +16,6 @@
     "AI",
     "Chat"
   ],
-  "activationEvents": [],
   "main": "./out/extension.js",
   "contributes": {
     "viewsContainers": {
@@ -55,6 +54,12 @@
         "command": "agentsmithy.moveToSecondarySidebar",
         "title": "Move to Secondary Sidebar (Instructions)",
         "category": "AgentSmithy"
+      },
+      {
+        "command": "agentsmithy.setDiffViewMode",
+        "title": "Set Diff View Mode",
+        "category": "AgentSmithy",
+        "icon": "$(split-horizontal)"
       }
     ],
     "menus": {
@@ -72,6 +77,9 @@
         {
           "command": "agentsmithy.sendSelection",
           "when": "editorHasSelection"
+        },
+        {
+          "command": "agentsmithy.setDiffViewMode"
         }
       ]
     },
@@ -111,6 +119,9 @@
   "devDependencies": {
     "@eslint/js": "^9.39.1",
     "@stylistic/eslint-plugin": "^5.5.0",
+    "@types/diff": "^7.0.2",
+    "@types/dompurify": "^3.0.5",
+    "@types/jsdom": "^27.0.0",
     "@types/node": "^24.10.0",
     "@types/vscode": "^1.100.0",
     "@vitest/coverage-v8": "^4.0.7",
@@ -130,6 +141,8 @@
   },
   "dependencies": {
     "@vscode/codicons": "^0.0.36",
+    "diff": "^6.0.0",
+    "dompurify": "^3.3.0",
     "marked": "^16.3.0"
   }
 }

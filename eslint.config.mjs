@@ -109,12 +109,20 @@ export default [
       '@typescript-eslint/no-non-null-assertion': 'error',
       '@typescript-eslint/prefer-optional-chain': 'error',
       '@typescript-eslint/no-unnecessary-condition': 'error',
+      '@typescript-eslint/no-floating-promises': 'error',
+      '@typescript-eslint/await-thenable': 'error',
+      '@typescript-eslint/no-misused-promises': 'error',
 
       // Unicorn adjustments suitable for VSCode extension
       'unicorn/filename-case': 'off',
       'unicorn/prevent-abbreviations': 'off',
       'unicorn/prefer-query-selector': 'off',
       'unicorn/no-null': 'off',
+      'unicorn/no-array-for-each': 'warn',
+      'unicorn/prefer-array-some': 'warn',
+      'unicorn/prefer-includes': 'warn',
+      'unicorn/prefer-string-slice': 'warn',
+      'unicorn/prefer-ternary': 'warn',
 
       // Import rules baseline
       'import/no-cycle': ['error', {maxDepth: Infinity}],
@@ -137,9 +145,11 @@ export default [
       ],
 
       // SonarJS subset
-      'sonarjs/cognitive-complexity': 'warn',
-      'sonarjs/no-duplicate-string': 'warn',
+      'sonarjs/cognitive-complexity': ['warn', 15],
+      'sonarjs/no-duplicate-string': ['warn', {threshold: 3}],
       'sonarjs/no-inconsistent-returns': 'warn',
+      'sonarjs/no-identical-functions': 'warn',
+      'sonarjs/no-nested-template-literals': 'warn',
       'prefer-template': 'warn',
     },
   },

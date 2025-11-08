@@ -7,10 +7,12 @@ import {HistoryService} from '../services/HistoryService';
 import {DialogService} from '../services/DialogService';
 import {ConfigService} from '../services/ConfigService';
 import {WEBVIEW_IN_MSG, WEBVIEW_OUT_MSG} from '../shared/messages';
+import {normalizeSSEEvent} from '../shared/sseNormalizer';
+import {bootWebview, mockSessionStatus, waitForAsync} from './test-helpers';
 
 class FakeStream extends StreamService {
   constructor() {
-    super({} as any);
+    super('http://localhost', normalizeSSEEvent);
   }
 }
 
@@ -29,38 +31,6 @@ describe('ChatWebviewProvider - session operations', () => {
     vi.restoreAllMocks();
   });
 
-  const bootWebview = (provider: ChatWebviewProvider) => {
-    type WebviewLike = {
-      postMessage: (message: unknown) => Promise<boolean>;
-      onDidReceiveMessage?: (cb: (msg: unknown) => void) => void;
-    };
-    type DisposableLike = {dispose: () => void};
-    type WebviewViewLike = {
-      webview: WebviewLike;
-      onDidChangeVisibility: (cb: () => void) => DisposableLike;
-      onDidDispose: (cb: () => void) => void;
-    };
-
-    const postMessage = vi.fn(async () => true);
-    const webview: WebviewLike = {postMessage};
-
-    let handler: ((msg: unknown) => void) | undefined;
-    webview.onDidReceiveMessage = (cb: (msg: unknown) => void) => {
-      handler = cb;
-    };
-
-    (vscode.workspace as any).openTextDocument = vi.fn();
-
-    const webviewView: WebviewViewLike = {
-      webview,
-      onDidChangeVisibility: () => ({dispose: vi.fn()}),
-      onDidDispose: (cb: () => void) => cb(),
-    };
-
-    provider.resolveWebviewView(webviewView as unknown as any, {} as any, {} as any);
-    return {postMessage, send: (msg: unknown) => handler?.(msg)};
-  };
-
   it('handles APPROVE_SESSION success path', async () => {
     const {provider, api, history, dialog} = createProvider();
     const {postMessage, send} = bootWebview(provider);
@@ -72,13 +42,12 @@ describe('ChatWebviewProvider - session operations', () => {
     vi.spyOn(api, 'approveSession').mockResolvedValue({approved_commit: 'c1', new_session: 's2', commits_approved: 3});
     vi.spyOn(history, 'loadLatest').mockResolvedValue({events: [], hasMore: false, dialogId: 'd1'} as any);
     vi.spyOn(dialog, 'loadDialogs').mockResolvedValue();
+    mockSessionStatus(api, 's2');
 
     // Trigger
     send({type: WEBVIEW_IN_MSG.APPROVE_SESSION, dialogId: 'd1'});
 
-    // Allow async handlers to run
-    await Promise.resolve();
-    await Promise.resolve();
+    await waitForAsync();
 
     // Expect info, history reload, session status update
     expect(api.approveSession).toHaveBeenCalledWith('d1');
@@ -110,13 +79,14 @@ describe('ChatWebviewProvider - session operations', () => {
     history.currentDialogId = 'd1';
 
     vi.spyOn(vscode.window, 'showWarningMessage').mockResolvedValueOnce(undefined as any); // user cancels
+    const resetSpy = vi.spyOn(api, 'resetToApproved');
 
     send({type: WEBVIEW_IN_MSG.RESET_TO_APPROVED, dialogId: 'd1'});
 
     await Promise.resolve();
 
     expect(postMessage).toHaveBeenCalledWith({type: WEBVIEW_OUT_MSG.SESSION_OPERATION_CANCELLED});
-    expect(api.resetToApproved).not.toHaveBeenCalled();
+    expect(resetSpy).not.toHaveBeenCalled();
   });
 
   it('handles RESET_TO_APPROVED success path', async () => {
@@ -128,11 +98,11 @@ describe('ChatWebviewProvider - session operations', () => {
     vi.spyOn(vscode.window, 'showWarningMessage').mockResolvedValueOnce('Reset' as any);
     vi.spyOn(api, 'resetToApproved').mockResolvedValue({reset_to: 'c1', new_session: 's2'});
     vi.spyOn(history, 'loadLatest').mockResolvedValue({events: [], hasMore: false, dialogId: 'd1'} as any);
+    mockSessionStatus(api, 's2');
 
     send({type: WEBVIEW_IN_MSG.RESET_TO_APPROVED, dialogId: 'd1'});
 
-    await Promise.resolve();
-    await Promise.resolve();
+    await waitForAsync();
 
     expect(api.resetToApproved).toHaveBeenCalledWith('d1');
     expect(postMessage).toHaveBeenCalledWith(expect.objectContaining({type: WEBVIEW_OUT_MSG.SHOW_INFO}));
@@ -149,6 +119,7 @@ describe('ChatWebviewProvider - session operations', () => {
     vi.spyOn(vscode.window, 'showWarningMessage').mockResolvedValueOnce('Restore' as any);
     vi.spyOn(api, 'restoreCheckpoint').mockResolvedValue({restored_to: 'c1', new_checkpoint: 'c2'});
     vi.spyOn(history, 'loadLatest').mockResolvedValue({events: [], hasMore: false, dialogId: 'd1'} as any);
+    mockSessionStatus(api);
 
     send({
       type: WEBVIEW_IN_MSG.RESTORE_CHECKPOINT,
@@ -156,8 +127,7 @@ describe('ChatWebviewProvider - session operations', () => {
       checkpointId: 'c1',
     });
 
-    await Promise.resolve();
-    await Promise.resolve();
+    await waitForAsync();
 
     expect(api.restoreCheckpoint).toHaveBeenCalledWith('d1', 'c1');
     expect(postMessage).toHaveBeenCalledWith(expect.objectContaining({type: WEBVIEW_OUT_MSG.SHOW_INFO}));
@@ -170,6 +140,7 @@ describe('ChatWebviewProvider - session operations', () => {
     const {postMessage, send} = bootWebview(provider);
 
     vi.spyOn(vscode.window, 'showWarningMessage').mockResolvedValueOnce(undefined as any);
+    const restoreSpy = vi.spyOn(api, 'restoreCheckpoint');
 
     send({
       type: WEBVIEW_IN_MSG.RESTORE_CHECKPOINT,
@@ -179,7 +150,7 @@ describe('ChatWebviewProvider - session operations', () => {
 
     await Promise.resolve();
 
-    expect(api.restoreCheckpoint).not.toHaveBeenCalled();
+    expect(restoreSpy).not.toHaveBeenCalled();
     // No explicit cancel message for restore; just ensure no errors
     expect(postMessage).not.toHaveBeenCalledWith(expect.objectContaining({type: WEBVIEW_OUT_MSG.SHOW_ERROR}));
   });

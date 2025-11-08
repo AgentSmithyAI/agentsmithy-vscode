@@ -88,7 +88,7 @@ class ChatWebview {
     this.dialogsUI.onCreateNewDialog = () => {
       this.pendingFocusAfterCreate = true;
     };
-    this.sessionActionsUI = new SessionActionsUI(this.vscode);
+    this.sessionActionsUI = new SessionActionsUI(this.vscode, workspaceRoot);
     // Connect renderer to scroll manager for smart auto-scroll
     this.renderer.setScrollManager(this.scrollManager);
     this.messageHandler = new MessageHandler(
@@ -117,6 +117,14 @@ class ChatWebview {
     if (settingsBtn) {
       settingsBtn.addEventListener('click', () => {
         this.vscode.postMessage({type: WEBVIEW_IN_MSG.OPEN_SETTINGS});
+      });
+    }
+
+    // Diff view toggle button
+    const diffToggleBtn = document.getElementById(DOM_IDS.DIFF_VIEW_TOGGLE_BTN);
+    if (diffToggleBtn) {
+      diffToggleBtn.addEventListener('click', () => {
+        this.vscode.postMessage({type: WEBVIEW_IN_MSG.TOGGLE_DIFF_VIEW});
       });
     }
 
@@ -342,6 +350,11 @@ class ChatWebview {
 
       case WEBVIEW_OUT_MSG.DIALOG_SWITCHED:
         this.handleDialogSwitch(message.dialogId, message.title);
+        break;
+
+      case WEBVIEW_OUT_MSG.SESSION_STATUS_UPDATE:
+        // Forward to SessionActionsUI for buttons and changes panel
+        this.sessionActionsUI.updateSessionStatus(message.hasUnapproved, message.changedFiles);
         break;
 
       case WEBVIEW_OUT_MSG.GET_VISIBLE_FIRST_IDX: {
