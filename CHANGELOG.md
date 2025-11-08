@@ -1,3 +1,10 @@
+# [1.4.0](https://github.com/AgentSmithyAI/agentsmithy-vscode/compare/v1.3.0...v1.4.0) (2025-11-08)
+
+
+### Features
+
+* Add changed files info + diffs ([#27](https://github.com/AgentSmithyAI/agentsmithy-vscode/issues/27)) ([93d0f97](https://github.com/AgentSmithyAI/agentsmithy-vscode/commit/93d0f9736888fbbfbfb64584ce669b7c33605916))
+
 # [1.3.0](https://github.com/AgentSmithyAI/agentsmithy-vscode/compare/v1.2.1...v1.3.0) (2025-11-03)
 
 
