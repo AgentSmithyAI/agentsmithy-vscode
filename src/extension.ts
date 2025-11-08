@@ -8,16 +8,64 @@ import {DialogService} from './services/DialogService';
 import {HistoryService} from './services/HistoryService';
 import {StreamService} from './api/StreamService';
 import {normalizeSSEEvent} from './shared/sseNormalizer';
+import {ServerManager} from './services/ServerManager';
 
-export const activate = (context: vscode.ExtensionContext) => {
+export const activate = async (context: vscode.ExtensionContext) => {
   // Create services
   const configService = new ConfigService();
-  const serverUrl = configService.getServerUrl();
+  const serverManager = new ServerManager(context, configService);
 
-  const apiService = new ApiService(serverUrl);
-  const streamService = new StreamService(serverUrl, normalizeSSEEvent);
+  // Add ServerManager to subscriptions for proper cleanup
+  context.subscriptions.push(serverManager);
+
+  // Create API services
+  const serverUrl = configService.getServerUrl();
+  const apiServiceImpl = new ApiService(serverUrl);
+
+  // Wrap ApiService with Proxy to wait for server readiness
+  const apiService = new Proxy(apiServiceImpl, {
+    get: (target, prop) => {
+      const value = target[prop as keyof ApiService];
+      if (typeof value === 'function') {
+        return async (...args: unknown[]) => {
+          await serverManager.waitForReady();
+
+          return (value as (...args: unknown[]) => unknown).apply(target, args);
+        };
+      }
+      return value;
+    },
+  });
+
+  const streamServiceImpl = new StreamService(serverUrl, normalizeSSEEvent);
+
+  // Wrap StreamService with Proxy to wait for server readiness
+  const streamService = new Proxy(streamServiceImpl, {
+    get: (target, prop) => {
+      const value = target[prop as keyof StreamService];
+      if (typeof value === 'function') {
+        return async (...args: unknown[]) => {
+          await serverManager.waitForReady();
+
+          return (value as (...args: unknown[]) => unknown).apply(target, args);
+        };
+      }
+      return value;
+    },
+  });
+
   const historyService = new HistoryService(apiService);
   const dialogService = new DialogService(apiService);
+
+  // Auto-start server if configured
+  if (configService.getAutoStartServer()) {
+    // Start server in background, don't block activation
+    void serverManager.startServer().catch(() => {
+      void vscode.window.showWarningMessage(
+        'Failed to start AgentSmithy server automatically. You can start it manually from the Command Palette.',
+      );
+    });
+  }
 
   // Note: When server URL changes, we recreate service instances,
   // but existing providers will continue using old instances.
@@ -44,6 +92,38 @@ export const activate = (context: vscode.ExtensionContext) => {
   // Register commands using Command Pattern
   registerCommands(context, provider);
 
+  // Register server management commands
+  context.subscriptions.push(
+    vscode.commands.registerCommand(COMMANDS.START_SERVER, async () => {
+      await serverManager.startServer();
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand(COMMANDS.STOP_SERVER, async () => {
+      await serverManager.stopServer();
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand(COMMANDS.RESTART_SERVER, async () => {
+      await serverManager.restartServer();
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand(COMMANDS.SERVER_STATUS, async () => {
+      const status = await serverManager.getStatus();
+      const statusMessage = status.running
+        ? status.port !== null
+          ? `AgentSmithy server is running on port ${status.port} (PID: ${status.pid ?? 'unknown'})`
+          : `AgentSmithy server is running (port unknown, PID: ${status.pid ?? 'unknown'})`
+        : `AgentSmithy server is not running`;
+
+      void vscode.window.showInformationMessage(statusMessage);
+    }),
+  );
+
   // Show a welcome message
   const hasShownWelcome = Boolean(context.globalState.get(STATE_KEYS.WELCOME_SHOWN, false));
 
@@ -58,4 +138,9 @@ export const activate = (context: vscode.ExtensionContext) => {
   }
 };
 
-// VSCode does not require a deactivate export; intentionally omitted.
+/**
+ * Deactivate function to clean up resources
+ */
+export const deactivate = () => {
+  // Resources are automatically disposed via context.subscriptions
+};

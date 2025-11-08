@@ -1,0 +1,345 @@
+/* eslint-disable no-undef */
+import * as vscode from 'vscode';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as https from 'https';
+import * as http from 'http';
+import {
+  getAssetName,
+  getVersionedBinaryName,
+  createFileLink,
+  getLatestInstalledVersion,
+  compareVersions,
+  getInstalledVersions,
+  makeExecutable,
+} from '../../utils/platform';
+import {calculateFileSHA256} from '../../utils/crypto';
+
+export class DownloadManager {
+  private readonly serverDir: string;
+  private readonly outputChannel: vscode.OutputChannel;
+
+  constructor(serverDir: string, outputChannel: vscode.OutputChannel) {
+    this.serverDir = serverDir;
+    this.outputChannel = outputChannel;
+  }
+
+  /**
+   * Get lock file path
+   */
+  private getLockPath = (): string => {
+    return path.join(this.serverDir, '.download.lock');
+  };
+
+  /**
+   * Check if process with given PID is running
+   */
+  private isProcessAlive = (pid: number): boolean => {
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  /**
+   * Try to acquire download lock
+   */
+  private tryAcquireLock = (): boolean => {
+    const lockPath = this.getLockPath();
+
+    try {
+      const fd = fs.openSync(lockPath, 'wx');
+      fs.writeSync(fd, process.pid.toString());
+      fs.closeSync(fd);
+      return true;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
+        try {
+          const lockPid = Number.parseInt(fs.readFileSync(lockPath, 'utf8'), 10);
+          if (!this.isProcessAlive(lockPid)) {
+            this.outputChannel.appendLine(`Removing stale download lock (PID ${lockPid})`);
+            fs.unlinkSync(lockPath);
+            return this.tryAcquireLock();
+          }
+          return false;
+        } catch {
+          try {
+            fs.unlinkSync(lockPath);
+            return this.tryAcquireLock();
+          } catch {
+            return false;
+          }
+        }
+      }
+      return false;
+    }
+  };
+
+  /**
+   * Acquire download lock, waiting if necessary
+   */
+  acquireLock = async (maxAttempts = 60): Promise<boolean> => {
+    for (let i = 0; i < maxAttempts; i++) {
+      if (this.tryAcquireLock()) {
+        this.outputChannel.appendLine('Acquired download lock');
+        return true;
+      }
+
+      if (i === 0) {
+        this.outputChannel.appendLine('Download lock is held by another VSCode instance, waiting...');
+      }
+
+      await new Promise((resolve) => {
+        setTimeout(resolve, 1000);
+      });
+    }
+
+    this.outputChannel.appendLine('Failed to acquire download lock after timeout');
+    return false;
+  };
+
+  /**
+   * Release download lock
+   */
+  releaseLock = (): void => {
+    const lockPath = this.getLockPath();
+    try {
+      if (fs.existsSync(lockPath)) {
+        fs.unlinkSync(lockPath);
+        this.outputChannel.appendLine('Released download lock');
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      this.outputChannel.appendLine(`Failed to release download lock: ${errorMessage}`);
+    }
+  };
+
+  /**
+   * Fetch latest release info from GitHub
+   */
+  fetchLatestRelease = async (): Promise<{version: string; size: number; sha256: string}> => {
+    return new Promise((resolve, reject) => {
+      const options = {
+        hostname: 'api.github.com',
+        path: '/repos/AgentSmithyAI/agentsmithy-agent/releases/latest',
+        method: 'GET',
+        headers: {
+          'User-Agent': 'AgentSmithy-VSCode',
+          Accept: 'application/vnd.github+json',
+        },
+      };
+
+      https
+        .get(options, (res) => {
+          let data = '';
+
+          res.on('data', (chunk) => {
+            data += chunk;
+          });
+
+          res.on('end', () => {
+            try {
+              // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+              const release = JSON.parse(data);
+
+              const version = release.tag_name as string;
+
+              const assets = release.assets as unknown[];
+
+              const assetName = getAssetName(version);
+
+              const asset = assets.find((a: unknown) => {
+                return (a as {name: string}).name === assetName;
+              });
+
+              if (asset === undefined) {
+                reject(new Error(`Asset ${assetName} not found in release ${version}`));
+                return;
+              }
+
+              const size = (asset as {size: number}).size;
+              // Get SHA256 from digest field (format: "sha256:hash")
+              const digest = (asset as {digest?: string}).digest || '';
+              const sha256 = digest.replace(/^sha256:/, '');
+
+              resolve({version, size, sha256});
+            } catch (error) {
+              const errorMessage = error instanceof Error ? error.message : String(error);
+              reject(new Error(`Failed to parse release data: ${errorMessage}`));
+            }
+          });
+        })
+        .on('error', (error) => {
+          reject(new Error(`Failed to fetch latest version: ${error.message}`));
+        });
+    });
+  };
+
+  /**
+   * Download server binary from GitHub
+   * @param versionTag - version tag with 'v' prefix for GitHub URL (e.g., 'v1.9.0')
+   * @param versionClean - version without 'v' for filenames (e.g., '1.9.0')
+   */
+  downloadBinary = async (versionTag: string, versionClean: string, linkPath: string): Promise<void> => {
+    const assetName = getAssetName(versionClean);
+    const versionedPath = path.join(this.serverDir, getVersionedBinaryName(versionClean));
+    const downloadUrl = `https://github.com/AgentSmithyAI/agentsmithy-agent/releases/download/${versionTag}/${assetName}`;
+
+    this.outputChannel.appendLine(`Downloading server from: ${downloadUrl}`);
+
+    return new Promise((resolve, reject) => {
+      const file = fs.createWriteStream(versionedPath);
+      const protocol = downloadUrl.startsWith('https') ? https : http;
+
+      protocol
+        .get(downloadUrl, (response) => {
+          // Handle redirects
+          if (response.statusCode === 302 || response.statusCode === 301) {
+            const redirectUrl = response.headers.location;
+            if (!redirectUrl) {
+              reject(new Error('Redirect location not found'));
+              return;
+            }
+
+            const redirectProtocol = redirectUrl.startsWith('https') ? https : http;
+            redirectProtocol
+              .get(redirectUrl, (redirectResponse) => {
+                redirectResponse.pipe(file);
+
+                file.on('finish', () => {
+                  file.close(() => {
+                    makeExecutable(versionedPath);
+                    try {
+                      createFileLink(versionedPath, linkPath);
+                      this.outputChannel.appendLine('Server downloaded successfully');
+                    } catch (error) {
+                      const errorMessage = error instanceof Error ? error.message : String(error);
+                      this.outputChannel.appendLine(`Failed to create link: ${errorMessage}`);
+                      reject(new Error(`Failed to create link: ${errorMessage}`));
+                      return;
+                    }
+                    resolve();
+                  });
+                });
+              })
+              .on('error', (error) => {
+                fs.unlinkSync(versionedPath);
+                reject(new Error(`Download failed: ${error.message}`));
+              });
+          } else if (response.statusCode === 200) {
+            response.pipe(file);
+
+            file.on('finish', () => {
+              file.close(() => {
+                makeExecutable(versionedPath);
+                try {
+                  createFileLink(versionedPath, linkPath);
+                  this.outputChannel.appendLine('Server downloaded successfully');
+                } catch (error) {
+                  const errorMessage = error instanceof Error ? error.message : String(error);
+                  this.outputChannel.appendLine(`Failed to create link: ${errorMessage}`);
+                  reject(new Error(`Failed to create link: ${errorMessage}`));
+                  return;
+                }
+                resolve();
+              });
+            });
+          } else {
+            reject(new Error(`Download failed with status code: ${response.statusCode}`));
+          }
+        })
+        .on('error', (error) => {
+          fs.unlinkSync(versionedPath);
+          reject(new Error(`Download failed: ${error.message}`));
+        });
+
+      file.on('error', (error) => {
+        fs.unlinkSync(versionedPath);
+        reject(new Error(`File write failed: ${error.message}`));
+      });
+    });
+  };
+
+  /**
+   * Verify binary integrity by size
+   */
+  verifyIntegrity = (version: string, expectedSize: number): boolean => {
+    const filePath = path.join(this.serverDir, getVersionedBinaryName(version));
+
+    if (!fs.existsSync(filePath)) {
+      return false;
+    }
+
+    const stats = fs.statSync(filePath);
+    return stats.size === expectedSize;
+  };
+
+  /**
+   * Verify binary SHA256
+   */
+  verifySHA256 = async (version: string, expectedSHA256: string): Promise<boolean> => {
+    if (!expectedSHA256) {
+      // No SHA256 available, skip verification
+      return true;
+    }
+
+    const filePath = path.join(this.serverDir, getVersionedBinaryName(version));
+
+    if (!fs.existsSync(filePath)) {
+      return false;
+    }
+
+    try {
+      const actualSHA256 = await calculateFileSHA256(filePath);
+      const match = actualSHA256.toLowerCase() === expectedSHA256.toLowerCase();
+
+      if (!match) {
+        this.outputChannel.appendLine(`SHA256 mismatch: expected ${expectedSHA256}, got ${actualSHA256}`);
+      }
+
+      return match;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      this.outputChannel.appendLine(`Failed to calculate SHA256: ${errorMessage}`);
+      return false;
+    }
+  };
+
+  /**
+   * Clean up old versions
+   */
+  cleanupOldVersions = async (currentVersion: string): Promise<void> => {
+    const allVersions = getInstalledVersions(this.serverDir);
+
+    for (const version of allVersions) {
+      if (version !== currentVersion) {
+        const oldPath = path.join(this.serverDir, getVersionedBinaryName(version));
+        try {
+          if (fs.existsSync(oldPath)) {
+            fs.unlinkSync(oldPath);
+            this.outputChannel.appendLine(`Removed old version: ${version}`);
+          }
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          this.outputChannel.appendLine(`Failed to remove old version ${version}: ${errorMessage}`);
+        }
+      }
+    }
+  };
+
+  /**
+   * Get latest installed version
+   */
+  getLatestInstalled = (): string | null => {
+    return getLatestInstalledVersion(this.serverDir);
+  };
+
+  /**
+   * Compare versions
+   */
+  compareVersions = (a: string, b: string): number => {
+    return compareVersions(a, b);
+  };
+}

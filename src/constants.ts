@@ -2,6 +2,10 @@ export const COMMANDS = {
   OPEN_CHAT: 'agentsmithy.openChat',
   SEND_SELECTION: 'agentsmithy.sendSelection',
   MOVE_TO_SECONDARY: 'agentsmithy.moveToSecondarySidebar',
+  START_SERVER: 'agentsmithy.startServer',
+  STOP_SERVER: 'agentsmithy.stopServer',
+  RESTART_SERVER: 'agentsmithy.restartServer',
+  SERVER_STATUS: 'agentsmithy.serverStatus',
 } as const;
 
 export const VIEWS = {
@@ -12,6 +16,7 @@ export const VIEWS = {
 export const CONFIG_KEYS = {
   SERVER_URL: 'agentsmithy.serverUrl',
   SHOW_REASONING: 'agentsmithy.showReasoning',
+  AUTO_START_SERVER: 'agentsmithy.autoStartServer',
 } as const;
 
 export const DEFAULT_SERVER_URL = 'http://localhost:8765';

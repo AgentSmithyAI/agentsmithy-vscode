@@ -60,6 +60,30 @@
         "title": "Set Diff View Mode",
         "category": "AgentSmithy",
         "icon": "$(split-horizontal)"
+      },
+      {
+        "command": "agentsmithy.startServer",
+        "title": "Start Server",
+        "category": "AgentSmithy",
+        "icon": "$(run)"
+      },
+      {
+        "command": "agentsmithy.stopServer",
+        "title": "Stop Server",
+        "category": "AgentSmithy",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "agentsmithy.restartServer",
+        "title": "Restart Server",
+        "category": "AgentSmithy",
+        "icon": "$(debug-restart)"
+      },
+      {
+        "command": "agentsmithy.serverStatus",
+        "title": "Show Server Status",
+        "category": "AgentSmithy",
+        "icon": "$(pulse)"
       }
     ],
     "menus": {
@@ -80,6 +104,18 @@
         },
         {
           "command": "agentsmithy.setDiffViewMode"
+        },
+        {
+          "command": "agentsmithy.startServer"
+        },
+        {
+          "command": "agentsmithy.stopServer"
+        },
+        {
+          "command": "agentsmithy.restartServer"
+        },
+        {
+          "command": "agentsmithy.serverStatus"
         }
       ]
     },
@@ -95,6 +131,11 @@
           "type": "boolean",
           "default": false,
           "description": "Show reasoning/thinking process in chat"
+        },
+        "agentsmithy.autoStartServer": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically start AgentSmithy server when extension activates"
         }
       }
     }

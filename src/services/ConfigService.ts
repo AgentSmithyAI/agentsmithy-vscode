@@ -75,4 +75,12 @@ export class ConfigService {
     const config = vscode.workspace.getConfiguration('agentsmithy');
     return config.get<string>(CONFIG_KEYS.SERVER_URL, DEFAULT_SERVER_URL);
   };
+
+  /**
+   * Get auto-start server configuration
+   */
+  getAutoStartServer = (): boolean => {
+    const config = vscode.workspace.getConfiguration('agentsmithy');
+    return config.get<boolean>(CONFIG_KEYS.AUTO_START_SERVER, true);
+  };
 }

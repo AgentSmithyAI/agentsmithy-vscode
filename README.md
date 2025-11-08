@@ -13,51 +13,64 @@ Ask it to implement features, refactor code, fix bugs, or explain how something 
 
 Supports Code-OSS, VSCodium, and any VSCode fork.
 
-Requires [AgentSmithy server](https://github.com/AgentSmithyAI/agentsmithy-agent) running locally.
+**New in v1.5.0**: The extension now automatically downloads and manages the AgentSmithy server! No manual setup required.
+
+## Features
+
+- 🚀 **Automatic Server Management** - Downloads and starts the server automatically
+- 🔄 **Cross-Platform Support** - Works on Linux, macOS (Intel & Apple Silicon), and Windows
+- 💬 **AI Code Assistant** - Ask it to implement features, refactor code, or fix bugs
+- 📝 **Direct File Editing** - Makes changes directly in your files
+- 🔍 **Context-Aware** - Understands your codebase
 
 ## Prerequisites
 
-- [AgentSmithy server](https://github.com/AgentSmithyAI/agentsmithy-agent) running locally (default: http://localhost:8765)
-- Any version of Visual Studio Code (including Code-OSS, VSCodium)
+- Visual Studio Code (any version, including Code-OSS, VSCodium)
+- OpenAI API key (for AI features)
 
-### Setting up AgentSmithy server
+## Quick Start
 
-1. Download binary from [releases page](https://github.com/AgentSmithyAI/agentsmithy-agent/releases)
+1. **Install the extension** (see [Installation](#installation) below)
 
-2. Make it executable:
+2. **Configure your OpenAI API key**:
 
-   ```bash
-   chmod +x agentsmithy
+   Create `<your-project>/.agentsmithy/config.json`:
+
+   ```json
+   {
+     "providers": {
+       "gpt5": {
+         "type": "openai",
+         "model": "gpt-4o",
+         "api_key": "your_key_here"
+       }
+     }
+   }
    ```
 
-3. Configure OpenAI API key:
-
-   Via environment variable:
+   Or set environment variable:
 
    ```bash
    export OPENAI_API_KEY=your_key_here
    ```
 
-   Or directly in `<your-project>/.agentsmithy/config.json` providers section:
+3. **Start using AgentSmithy**:
+   - Click the AgentSmithy icon in the Activity Bar
+   - The server will download and start automatically on first use
+   - Start chatting with your AI assistant!
 
-   ```json
-   "providers": {
-     "gpt5": {
-       "type": "openai",
-       "model": "gpt-4o",
-       "api_key": "your_key_here"
-     }
-   }
-   ```
+### Manual Server Management (Optional)
 
-4. Start the server:
+If you prefer to manage the server yourself:
+
+1. Set `agentsmithy.autoStartServer` to `false` in settings
+2. Download binary from [releases page](https://github.com/AgentSmithyAI/agentsmithy-agent/releases)
+3. Start manually:
    ```bash
    ./agentsmithy --workdir /path/to/your/project --ide vscode
    ```
 
-Server will start on `http://localhost:8765`. All project data (conversation history, code index, config) is stored in `<your-project>/.agentsmithy/`.
-
-See [server documentation](https://github.com/AgentSmithyAI/agentsmithy-agent#readme) for details.
+See [server management documentation](docs/server-management.md) for details.
 
 ## Installation
 
@@ -78,23 +91,40 @@ Or install manually: `Ctrl+Shift+P` → `Extensions: Install from VSIX...`
 
 ## Usage
 
-First, start the agent server:
+### Chat Interface
 
-```bash
-./agentsmithy --workdir /path/to/your/project --ide vscode
-```
+- **Open Chat**: Click AgentSmithy icon in Activity Bar or use `Ctrl+Shift+P` → `AgentSmithy: Open Chat`
+- **Send Selection**: Right-click selected code → `Send Selection to AgentSmithy`
+- **Ask Questions**: Type your question or request in the chat input
 
-Then in VSCode:
+### Server Management Commands
 
-- Click AgentSmithy icon in Activity Bar
-- Or: `Ctrl+Shift+P` → `AgentSmithy: Open Chat`
-- Send selected code: Right-click → `Send Selection to AgentSmithy`
+Access via Command Palette (`Ctrl+Shift+P`):
+
+- `AgentSmithy: Start Server` - Manually start the server
+- `AgentSmithy: Stop Server` - Stop the running server
+- `AgentSmithy: Restart Server` - Restart the server
+- `AgentSmithy: Show Server Status` - Check server status
+
+### Monitor Server Logs
+
+View server output in `View → Output → AgentSmithy Server`
 
 ## Configuration
 
 Access settings via `File → Preferences → Settings` → search for "AgentSmithy":
 
-- `agentsmithy.serverUrl`: Local server URL (default: "http://localhost:8765")
+### Server Settings
+
+- `agentsmithy.autoStartServer`: Automatically start server on extension activation (default: `true`)
+- `agentsmithy.serverPort`: Port for AgentSmithy server (default: `8765`)
+- `agentsmithy.serverUrl`: Server URL override (default: `http://localhost:8765`)
+
+### UI Settings
+
+- `agentsmithy.showReasoning`: Show AI reasoning/thinking process in chat (default: `false`)
+
+For detailed server configuration, see [server management documentation](docs/server-management.md).
 
 ## License
 
