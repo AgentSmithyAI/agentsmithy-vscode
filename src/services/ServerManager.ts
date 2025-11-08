@@ -1,8 +1,7 @@
-/* eslint-disable no-undef */
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
-import {getBinaryName} from '../utils/platform';
+import {getBinaryName, getPlatformInfo} from '../utils/platform';
 import {DownloadManager} from './server/DownloadManager';
 import {ProcessManager} from './server/ProcessManager';
 
@@ -64,7 +63,9 @@ export class ServerManager {
         this.outputChannel.appendLine('Server binary is empty (0 bytes)');
         return false;
       }
-      if (process.platform !== 'win32') {
+
+      const {platform} = getPlatformInfo();
+      if (platform !== 'win32') {
         const isExecutable = (stats.mode & 0o100) !== 0;
         if (!isExecutable) {
           this.outputChannel.appendLine('Server binary is not executable');

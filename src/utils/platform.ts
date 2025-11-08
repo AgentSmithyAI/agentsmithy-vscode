@@ -126,7 +126,7 @@ export const getLatestInstalledVersion = (serverDir: string): string | null => {
  */
 export const makeExecutable = (filePath: string): void => {
   const {platform} = getPlatformInfo();
-  
+
   if (platform !== 'win32' && fs.existsSync(filePath)) {
     fs.chmodSync(filePath, 0o755);
   }
@@ -152,7 +152,7 @@ export const createFileLink = (targetPath: string, linkPath: string): void => {
     // For symlinks in same directory, use just the filename
     const targetName = path.basename(targetPath);
     fs.symlinkSync(targetName, linkPath);
-    
+
     // Ensure link is executable
     makeExecutable(linkPath);
   }

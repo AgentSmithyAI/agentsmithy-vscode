@@ -29,6 +29,10 @@ eslint.config.mjs
 # AgentSmithy working directory
 .agentsmithy/**
 
+# Environment variables
+.env
+.env.*
+
 # Source maps (optional - remove if you want to include them)
 **/*.map
 
