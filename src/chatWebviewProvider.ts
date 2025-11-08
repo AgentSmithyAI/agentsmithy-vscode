@@ -303,7 +303,11 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     this._diffContentProvider = {
       onDidChange: this._diffContentEmitter.event,
       provideTextDocumentContent: (uri) => {
-        // Compose a stable key from authority + path
+        // Compose stable key from authority and path
+        // authority: always "left" or "right" (DIFF_SIDE_LEFT/DIFF_SIDE_RIGHT)
+        // path: always starts with "/" per URI standard (e.g., "/src/file.ts")
+        // Result: "left/src/file.ts" matches key used in _diffContentMap.set(leftKey, ...)
+        // No collision risk since authority is controlled and path always has leading "/"
         const key = `${uri.authority}${uri.path}`;
         return this._diffContentMap.get(key) ?? '';
       },

@@ -57,7 +57,7 @@ describe('SessionActionsUI changes panel resize snap/hysteresis', () => {
       setState: vi.fn(),
     };
 
-    ui = new SessionActionsUI(mockVscode);
+    ui = new SessionActionsUI(mockVscode, '/workspace');
 
     // render panel with 2 items (default target uses header + body.scrollHeight)
     ui.updateSessionStatus(true, [

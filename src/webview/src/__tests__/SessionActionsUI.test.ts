@@ -39,7 +39,7 @@ describe('SessionActionsUI', () => {
       setState: vi.fn(),
     };
 
-    sessionActionsUI = new SessionActionsUI(mockVscode);
+    sessionActionsUI = new SessionActionsUI(mockVscode, '/workspace');
   });
   afterEach(() => {
     document.body.innerHTML = '';

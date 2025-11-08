@@ -88,7 +88,7 @@ class ChatWebview {
     this.dialogsUI.onCreateNewDialog = () => {
       this.pendingFocusAfterCreate = true;
     };
-    this.sessionActionsUI = new SessionActionsUI(this.vscode);
+    this.sessionActionsUI = new SessionActionsUI(this.vscode, workspaceRoot);
     // Connect renderer to scroll manager for smart auto-scroll
     this.renderer.setScrollManager(this.scrollManager);
     this.messageHandler = new MessageHandler(

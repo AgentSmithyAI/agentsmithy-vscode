@@ -75,7 +75,10 @@ export class SessionActionsUI {
   private static readonly SNAP_PX = 8;
   private static readonly UNSNAP_PX = SessionActionsUI.SNAP_PX * 2;
 
-  constructor(private readonly vscode: VSCodeAPI) {
+  constructor(
+    private readonly vscode: VSCodeAPI,
+    private readonly workspaceRoot: string,
+  ) {
     this.panel = document.getElementById('sessionActions')!;
     this.approveBtn = document.getElementById('sessionApproveBtn') as HTMLButtonElement;
     this.resetBtn = document.getElementById('sessionResetBtn') as HTMLButtonElement;
@@ -237,9 +240,12 @@ export class SessionActionsUI {
                 ? '<span class="removed">deleted</span>'
                 : `<span>${escapeHtml(f.status)}</span>`;
         const displayPath = escapeHtml(f.path);
-        const root = (window as unknown as {WORKSPACE_ROOT?: string}).WORKSPACE_ROOT || '';
         const absolutePath =
-          f.path.startsWith('/') || /^\w:\\/.test(f.path) ? f.path : root ? `${root}/${f.path}` : f.path;
+          f.path.startsWith('/') || /^\w:\\/.test(f.path)
+            ? f.path
+            : this.workspaceRoot
+              ? `${this.workspaceRoot}/${f.path}`
+              : f.path;
         const dataFile = encodeURIComponent(absolutePath);
         return `<div class="session-change-item">
           <a href="#" class="file-link" data-file="${dataFile}">${displayPath}</a>
