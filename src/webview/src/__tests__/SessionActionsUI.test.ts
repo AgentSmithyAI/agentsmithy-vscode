@@ -326,4 +326,98 @@ describe('SessionActionsUI', () => {
       expect(mockVscode.postMessage).toHaveBeenCalledTimes(2);
     });
   });
+
+  describe('workspaceRoot handling for file paths', () => {
+    it('converts relative paths to absolute using workspaceRoot', () => {
+      const workspaceRoot = '/home/user/project';
+      const ui = new SessionActionsUI(mockVscode, workspaceRoot);
+      ui.setCurrentDialogId('d1');
+
+      ui.updateSessionStatus(true, [
+        {path: 'src/index.ts', status: 'modified', additions: 5, deletions: 2, diff: null} as any,
+      ]);
+
+      const panelEl = document.getElementById('sessionChanges') as HTMLElement;
+      const fileLink = panelEl.querySelector('.file-link') as HTMLAnchorElement;
+      expect(fileLink).toBeTruthy();
+
+      const dataFile = fileLink.getAttribute('data-file');
+      expect(dataFile).toBeTruthy();
+
+      const decodedPath = decodeURIComponent(dataFile!);
+      // Relative path should be converted to absolute
+      expect(decodedPath).toBe('/home/user/project/src/index.ts');
+    });
+
+    it('keeps absolute paths unchanged', () => {
+      const workspaceRoot = '/home/user/project';
+      const ui = new SessionActionsUI(mockVscode, workspaceRoot);
+      ui.setCurrentDialogId('d1');
+
+      const absolutePath = '/absolute/path/to/file.ts';
+      ui.updateSessionStatus(true, [
+        {path: absolutePath, status: 'added', additions: 10, deletions: 0, diff: null} as any,
+      ]);
+
+      const panelEl = document.getElementById('sessionChanges') as HTMLElement;
+      const fileLink = panelEl.querySelector('.file-link') as HTMLAnchorElement;
+      const dataFile = fileLink.getAttribute('data-file');
+      const decodedPath = decodeURIComponent(dataFile!);
+
+      // Absolute path should stay as is
+      expect(decodedPath).toBe(absolutePath);
+    });
+
+    it('handles Windows absolute paths (C:\\)', () => {
+      const workspaceRoot = 'C:\\Users\\dev\\project';
+      const ui = new SessionActionsUI(mockVscode, workspaceRoot);
+      ui.setCurrentDialogId('d1');
+
+      const windowsPath = 'C:\\Some\\Other\\File.cs';
+      ui.updateSessionStatus(true, [
+        {path: windowsPath, status: 'modified', additions: 1, deletions: 1, diff: null} as any,
+      ]);
+
+      const panelEl = document.getElementById('sessionChanges') as HTMLElement;
+      const fileLink = panelEl.querySelector('.file-link') as HTMLAnchorElement;
+      const dataFile = fileLink.getAttribute('data-file');
+      const decodedPath = decodeURIComponent(dataFile!);
+
+      // Windows absolute path should stay as is
+      expect(decodedPath).toBe(windowsPath);
+    });
+
+    it('works when workspaceRoot is empty string', () => {
+      const ui = new SessionActionsUI(mockVscode, '');
+      ui.setCurrentDialogId('d1');
+
+      ui.updateSessionStatus(true, [
+        {path: 'relative/file.ts', status: 'added', additions: 5, deletions: 0, diff: null} as any,
+      ]);
+
+      const panelEl = document.getElementById('sessionChanges') as HTMLElement;
+      const fileLink = panelEl.querySelector('.file-link') as HTMLAnchorElement;
+      const dataFile = fileLink.getAttribute('data-file');
+      const decodedPath = decodeURIComponent(dataFile!);
+
+      // Without workspace root, path stays relative
+      expect(decodedPath).toBe('relative/file.ts');
+    });
+
+    it('handles relative paths when workspaceRoot is falsy', () => {
+      const ui = new SessionActionsUI(mockVscode, ''); // Empty workspace root
+      ui.setCurrentDialogId('d1');
+
+      ui.updateSessionStatus(true, [
+        {path: 'src/test.js', status: 'modified', additions: 3, deletions: 1, diff: null} as any,
+      ]);
+
+      const panelEl = document.getElementById('sessionChanges') as HTMLElement;
+      const fileLink = panelEl.querySelector('.file-link') as HTMLAnchorElement;
+      const dataFile = fileLink.getAttribute('data-file');
+
+      // Path should remain as-is without workspace root
+      expect(decodeURIComponent(dataFile!)).toBe('src/test.js');
+    });
+  });
 });

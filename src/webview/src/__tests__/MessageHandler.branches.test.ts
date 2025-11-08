@@ -7,6 +7,7 @@ import {DialogViewManager} from '../DialogViewManager';
 import {MessageHandler} from '../MessageHandler';
 import {MessageRenderer} from '../renderer';
 import {ScrollManager} from '../scroll/ScrollManager';
+import {SessionActionsUI} from '../SessionActionsUI';
 import {StreamingStateManager} from '../StreamingStateManager';
 import {UIController} from '../UIController';
 
@@ -100,5 +101,53 @@ describe('MessageHandler branches', () => {
     messageHandler.handle({type: WEBVIEW_OUT_MSG.END_STREAM, dialogId: active});
     await nextTick();
     expect(isInputBusy(messageInput)).toBe(false);
+  });
+
+  it('handles SESSION_STATUS_UPDATE with changedFiles without type assertion', () => {
+    // Test that message.changedFiles is accessed directly without (message as any)
+    // This verifies the fix for removing unsafe type assertions
+    document.body.innerHTML += `
+      <div id="sessionActions"></div>
+      <div id="sessionChanges"></div>
+      <button id="sessionApproveBtn"></button>
+      <button id="sessionResetBtn"></button>
+    `;
+
+    const mockVscode = {postMessage: vi.fn(), getState: vi.fn(), setState: vi.fn()};
+    const sessionActionsUI = new SessionActionsUI(mockVscode as any, '/workspace');
+    const updateSpy = vi.spyOn(sessionActionsUI, 'updateSessionStatus');
+
+    const handlerWithSession = new MessageHandler(
+      renderer,
+      streamingState,
+      scrollManager,
+      uiController,
+      messagesContainer,
+      dialogViewManager,
+      sessionActionsUI,
+    );
+
+    const message: WebviewOutMessage = {
+      type: WEBVIEW_OUT_MSG.SESSION_STATUS_UPDATE,
+      hasUnapproved: true,
+      changedFiles: [
+        {
+          path: 'src/test.ts',
+          status: 'modified',
+          additions: 5,
+          deletions: 2,
+          diff: null,
+          base_content: null,
+          is_binary: false,
+          is_too_large: false,
+        },
+      ],
+    };
+
+    handlerWithSession.handle(message);
+
+    // Verify SessionActionsUI.updateSessionStatus was called with correct args
+    expect(updateSpy).toHaveBeenCalledWith(true, message.changedFiles);
+    expect(updateSpy).toHaveBeenCalledTimes(1);
   });
 });
