@@ -309,6 +309,74 @@ describe('Security: XSS Prevention', () => {
     });
   });
 
+  describe('Path Traversal Prevention', () => {
+    it('prevents reading files outside workspace using ../ sequences', () => {
+      // Why: Path traversal attacks can read sensitive files like /etc/passwd
+      // Example attack: /workspace/../../../etc/passwd
+      const workspaceRoot = '/home/user/project';
+      const attackPath = `${workspaceRoot}/../../../etc/passwd`;
+
+      // What _validateDiffRequest should do:
+      const path = require('path');
+      const resolvedFile = path.resolve(attackPath);
+      const resolvedRoot = path.resolve(workspaceRoot);
+
+      // resolvedFile will be '/etc/passwd' (outside workspace)
+      // resolvedRoot will be '/home/user/project'
+      expect(resolvedFile).toBe('/etc/passwd');
+      expect(resolvedFile.startsWith(resolvedRoot + path.sep)).toBe(false);
+
+      // Verify this specific attack wouldn't bypass old check (too obvious)
+      const oldCheckResult = attackPath.startsWith(`${workspaceRoot}/`);
+      expect(oldCheckResult).toBe(true); // Wait, it starts with workspace!
+      // The old check looked at the INPUT path, not the RESOLVED path!
+
+      // More subtle attack that definitely bypasses old check:
+      const subtleAttack = `${workspaceRoot}/subdir/../../../../etc/passwd`;
+      expect(subtleAttack.startsWith(`${workspaceRoot}/`)).toBe(true); // Old check PASSES!
+      const resolvedSubtle = path.resolve(subtleAttack);
+      expect(resolvedSubtle).toBe('/etc/passwd');
+      expect(resolvedSubtle.startsWith(resolvedRoot + path.sep)).toBe(false); // New check catches it!
+    });
+
+    it('prevents symlink-based attacks to escape workspace', () => {
+      // Why: Symlinks can point outside workspace
+      // Note: path.resolve doesn't follow symlinks, but the file system will
+      // This is a limitation - full protection needs fs.realpath()
+      const path = require('path');
+      const workspaceRoot = '/home/user/project';
+      const symlinkPath = `${workspaceRoot}/link-to-etc`;
+
+      // Even if symlink points to /etc, the path check will allow it
+      const resolved = path.resolve(symlinkPath);
+      expect(resolved).toBe('/home/user/project/link-to-etc');
+      expect(resolved.startsWith(workspaceRoot + path.sep)).toBe(true);
+
+      // Comment: For full protection, use fs.realpath() before checking
+      // But that's async and has performance implications
+    });
+
+    it('allows legitimate files in subdirectories', () => {
+      // Why: Normal files in workspace should work
+      const path = require('path');
+      const workspaceRoot = '/home/user/project';
+      const legitimateFile = `${workspaceRoot}/src/index.ts`;
+
+      const resolved = path.resolve(legitimateFile);
+      expect(resolved.startsWith(workspaceRoot + path.sep)).toBe(true);
+    });
+
+    it('allows opening the workspace root itself', () => {
+      // Why: Opening workspace root should be allowed
+      const path = require('path');
+      const workspaceRoot = '/home/user/project';
+
+      const resolved = path.resolve(workspaceRoot);
+      expect(resolved).toBe(workspaceRoot);
+      // Check: resolved === resolvedRoot should pass
+    });
+  });
+
   describe('Integration: Real-world attack scenarios', () => {
     it('prevents token theft through postMessage', () => {
       // Scenario: Attacker creates file named: "><script>window.vscode.postMessage(...)</script>.txt

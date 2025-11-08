@@ -268,14 +268,19 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
       }
 
       // Security: only allow opening files within the current workspace (if any)
+      // Note: This is defense-in-depth and not critical for local VS Code since the user
+      // already has full filesystem access. However, it provides some protection in edge cases:
+      // 1. Remote scenarios (SSH, Codespaces) where filesystem access is more sensitive
+      // 2. Malicious git repos with crafted filenames like "../../sensitive-file"
+      // 3. Backend bugs that could generate invalid paths
+      // File paths come from backend tool call results, which are typically safe.
       const workspaceRoot = this._configService.getWorkspaceRoot();
-      if (
-        typeof workspaceRoot === 'string' &&
-        workspaceRoot.length > 0 &&
-        !file.startsWith(`${workspaceRoot}/`) &&
-        file !== workspaceRoot
-      ) {
-        throw new Error('Opening files outside the workspace is not allowed');
+      if (typeof workspaceRoot === 'string' && workspaceRoot.length > 0) {
+        const resolvedFile = path.resolve(file);
+        const resolvedRoot = path.resolve(workspaceRoot);
+        if (!resolvedFile.startsWith(resolvedRoot + path.sep) && resolvedFile !== resolvedRoot) {
+          throw new Error('Opening files outside the workspace is not allowed');
+        }
       }
 
       const uri = vscode.Uri.file(file);
@@ -499,14 +504,16 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     if (typeof file !== 'string' || file.length === 0) {
       throw new Error(ERROR_MESSAGES.INVALID_FILE_PATH);
     }
+    // Security: Defense-in-depth workspace boundary check
+    // Not critical since file paths come from backend's session.changed_files (git-controlled),
+    // but provides protection against malicious repos with crafted filenames and Remote scenarios.
     const workspaceRoot = this._configService.getWorkspaceRoot();
-    if (
-      typeof workspaceRoot === 'string' &&
-      workspaceRoot.length > 0 &&
-      !file.startsWith(`${workspaceRoot}/`) &&
-      file !== workspaceRoot
-    ) {
-      throw new Error('Opening files outside the workspace is not allowed');
+    if (typeof workspaceRoot === 'string' && workspaceRoot.length > 0) {
+      const resolvedFile = path.resolve(file);
+      const resolvedRoot = path.resolve(workspaceRoot);
+      if (!resolvedFile.startsWith(resolvedRoot + path.sep) && resolvedFile !== resolvedRoot) {
+        throw new Error('Opening files outside the workspace is not allowed');
+      }
     }
     return file;
   }
