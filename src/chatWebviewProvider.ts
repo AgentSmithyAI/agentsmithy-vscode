@@ -522,6 +522,16 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     return cf;
   }
 
+  _readFileContent = async (file: string): Promise<string> => {
+    try {
+      const uri = vscode.Uri.file(file);
+      const doc = await vscode.workspace.openTextDocument(uri);
+      return doc.getText();
+    } catch {
+      return '';
+    }
+  };
+
   private _resolveDiffContents = async (
     cf: ChangedFile,
     file: string,
@@ -529,26 +539,12 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     switch (cf.status) {
       case 'modified': {
         const leftContent = typeof cf.base_content === 'string' ? cf.base_content : '';
-        let rightContent = '';
-        try {
-          const uri = vscode.Uri.file(file);
-          const doc = await vscode.workspace.openTextDocument(uri);
-          rightContent = doc.getText();
-        } catch {
-          rightContent = '';
-        }
+        const rightContent = await this._readFileContent(file);
         return {leftContent, rightContent};
       }
       case 'added': {
         const leftContent = '';
-        let rightContent = '';
-        try {
-          const uri = vscode.Uri.file(file);
-          const doc = await vscode.workspace.openTextDocument(uri);
-          rightContent = doc.getText();
-        } catch {
-          rightContent = '';
-        }
+        const rightContent = await this._readFileContent(file);
         return {leftContent, rightContent};
       }
       case 'deleted': {
@@ -557,8 +553,6 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
         return {leftContent, rightContent};
       }
       default: {
-        const _never: never = cf.status;
-        void _never;
         throw new Error('Unsupported status');
       }
     }
