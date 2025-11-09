@@ -28,17 +28,11 @@ export const activate = async (context: vscode.ExtensionContext) => {
   // Auto-start server if configured
   if (configService.getAutoStartServer()) {
     // Start server in background, don't block activation
-    void serverManager
-      .startServer()
-      .then(async () => {
-        // After server is ready, trigger webview refresh if it's already open
-        await provider.refreshAfterServerStart();
-      })
-      .catch(() => {
-        void vscode.window.showWarningMessage(
-          'Failed to start AgentSmithy server automatically. You can start it manually from the Command Palette.',
-        );
-      });
+    void serverManager.startServer().catch(() => {
+      void vscode.window.showWarningMessage(
+        'Failed to start AgentSmithy server automatically. You can start it manually from the Command Palette.',
+      );
+    });
   }
 
   // Note: When server URL changes, we recreate service instances,
@@ -53,22 +47,17 @@ export const activate = async (context: vscode.ExtensionContext) => {
     dialogService,
     configService,
     apiService,
+    serverManager,
   );
 
   // Subscribe to server ready event
+  const eventsChannel = vscode.window.createOutputChannel('AgentSmithy Events');
+  context.subscriptions.push(eventsChannel);
+
   const serverReadyDisposable = serverManager.onServerReady(() => {
-    const outputChannel = vscode.window.createOutputChannel('AgentSmithy Events');
-    outputChannel.appendLine('[onServerReady callback] Event received!');
-    outputChannel.appendLine(`[onServerReady callback] Provider has view: ${provider['_view'] !== undefined}`);
-    outputChannel.appendLine('[onServerReady callback] Calling refreshAfterServerStart...');
-    void provider
-      .refreshAfterServerStart()
-      .then(() => {
-        outputChannel.appendLine('[onServerReady callback] Refresh complete');
-      })
-      .catch((error) => {
-        outputChannel.appendLine(`[onServerReady callback] Refresh error: ${error}`);
-      });
+    eventsChannel.appendLine(`[onServerReady callback] Event received at ${new Date().toISOString()}`);
+    eventsChannel.appendLine(`[onServerReady callback] Provider has view: ${provider['_view'] !== undefined}`);
+    void provider.refreshAfterServerStart();
   });
   context.subscriptions.push(serverReadyDisposable);
 

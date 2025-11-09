@@ -77,6 +77,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
   private _view?: vscode.WebviewView;
   private readonly _outputChannel: vscode.OutputChannel;
   private _isInitializing = false;
+  private readonly _serverManager: {waitForReady: () => Promise<void>};
 
   constructor(
     private readonly _extensionUri: vscode.Uri,
@@ -85,7 +86,9 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     private readonly _dialogService: DialogService,
     private readonly _configService: ConfigService,
     private readonly _apiService: ApiService,
+    serverManager: {waitForReady: () => Promise<void>},
   ) {
+    this._serverManager = serverManager;
     this._outputChannel = vscode.window.createOutputChannel('AgentSmithy Webview');
 
     // Listen to history state changes
@@ -227,6 +230,9 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
           this._stream.abort();
           break;
         case WEBVIEW_IN_MSG.READY:
+          this._outputChannel.appendLine('[READY message] Received, waiting for server...');
+          await this._serverManager.waitForReady();
+          this._outputChannel.appendLine('[READY message] Server ready, loading data...');
           await this._handleWebviewReady();
           break;
         case WEBVIEW_IN_MSG.LOAD_MORE_HISTORY:
@@ -475,7 +481,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
 
     try {
       this._outputChannel.appendLine('[_handleWebviewReady] Resolving current dialog...');
-      const dialogId = await this._historyService.resolveCurrentDialogId();
+      const dialogId = await this._historyService.resolveCurrentDialogId(this._outputChannel);
       this._outputChannel.appendLine(`[_handleWebviewReady] Dialog ID resolved: ${dialogId ?? 'none'}`);
 
       if (dialogId) {
