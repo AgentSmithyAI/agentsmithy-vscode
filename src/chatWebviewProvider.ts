@@ -70,7 +70,8 @@ type WebviewOutMessage =
   | {type: typeof WEBVIEW_OUT_MSG.DIALOG_SWITCHED; dialogId: string | null; title: string}
   | {type: typeof WEBVIEW_OUT_MSG.SESSION_STATUS_UPDATE; hasUnapproved: boolean; changedFiles?: ChangedFile[]}
   | {type: typeof WEBVIEW_OUT_MSG.SESSION_OPERATION_CANCELLED}
-  | {type: typeof WEBVIEW_OUT_MSG.FOCUS_INPUT};
+  | {type: typeof WEBVIEW_OUT_MSG.FOCUS_INPUT}
+  | {type: typeof WEBVIEW_OUT_MSG.SERVER_STATUS; status: 'launching' | 'ready' | 'error'; message?: string};
 export class ChatWebviewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = VIEWS.CHAT;
 
@@ -231,9 +232,22 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
           break;
         case WEBVIEW_IN_MSG.READY:
           this._outputChannel.appendLine('[READY message] Received, waiting for server...');
-          await this._serverManager.waitForReady();
-          this._outputChannel.appendLine('[READY message] Server ready, loading data...');
-          await this._handleWebviewReady();
+          this._postMessage({type: WEBVIEW_OUT_MSG.SERVER_STATUS, status: 'launching', message: 'Launching server...'});
+
+          try {
+            await this._serverManager.waitForReady();
+            this._outputChannel.appendLine('[READY message] Server ready, loading data...');
+            this._postMessage({type: WEBVIEW_OUT_MSG.SERVER_STATUS, status: 'ready'});
+            await this._handleWebviewReady();
+          } catch (error) {
+            const errorMsg = error instanceof Error ? error.message : String(error);
+            this._outputChannel.appendLine(`[READY message] Server error: ${errorMsg}`);
+            this._postMessage({
+              type: WEBVIEW_OUT_MSG.SERVER_STATUS,
+              status: 'error',
+              message: 'Failed to start server. Check Output → AgentSmithy Server for details.',
+            });
+          }
           break;
         case WEBVIEW_IN_MSG.LOAD_MORE_HISTORY:
           await this._handleLoadMoreHistory();
