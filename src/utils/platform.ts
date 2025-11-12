@@ -10,18 +10,12 @@ export interface PlatformInfo {
 
 /**
  * Get current platform information
+ * Note: Does not validate if platform is supported by AgentSmithy server.
+ * Use DownloadManager.fetchLatestRelease() to check if asset exists for this platform.
  */
 export const getPlatformInfo = (): PlatformInfo => {
   const platform = process.platform as 'linux' | 'darwin' | 'win32';
   const arch = process.arch as 'x64' | 'arm64';
-
-  if (!['linux', 'darwin', 'win32'].includes(platform)) {
-    throw new Error(`Unsupported platform: ${platform}`);
-  }
-
-  if (!['x64', 'arm64'].includes(arch)) {
-    throw new Error(`Unsupported architecture: ${arch}`);
-  }
 
   return {platform, arch};
 };
@@ -37,20 +31,47 @@ export const getBinaryName = (): string => {
 /**
  * Get asset name from GitHub releases for current platform
  * GitHub releases use naming: agentsmithy-{os}-{arch}-{version}
+ *
+ * Note: This function generates expected asset name based on current platform.
+ * It doesn't guarantee the asset exists - use DownloadManager.fetchLatestRelease()
+ * to verify asset availability.
  */
 export const getAssetName = (version: string): string => {
   const {platform, arch} = getPlatformInfo();
   // Remove 'v' prefix if present using semver
   const cleanVersion = semver.clean(version) || version.replace(/^v/, '');
 
+  // Map Node.js arch to binary arch naming
+  // Only map known architectures, use original name for unknown ones
+  let binaryArch: string;
+  if (arch === 'x64') {
+    binaryArch = 'amd64';
+  } else if (arch === 'arm64') {
+    binaryArch = 'arm64';
+  } else {
+    // Unknown architecture (ia32, arm, mips, ppc64, s390x, etc.)
+    // Use Node.js arch name as-is, will fail when asset not found
+    binaryArch = arch;
+  }
+
+  // Map platform to binary OS naming
+  let os: string;
+  let ext = '';
+
   if (platform === 'linux') {
-    return `agentsmithy-linux-amd64-${cleanVersion}`;
+    os = 'linux';
+  } else if (platform === 'darwin') {
+    os = 'macos';
+  } else if (platform === 'win32') {
+    os = 'windows';
+    ext = '.exe';
+  } else {
+    // Unknown platform - use Node.js platform name as-is
+    // Will fail when asset not found with helpful error message
+    os = platform;
   }
-  if (platform === 'darwin') {
-    return arch === 'arm64' ? `agentsmithy-macos-arm64-${cleanVersion}` : `agentsmithy-macos-amd64-${cleanVersion}`;
-  }
-  // platform === 'win32'
-  return `agentsmithy-windows-amd64-${cleanVersion}.exe`;
+
+  return `agentsmithy-${os}-${binaryArch}-${cleanVersion}${ext}`;
 };
 
 /**

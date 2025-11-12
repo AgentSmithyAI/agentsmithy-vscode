@@ -13,6 +13,7 @@ import {
   compareVersions,
   getInstalledVersions,
   makeExecutable,
+  getPlatformInfo,
 } from '../../utils/platform';
 import {calculateFileSHA256} from '../../utils/crypto';
 
@@ -163,7 +164,16 @@ export class DownloadManager {
               });
 
               if (asset === undefined) {
-                reject(new Error(`Asset ${assetName} not found in release ${version}`));
+                const {platform, arch} = getPlatformInfo();
+                const availableAssets = assets.map((a: unknown) => (a as {name: string}).name).join(', ');
+                reject(
+                  new Error(
+                    `Asset ${assetName} not found in release ${version}.\n` +
+                      `Your platform: ${platform} ${arch}\n` +
+                      `Available assets: ${availableAssets}\n` +
+                      `This platform/architecture combination may not be supported by AgentSmithy server.`,
+                  ),
+                );
                 return;
               }
 

@@ -18,6 +18,7 @@ vi.mock('../../../utils/platform', () => ({
   compareVersions: vi.fn(),
   getInstalledVersions: vi.fn(() => []),
   makeExecutable: vi.fn(),
+  getPlatformInfo: vi.fn(() => ({platform: 'linux', arch: 'x64'})),
 }));
 vi.mock('../../../utils/crypto', () => ({
   calculateFileSHA256: vi.fn(),
@@ -538,6 +539,41 @@ describe('DownloadManager', () => {
 
       // Act & Assert
       await expect(downloadManager.fetchLatestRelease()).rejects.toThrow('Invalid version format from GitHub API');
+    });
+
+    it('should provide helpful error when platform is not supported', async () => {
+      // Arrange
+      const mockReleaseData = {
+        tag_name: 'v1.0.0',
+        assets: [
+          {name: 'agentsmithy-macos-amd64-1.0.0', size: 1000},
+          {name: 'agentsmithy-macos-arm64-1.0.0', size: 1000},
+          // Missing linux-amd64 (which test expects based on mock)
+        ],
+      };
+
+      vi.mocked(https.get).mockImplementation((options: unknown, callback?: (res: any) => void) => {
+        if (callback) {
+          const mockResponse = new EventEmitter();
+          setTimeout(() => {
+            callback(mockResponse);
+            mockResponse.emit('data', JSON.stringify(mockReleaseData));
+            mockResponse.emit('end');
+          }, 0);
+        }
+        return new EventEmitter() as any;
+      });
+
+      // Act
+      const error = await downloadManager.fetchLatestRelease().catch((e) => e);
+
+      // Assert - error message should include platform info and available assets
+      expect(error.message).toContain('not found in release v1.0.0');
+      expect(error.message).toContain('Your platform: linux x64');
+      expect(error.message).toContain('Available assets:');
+      expect(error.message).toContain('agentsmithy-macos-amd64-1.0.0');
+      expect(error.message).toContain('agentsmithy-macos-arm64-1.0.0');
+      expect(error.message).toContain('may not be supported by AgentSmithy server');
     });
   });
 
