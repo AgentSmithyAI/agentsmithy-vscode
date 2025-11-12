@@ -106,13 +106,14 @@ export class DownloadManager {
   releaseLock = (): void => {
     const lockPath = this.getLockPath();
     try {
-      if (fs.existsSync(lockPath)) {
-        fs.unlinkSync(lockPath);
-        this.outputChannel.appendLine('Released download lock');
-      }
+      fs.unlinkSync(lockPath);
+      this.outputChannel.appendLine('Released download lock');
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      this.outputChannel.appendLine(`Failed to release download lock: ${errorMessage}`);
+      // Ignore ENOENT - file doesn't exist or was already removed
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        this.outputChannel.appendLine(`Failed to release download lock: ${errorMessage}`);
+      }
     }
   };
 
@@ -199,7 +200,7 @@ export class DownloadManager {
 
     // Check if partial download exists
     let startByte = 0;
-    if (fs.existsSync(tempPath)) {
+    try {
       const stats = fs.statSync(tempPath);
       startByte = stats.size;
       if (startByte > 0) {
@@ -213,7 +214,19 @@ export class DownloadManager {
         }
       } else {
         // Empty .part file, remove it
-        fs.unlinkSync(tempPath);
+        try {
+          fs.unlinkSync(tempPath);
+        } catch (error) {
+          // Ignore ENOENT - file was already removed
+          if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+            throw error;
+          }
+        }
+      }
+    } catch (error) {
+      // Ignore ENOENT - partial file doesn't exist
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+        throw error;
       }
     }
 
@@ -259,8 +272,13 @@ export class DownloadManager {
             } else if (offset > 0 && response.statusCode === 200) {
               this.outputChannel.appendLine('Server does not support resume, starting from beginning');
               // Delete partial file and start fresh
-              if (fs.existsSync(tempPath)) {
+              try {
                 fs.unlinkSync(tempPath);
+              } catch (error) {
+                // Ignore ENOENT - file was already removed
+                if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+                  throw error;
+                }
               }
               actualOffset = 0; // Reset offset since we're starting over
             }
@@ -305,8 +323,13 @@ export class DownloadManager {
 
                 // Rename temp file to final name
                 try {
-                  if (fs.existsSync(versionedPath)) {
+                  try {
                     fs.unlinkSync(versionedPath);
+                  } catch (error) {
+                    // Ignore ENOENT - file doesn't exist
+                    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+                      throw error;
+                    }
                   }
                   fs.renameSync(tempPath, versionedPath);
                   makeExecutable(versionedPath);
@@ -329,8 +352,13 @@ export class DownloadManager {
             // Range not satisfiable - file might be complete already
             this.outputChannel.appendLine('Download appears to be complete, finalizing...');
             try {
-              if (fs.existsSync(versionedPath)) {
+              try {
                 fs.unlinkSync(versionedPath);
+              } catch (error) {
+                // Ignore ENOENT - file doesn't exist
+                if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+                  throw error;
+                }
               }
               fs.renameSync(tempPath, versionedPath);
               makeExecutable(versionedPath);
@@ -365,12 +393,13 @@ export class DownloadManager {
   verifyIntegrity = (version: string, expectedSize: number): boolean => {
     const filePath = path.join(this.serverDir, getVersionedBinaryName(version));
 
-    if (!fs.existsSync(filePath)) {
+    try {
+      const stats = fs.statSync(filePath);
+      return stats.size === expectedSize;
+    } catch {
+      // File doesn't exist or can't be accessed
       return false;
     }
-
-    const stats = fs.statSync(filePath);
-    return stats.size === expectedSize;
   };
 
   /**
@@ -384,10 +413,6 @@ export class DownloadManager {
 
     const filePath = path.join(this.serverDir, getVersionedBinaryName(version));
 
-    if (!fs.existsSync(filePath)) {
-      return false;
-    }
-
     try {
       const actualSHA256 = await calculateFileSHA256(filePath);
       const match = actualSHA256.toLowerCase() === expectedSHA256.toLowerCase();
@@ -398,6 +423,7 @@ export class DownloadManager {
 
       return match;
     } catch (error) {
+      // File doesn't exist or can't calculate SHA256
       const errorMessage = error instanceof Error ? error.message : String(error);
       this.outputChannel.appendLine(`Failed to calculate SHA256: ${errorMessage}`);
       return false;
@@ -416,18 +442,26 @@ export class DownloadManager {
         const oldPartPath = `${oldPath}.part`;
 
         try {
-          if (fs.existsSync(oldPath)) {
-            fs.unlinkSync(oldPath);
-            this.outputChannel.appendLine(`Removed old version: ${version}`);
-          }
-          // Also remove partial downloads of old versions
-          if (fs.existsSync(oldPartPath)) {
-            fs.unlinkSync(oldPartPath);
-            this.outputChannel.appendLine(`Removed partial download: ${version}`);
-          }
+          fs.unlinkSync(oldPath);
+          this.outputChannel.appendLine(`Removed old version: ${version}`);
         } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : String(error);
-          this.outputChannel.appendLine(`Failed to remove old version ${version}: ${errorMessage}`);
+          // Ignore ENOENT - file doesn't exist or was already removed
+          if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            this.outputChannel.appendLine(`Failed to remove old version ${version}: ${errorMessage}`);
+          }
+        }
+
+        // Also remove partial downloads of old versions
+        try {
+          fs.unlinkSync(oldPartPath);
+          this.outputChannel.appendLine(`Removed partial download: ${version}`);
+        } catch (error) {
+          // Ignore ENOENT - file doesn't exist or was already removed
+          if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            this.outputChannel.appendLine(`Failed to remove partial download ${version}: ${errorMessage}`);
+          }
         }
       }
     }

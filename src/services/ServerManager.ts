@@ -28,10 +28,8 @@ export class ServerManager {
     this.outputChannel = vscode.window.createOutputChannel('AgentSmithy Server');
     this.serverDir = path.join(context.globalStorageUri.fsPath, 'server');
 
-    // Ensure server directory exists
-    if (!fs.existsSync(this.serverDir)) {
-      fs.mkdirSync(this.serverDir, {recursive: true});
-    }
+    // Ensure server directory exists (recursive: true handles existing directories)
+    fs.mkdirSync(this.serverDir, {recursive: true});
 
     this.downloadManager = new DownloadManager(this.serverDir, this.outputChannel);
     this.processManager = new ProcessManager(this.outputChannel);
@@ -55,9 +53,6 @@ export class ServerManager {
    */
   private serverExists = (): boolean => {
     const serverPath = this.getServerPath();
-    if (!fs.existsSync(serverPath)) {
-      return false;
-    }
 
     try {
       const stats = fs.statSync(serverPath);
@@ -76,6 +71,7 @@ export class ServerManager {
       }
       return true;
     } catch {
+      // File doesn't exist or can't be accessed
       return false;
     }
   };

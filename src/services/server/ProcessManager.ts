@@ -36,57 +36,53 @@ export class ProcessManager {
     // Remember old PID if status file exists
     let oldPid: number | null = null;
     try {
-      if (fs.existsSync(statusPath)) {
-        const content = fs.readFileSync(statusPath, 'utf8');
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-        const status = JSON.parse(content);
+      const content = fs.readFileSync(statusPath, 'utf8');
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      const status = JSON.parse(content);
 
-        oldPid = (status.server_pid as number | undefined) ?? null;
-        if (oldPid !== null) {
-          this.outputChannel.appendLine(`Old status file has PID ${oldPid}, waiting for new one...`);
-        }
+      oldPid = (status.server_pid as number | undefined) ?? null;
+      if (oldPid !== null) {
+        this.outputChannel.appendLine(`Old status file has PID ${oldPid}, waiting for new one...`);
       }
     } catch {
-      // Ignore
+      // Ignore ENOENT and parse errors
     }
 
     for (let i = 0; i < maxAttempts; i++) {
       try {
-        if (fs.existsSync(statusPath)) {
-          const content = fs.readFileSync(statusPath, 'utf8');
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-          const status = JSON.parse(content);
+        const content = fs.readFileSync(statusPath, 'utf8');
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        const status = JSON.parse(content);
 
-          const serverStatus = status.server_status as string | undefined;
+        const serverStatus = status.server_status as string | undefined;
 
-          // Server is ready when server_status === "ready"
-          if (serverStatus === 'ready' && typeof status.port === 'number') {
-            const pid = status.server_pid as number | undefined;
+        // Server is ready when server_status === "ready"
+        if (serverStatus === 'ready' && typeof status.port === 'number') {
+          const pid = status.server_pid as number | undefined;
 
-            // Check if it's a new PID (not the old one)
-            if (oldPid !== null && pid === oldPid) {
-              // Still old status, continue waiting
-              if (i % 5 === 0) {
-                this.outputChannel.appendLine(`Still waiting for new status (has old PID ${oldPid})...`);
-              }
-              await new Promise((resolve) => {
-                setTimeout(resolve, 500);
-              });
-              continue;
+          // Check if it's a new PID (not the old one)
+          if (oldPid !== null && pid === oldPid) {
+            // Still old status, continue waiting
+            if (i % 5 === 0) {
+              this.outputChannel.appendLine(`Still waiting for new status (has old PID ${oldPid})...`);
             }
-
-            // New status! Server is ready
-            if (pid !== undefined) {
-              this.serverPid = pid;
-              this.outputChannel.appendLine(`Server ready with PID ${pid} on port ${status.port as number}`);
-            } else {
-              this.outputChannel.appendLine(`Server ready on port ${status.port as number}`);
-            }
-            return true;
+            await new Promise((resolve) => {
+              setTimeout(resolve, 500);
+            });
+            continue;
           }
+
+          // New status! Server is ready
+          if (pid !== undefined) {
+            this.serverPid = pid;
+            this.outputChannel.appendLine(`Server ready with PID ${pid} on port ${status.port as number}`);
+          } else {
+            this.outputChannel.appendLine(`Server ready on port ${status.port as number}`);
+          }
+          return true;
         }
       } catch {
-        // Ignore parse errors
+        // Ignore ENOENT and parse errors
       }
 
       await new Promise((resolve) => {
@@ -103,21 +99,19 @@ export class ProcessManager {
     const statusPath = path.join(workspaceRoot, '.agentsmithy', 'status.json');
 
     try {
-      if (fs.existsSync(statusPath)) {
-        const content = fs.readFileSync(statusPath, 'utf8');
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-        const status = JSON.parse(content);
+      const content = fs.readFileSync(statusPath, 'utf8');
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      const status = JSON.parse(content);
 
-        const existingPid = status.server_pid as number | undefined;
+      const existingPid = status.server_pid as number | undefined;
 
-        if (existingPid !== undefined && this.isProcessAlive(existingPid)) {
-          this.outputChannel.appendLine(`Found existing server process (PID ${existingPid})`);
-          this.serverPid = existingPid;
-          return true;
-        }
+      if (existingPid !== undefined && this.isProcessAlive(existingPid)) {
+        this.outputChannel.appendLine(`Found existing server process (PID ${existingPid})`);
+        this.serverPid = existingPid;
+        return true;
       }
     } catch {
-      // Ignore errors
+      // Ignore ENOENT and parse errors
     }
 
     return false;
@@ -240,24 +234,22 @@ export class ProcessManager {
     const statusPath = path.join(workspaceRoot, '.agentsmithy', 'status.json');
 
     try {
-      if (fs.existsSync(statusPath)) {
-        const content = fs.readFileSync(statusPath, 'utf8');
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-        const status = JSON.parse(content);
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-        const portValue = status.port;
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-        const pidValue = status.server_pid;
+      const content = fs.readFileSync(statusPath, 'utf8');
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      const status = JSON.parse(content);
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      const portValue = status.port;
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      const pidValue = status.server_pid;
 
-        const port = typeof portValue === 'number' ? portValue : null;
-        const pid = typeof pidValue === 'number' ? pidValue : null;
+      const port = typeof portValue === 'number' ? portValue : null;
+      const pid = typeof pidValue === 'number' ? pidValue : null;
 
-        const running = pid !== null ? this.isProcessAlive(pid) : this.process !== null;
+      const running = pid !== null ? this.isProcessAlive(pid) : this.process !== null;
 
-        return {running, port, pid};
-      }
+      return {running, port, pid};
     } catch {
-      // Ignore errors
+      // Ignore ENOENT and parse errors
     }
 
     return {running: this.process !== null, port: null, pid: this.serverPid};

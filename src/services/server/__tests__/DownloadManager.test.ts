@@ -290,6 +290,13 @@ describe('DownloadManager', () => {
       const expectedSize = 1000;
       const onProgress = vi.fn();
 
+      // Mock no partial file exists (statSync throws ENOENT)
+      vi.mocked(fs.statSync).mockImplementation(() => {
+        const error: NodeJS.ErrnoException = new Error('ENOENT: no such file or directory');
+        error.code = 'ENOENT';
+        throw error;
+      });
+
       vi.mocked(https.request).mockImplementation((options: unknown, callback?: (res: IncomingMessage) => void) => {
         if (callback) {
           setTimeout(() => {
@@ -315,6 +322,13 @@ describe('DownloadManager', () => {
       // Arrange
       const expectedSize = 1000;
       const onProgress = vi.fn();
+
+      // Mock no partial file exists (statSync throws ENOENT)
+      vi.mocked(fs.statSync).mockImplementation(() => {
+        const error: NodeJS.ErrnoException = new Error('ENOENT: no such file or directory');
+        error.code = 'ENOENT';
+        throw error;
+      });
 
       vi.mocked(https.request).mockImplementation(() => {
         setTimeout(() => {
@@ -519,7 +533,10 @@ describe('DownloadManager', () => {
 
     it('should return false when file does not exist', async () => {
       // Arrange
-      vi.mocked(fs.existsSync).mockReturnValue(false);
+      const {calculateFileSHA256} = await import('../../../utils/crypto');
+      vi.mocked(calculateFileSHA256).mockRejectedValue(
+        Object.assign(new Error('ENOENT: no such file or directory'), {code: 'ENOENT'}),
+      );
 
       // Act
       const result = await downloadManager.verifySHA256('1.0.0', 'abc123');
@@ -722,15 +739,19 @@ describe('DownloadManager', () => {
       );
     });
 
-    it('should do nothing when lock file does not exist', () => {
-      // Arrange
-      vi.mocked(fs.existsSync).mockReturnValue(false);
+    it('should not fail when lock file does not exist', () => {
+      // Arrange - mock unlinkSync to throw ENOENT (file doesn't exist)
+      vi.mocked(fs.unlinkSync).mockImplementation(() => {
+        const error: NodeJS.ErrnoException = new Error('ENOENT: no such file or directory');
+        error.code = 'ENOENT';
+        throw error;
+      });
 
-      // Act
-      downloadManager.releaseLock();
+      // Act - should not throw
+      expect(() => downloadManager.releaseLock()).not.toThrow();
 
-      // Assert
-      expect(fs.unlinkSync).not.toHaveBeenCalled();
+      // Assert - unlinkSync should be called (but ENOENT is ignored)
+      expect(fs.unlinkSync).toHaveBeenCalledWith('/test/server/dir/.download.lock');
     });
   });
 

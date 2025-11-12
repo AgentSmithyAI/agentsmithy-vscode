@@ -54,18 +54,16 @@ export class ConfigService {
     const statusPath = path.join(workspaceRoot, STATUS_FILE_PATH);
 
     try {
-      if (fs.existsSync(statusPath)) {
-        const statusContent = fs.readFileSync(statusPath, 'utf8');
-        const parsed = safeJsonParse<{port?: unknown}>(statusContent);
-        if (typeof parsed?.port !== 'undefined') {
-          const port = parsed.port;
-          if (typeof port === 'number' || (typeof port === 'string' && String(port).trim().length > 0)) {
-            return `http://localhost:${String(port)}`;
-          }
+      const statusContent = fs.readFileSync(statusPath, 'utf8');
+      const parsed = safeJsonParse<{port?: unknown}>(statusContent);
+      if (typeof parsed?.port !== 'undefined') {
+        const port = parsed.port;
+        if (typeof port === 'number' || (typeof port === 'string' && String(port).trim().length > 0)) {
+          return `http://localhost:${String(port)}`;
         }
       }
     } catch {
-      // Fallback to config
+      // Ignore ENOENT and parse errors, fallback to config
     }
 
     return null;

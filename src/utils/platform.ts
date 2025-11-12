@@ -96,21 +96,22 @@ export const compareVersions = (a: string, b: string): number => {
  * Get all installed server versions in directory
  */
 export const getInstalledVersions = (serverDir: string): string[] => {
-  if (!fs.existsSync(serverDir)) {
+  try {
+    const files = fs.readdirSync(serverDir);
+    const versions: string[] = [];
+
+    for (const file of files) {
+      const version = parseVersionFromFilename(file);
+      if (version) {
+        versions.push(version);
+      }
+    }
+
+    return versions.sort((a, b) => compareVersions(b, a)); // Newest first
+  } catch {
+    // Directory doesn't exist or can't be read
     return [];
   }
-
-  const files = fs.readdirSync(serverDir);
-  const versions: string[] = [];
-
-  for (const file of files) {
-    const version = parseVersionFromFilename(file);
-    if (version) {
-      versions.push(version);
-    }
-  }
-
-  return versions.sort((a, b) => compareVersions(b, a)); // Newest first
 };
 
 /**
@@ -127,8 +128,15 @@ export const getLatestInstalledVersion = (serverDir: string): string | null => {
 export const makeExecutable = (filePath: string): void => {
   const {platform} = getPlatformInfo();
 
-  if (platform !== 'win32' && fs.existsSync(filePath)) {
-    fs.chmodSync(filePath, 0o755);
+  if (platform !== 'win32') {
+    try {
+      fs.chmodSync(filePath, 0o755);
+    } catch (error) {
+      // Ignore ENOENT - file doesn't exist
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+        throw error;
+      }
+    }
   }
 };
 
@@ -140,8 +148,13 @@ export const createFileLink = (targetPath: string, linkPath: string): void => {
   const {platform} = getPlatformInfo();
 
   // Remove existing link if present
-  if (fs.existsSync(linkPath)) {
+  try {
     fs.unlinkSync(linkPath);
+  } catch (error) {
+    // Ignore ENOENT - file doesn't exist or was already removed
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+      throw error;
+    }
   }
 
   if (platform === 'win32') {
