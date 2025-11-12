@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
+import semver from 'semver';
 import {getBinaryName, getPlatformInfo, getVersionedBinaryName, createFileLink} from '../utils/platform';
 import {DownloadManager} from './server/DownloadManager';
 import {ProcessManager} from './server/ProcessManager';
@@ -192,7 +193,8 @@ export class ServerManager {
       this.outputChannel.appendLine('Fetching latest release info from GitHub...');
       const latestRelease = await this.downloadManager.fetchLatestRelease();
       const {version: latestVersionTag, size: expectedSize, sha256: expectedSHA} = latestRelease;
-      const latestVersion = latestVersionTag.replace(/^v/, '');
+      // Use semver to clean version (removes 'v' prefix)
+      const latestVersion = semver.clean(latestVersionTag) || latestVersionTag.replace(/^v/, '');
 
       this.outputChannel.appendLine(`Latest available version: ${latestVersion} (size: ${expectedSize} bytes)`);
       if (expectedSHA) {

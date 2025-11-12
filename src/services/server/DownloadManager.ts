@@ -4,6 +4,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as https from 'https';
 import * as http from 'http';
+import semver from 'semver';
 import {
   getAssetName,
   getVersionedBinaryName,
@@ -147,6 +148,12 @@ export class DownloadManager {
 
               const version = release.tag_name as string;
 
+              // Validate version from GitHub API using semver
+              if (!semver.valid(version)) {
+                reject(new Error(`Invalid version format from GitHub API: ${version}`));
+                return;
+              }
+
               const assets = release.assets as unknown[];
 
               const assetName = getAssetName(version);
@@ -179,21 +186,23 @@ export class DownloadManager {
   };
 
   /**
-   * Validate version tag format (semver with optional 'v' prefix)
+   * Validate version tag format using semver library
    */
   private validateVersionTag(version: string): void {
     // Check for empty or invalid input
     if (!version || typeof version !== 'string') {
       throw new Error(`Invalid version tag: empty or invalid value`);
     }
-    // Allow optional 'v' prefix, then major.minor.patch
-    const semverPattern = /^v?\d+\.\d+\.\d+$/;
-    if (!semverPattern.test(version)) {
-      throw new Error(`Invalid version tag format: ${version}. Expected semver format like "v1.0.0" or "1.0.0"`);
-    }
-    // Additional check: prevent path traversal
+
+    // Security: prevent path traversal before validation
     if (version.includes('..') || version.includes('/') || version.includes('\\')) {
       throw new Error(`Invalid version tag: contains path traversal characters`);
+    }
+
+    // Use semver to validate - accepts both 'v1.0.0' and '1.0.0'
+    const valid = semver.valid(version);
+    if (!valid) {
+      throw new Error(`Invalid version tag format: ${version}. Expected valid semver like "v1.0.0" or "1.0.0"`);
     }
   }
 
@@ -205,14 +214,21 @@ export class DownloadManager {
     if (!version || typeof version !== 'string') {
       throw new Error(`Invalid version: empty or invalid value`);
     }
-    // NO 'v' prefix allowed - only major.minor.patch
-    const semverPattern = /^\d+\.\d+\.\d+$/;
-    if (!semverPattern.test(version)) {
-      throw new Error(`Invalid version format: ${version}. Expected semver format like "1.0.0" (without 'v' prefix)`);
-    }
-    // Additional check: prevent path traversal
+
+    // Security: prevent path traversal before validation
     if (version.includes('..') || version.includes('/') || version.includes('\\')) {
       throw new Error(`Invalid version: contains path traversal characters`);
+    }
+
+    // Use semver to validate
+    const valid = semver.valid(version);
+    if (!valid) {
+      throw new Error(`Invalid version format: ${version}. Expected valid semver like "1.0.0"`);
+    }
+
+    // Additional check: ensure no 'v' prefix in clean version
+    if (version.startsWith('v')) {
+      throw new Error(`Invalid version format: ${version}. Clean version should not have 'v' prefix`);
     }
   }
 

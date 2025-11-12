@@ -516,6 +516,29 @@ describe('DownloadManager', () => {
         sha256: 'abc123',
       });
     });
+
+    it('should reject invalid version from GitHub API', async () => {
+      // Arrange
+      const mockReleaseData = {
+        tag_name: 'invalid-version-string',
+        assets: [{name: 'agentsmithy-linux-amd64-1.0.0', size: 1000}],
+      };
+
+      vi.mocked(https.get).mockImplementation((options: unknown, callback?: (res: any) => void) => {
+        if (callback) {
+          const mockResponse = new EventEmitter();
+          setTimeout(() => {
+            callback(mockResponse);
+            mockResponse.emit('data', JSON.stringify(mockReleaseData));
+            mockResponse.emit('end');
+          }, 0);
+        }
+        return new EventEmitter() as any;
+      });
+
+      // Act & Assert
+      await expect(downloadManager.fetchLatestRelease()).rejects.toThrow('Invalid version format from GitHub API');
+    });
   });
 
   describe('cleanupOldVersions', () => {

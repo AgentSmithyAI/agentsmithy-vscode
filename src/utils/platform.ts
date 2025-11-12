@@ -1,6 +1,7 @@
 /* eslint-disable no-undef */
 import * as fs from 'fs';
 import * as path from 'path';
+import semver from 'semver';
 
 export interface PlatformInfo {
   platform: 'linux' | 'darwin' | 'win32';
@@ -39,8 +40,8 @@ export const getBinaryName = (): string => {
  */
 export const getAssetName = (version: string): string => {
   const {platform, arch} = getPlatformInfo();
-  // Remove 'v' prefix if present
-  const cleanVersion = version.replace(/^v/, '');
+  // Remove 'v' prefix if present using semver
+  const cleanVersion = semver.clean(version) || version.replace(/^v/, '');
 
   if (platform === 'linux') {
     return `agentsmithy-linux-amd64-${cleanVersion}`;
@@ -66,30 +67,21 @@ export const getVersionedBinaryName = (version: string): string => {
 export const parseVersionFromFilename = (filename: string): string | null => {
   // Match version at the end, with or without .exe
   const match = filename.match(/-(v?\d+\.\d+\.\d+)(?:\.exe)?$/);
-  return match ? match[1] : null;
+  if (!match) {
+    return null;
+  }
+
+  // Use semver to validate and clean the version
+  const version = semver.clean(match[1]);
+  return version;
 };
 
 /**
- * Compare two semantic versions
+ * Compare two semantic versions using semver library
  * Returns: 1 if a > b, -1 if a < b, 0 if equal
  */
 export const compareVersions = (a: string, b: string): number => {
-  const cleanA = a.replace(/^v/, '');
-  const cleanB = b.replace(/^v/, '');
-
-  const partsA = cleanA.split('.').map(Number);
-  const partsB = cleanB.split('.').map(Number);
-
-  for (let i = 0; i < 3; i++) {
-    if (partsA[i] > partsB[i]) {
-      return 1;
-    }
-    if (partsA[i] < partsB[i]) {
-      return -1;
-    }
-  }
-
-  return 0;
+  return semver.compare(a, b);
 };
 
 /**
