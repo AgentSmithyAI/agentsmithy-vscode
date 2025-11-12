@@ -158,6 +158,37 @@ export class ServerManager {
   };
 
   /**
+   * Format file size for display
+   */
+  private formatFileSize = (bytes: number): string => {
+    const units = ['B', 'KB', 'MB', 'GB'];
+    let size = bytes;
+    let unitIndex = 0;
+
+    while (size >= 1024 && unitIndex < units.length - 1) {
+      size /= 1024;
+      unitIndex++;
+    }
+
+    return `${size.toFixed(1)} ${units[unitIndex]}`;
+  };
+
+  /**
+   * Show download confirmation dialog
+   */
+  private showDownloadConfirmation = async (version: string, size: number, isUpdate: boolean): Promise<boolean> => {
+    const sizeFormatted = this.formatFileSize(size);
+    const action = isUpdate ? 'update' : 'download';
+    const message = isUpdate
+      ? `A new version of AgentSmithy server is available (v${version}). Size: ${sizeFormatted}. Would you like to ${action} it?`
+      : `AgentSmithy server needs to be downloaded (v${version}). Size: ${sizeFormatted}. Would you like to ${action} it?`;
+
+    const choice = await vscode.window.showInformationMessage(message, {modal: true}, 'Download');
+
+    return choice === 'Download';
+  };
+
+  /**
    * Ensure server binary is available, download/update if necessary
    */
   private ensureServer = async (): Promise<void> => {
@@ -184,6 +215,20 @@ export class ServerManager {
         );
         if (handled) {
           return;
+        }
+
+        // New version available - ask for confirmation
+        const confirmed = await this.showDownloadConfirmation(latestVersion, expectedSize, true);
+        if (!confirmed) {
+          this.outputChannel.appendLine('Download cancelled by user');
+          throw new Error('Server download cancelled by user');
+        }
+      } else {
+        // No version installed - ask for confirmation
+        const confirmed = await this.showDownloadConfirmation(latestVersion, expectedSize, false);
+        if (!confirmed) {
+          this.outputChannel.appendLine('Download cancelled by user');
+          throw new Error('Server download cancelled by user');
         }
       }
 
