@@ -41,6 +41,7 @@ class ChatWebview {
   private sessionActionsUI: SessionActionsUI;
   private dialogViewManager: DialogViewManager;
   private currentDialogId: string | null = null;
+  private serverStatusOverlay: HTMLElement | null = null;
 
   // Focus persistence state
   private shouldRestoreInputFocus = false;
@@ -336,6 +337,10 @@ class ChatWebview {
 
   private handleMessage(message: WebviewOutMessage): void {
     switch (message.type) {
+      case WEBVIEW_OUT_MSG.SERVER_STATUS:
+        this.handleServerStatus(message.status, message.message);
+        break;
+
       case WEBVIEW_OUT_MSG.DIALOGS_UPDATE:
         this.dialogsUI.updateDialogs(message.dialogs, message.currentDialogId);
         break;
@@ -378,6 +383,52 @@ class ChatWebview {
       default:
         this.messageHandler.handle(message);
     }
+  }
+
+  private handleServerStatus(status: 'launching' | 'ready' | 'error', message?: string): void {
+    const container = document.querySelector('.chat-container') as HTMLElement;
+
+    // Always remove existing overlay first to prevent leaks and ensure clean state
+    if (this.serverStatusOverlay) {
+      this.serverStatusOverlay.remove();
+      this.serverStatusOverlay = null;
+    }
+
+    // Only create overlay for launching and error states
+    if (status === 'launching' || status === 'error') {
+      const overlay = document.createElement('div');
+      overlay.id = 'serverStatusOverlay';
+      overlay.style.cssText = `
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: var(--vscode-editor-background);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+        z-index: 9999;
+      `;
+
+      if (status === 'launching') {
+        overlay.innerHTML = `
+          <div class="codicon codicon-loading codicon-modifier-spin" style="font-size: 48px; margin-bottom: 16px;"></div>
+          <div style="font-size: 14px; color: var(--vscode-foreground);">${escapeHtml(message || 'Launching server...')}</div>
+        `;
+      } else {
+        // error
+        overlay.innerHTML = `
+          <div class="codicon codicon-error" style="font-size: 48px; margin-bottom: 16px; color: var(--vscode-errorForeground);"></div>
+          <div style="font-size: 14px; color: var(--vscode-foreground); text-align: center; max-width: 400px;">${escapeHtml(message || 'Failed to start server')}</div>
+        `;
+      }
+
+      container?.appendChild(overlay);
+      this.serverStatusOverlay = overlay;
+    }
+    // For 'ready' status, overlay is already removed above
   }
 
   private handleDialogSwitch(dialogId: string | null, title: string): void {

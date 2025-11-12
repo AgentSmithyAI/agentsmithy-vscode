@@ -155,21 +155,38 @@ export class HistoryService {
   /**
    * Get or determine current dialog ID
    */
-  async resolveCurrentDialogId(): Promise<string | undefined> {
+  async resolveCurrentDialogId(outputChannel?: {appendLine: (msg: string) => void}): Promise<string | undefined> {
+    const log = (msg: string) => {
+      if (outputChannel) {
+        outputChannel.appendLine(`[HistoryService.resolve] ${msg}`);
+      }
+    };
+
+    log(`Starting, cached: ${this._currentDialogId ?? 'none'}`);
+
     if (this._currentDialogId) {
+      log('Returning cached ID');
       return this._currentDialogId;
     }
 
     try {
+      log('Calling getCurrentDialog...');
       const current = await this.apiService.getCurrentDialog();
+      log(`getCurrentDialog: ${JSON.stringify(current)}`);
+
       if (current.id) {
         this._currentDialogId = current.id;
+        log(`Using current: ${current.id}`);
         return current.id;
       }
 
+      log('Calling listDialogs...');
       const list = await this.apiService.listDialogs();
+      log(`listDialogs: ${list.dialogs.length} dialogs, current_dialog_id=${list.current_dialog_id ?? 'null'}`);
+
       if (list.current_dialog_id) {
         this._currentDialogId = list.current_dialog_id;
+        log(`Using from list.current_dialog_id: ${list.current_dialog_id}`);
         return list.current_dialog_id;
       }
 
@@ -178,12 +195,16 @@ export class HistoryService {
           (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime(),
         );
         this._currentDialogId = sorted[0].id;
+        log(`Using most recent dialog: ${sorted[0].id}`);
         return sorted[0].id;
       }
-    } catch {
-      // noop - return undefined
+
+      log('No dialogs found');
+    } catch (error) {
+      log(`ERROR: ${error instanceof Error ? error.message : String(error)}`);
     }
 
+    log('Returning undefined');
     return undefined;
   }
 

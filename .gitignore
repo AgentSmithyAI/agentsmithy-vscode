@@ -6,3 +6,4 @@ node_modules
 .agentsmithy
 .vscode
 coverage
+.env

@@ -70,11 +70,15 @@ type WebviewOutMessage =
   | {type: typeof WEBVIEW_OUT_MSG.DIALOG_SWITCHED; dialogId: string | null; title: string}
   | {type: typeof WEBVIEW_OUT_MSG.SESSION_STATUS_UPDATE; hasUnapproved: boolean; changedFiles?: ChangedFile[]}
   | {type: typeof WEBVIEW_OUT_MSG.SESSION_OPERATION_CANCELLED}
-  | {type: typeof WEBVIEW_OUT_MSG.FOCUS_INPUT};
-export class ChatWebviewProvider implements vscode.WebviewViewProvider {
+  | {type: typeof WEBVIEW_OUT_MSG.FOCUS_INPUT}
+  | {type: typeof WEBVIEW_OUT_MSG.SERVER_STATUS; status: 'launching' | 'ready' | 'error'; message?: string};
+export class ChatWebviewProvider implements vscode.WebviewViewProvider, vscode.Disposable {
   public static readonly viewType = VIEWS.CHAT;
 
   private _view?: vscode.WebviewView;
+  private readonly _outputChannel: vscode.OutputChannel;
+  private _isInitializing = false;
+  private readonly _serverManager: {waitForReady: () => Promise<void>};
 
   constructor(
     private readonly _extensionUri: vscode.Uri,
@@ -83,7 +87,11 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     private readonly _dialogService: DialogService,
     private readonly _configService: ConfigService,
     private readonly _apiService: ApiService,
+    serverManager: {waitForReady: () => Promise<void>},
   ) {
+    this._serverManager = serverManager;
+    this._outputChannel = vscode.window.createOutputChannel('AgentSmithy Webview');
+
     // Listen to history state changes
     this._historyService.onDidChangeState(() => {
       // Enable only when not loading AND there is more to load
@@ -93,6 +101,13 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
         canLoad,
       });
     });
+  }
+
+  /**
+   * Check if the webview is currently visible/initialized
+   */
+  public hasView(): boolean {
+    return this._view !== undefined;
   }
 
   private _postMessage(msg: WebviewOutMessage): void {
@@ -166,6 +181,25 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     }
   }
 
+  /**
+   * Refresh webview data after server starts
+   */
+  public async refreshAfterServerStart(): Promise<void> {
+    if (!this._view) {
+      this._outputChannel.appendLine('[refreshAfterServerStart] No view, skipping');
+      return;
+    }
+
+    this._outputChannel.appendLine('[refreshAfterServerStart] Starting refresh...');
+
+    // Reset cached dialog ID to force reload from API
+    this._historyService.currentDialogId = undefined;
+
+    // Trigger data reload (server is already ready when this is called)
+    this._outputChannel.appendLine('[refreshAfterServerStart] Reloading data...');
+    await this._handleWebviewReady();
+  }
+
   public resolveWebviewView(
     webviewView: vscode.WebviewView,
     _context: vscode.WebviewViewResolveContext,
@@ -201,7 +235,23 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
           this._stream.abort();
           break;
         case WEBVIEW_IN_MSG.READY:
-          await this._handleWebviewReady();
+          this._outputChannel.appendLine('[READY message] Received, waiting for server...');
+          this._postMessage({type: WEBVIEW_OUT_MSG.SERVER_STATUS, status: 'launching', message: 'Launching server...'});
+
+          try {
+            await this._serverManager.waitForReady();
+            this._outputChannel.appendLine('[READY message] Server ready, loading data...');
+            this._postMessage({type: WEBVIEW_OUT_MSG.SERVER_STATUS, status: 'ready'});
+            await this._handleWebviewReady();
+          } catch (error) {
+            const errorMsg = error instanceof Error ? error.message : String(error);
+            this._outputChannel.appendLine(`[READY message] Server error: ${errorMsg}`);
+            this._postMessage({
+              type: WEBVIEW_OUT_MSG.SERVER_STATUS,
+              status: 'error',
+              message: 'Failed to start server. Check Output → AgentSmithy Server for details.',
+            });
+          }
           break;
         case WEBVIEW_IN_MSG.LOAD_MORE_HISTORY:
           await this._handleLoadMoreHistory();
@@ -439,13 +489,30 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     this._diffContentEmitter?.fire(rightUri);
   };
   private _handleWebviewReady = async (): Promise<void> => {
+    if (this._isInitializing) {
+      this._outputChannel.appendLine('[_handleWebviewReady] Already initializing, skipping');
+      return;
+    }
+
+    // Set flag immediately after check to prevent race condition
+    this._isInitializing = true;
+    this._outputChannel.appendLine('[_handleWebviewReady] Starting...');
+
     try {
-      const dialogId = await this._historyService.resolveCurrentDialogId();
+      this._outputChannel.appendLine('[_handleWebviewReady] Resolving current dialog...');
+      const dialogId = await this._historyService.resolveCurrentDialogId(this._outputChannel);
+      this._outputChannel.appendLine(`[_handleWebviewReady] Dialog ID resolved: ${dialogId ?? 'none'}`);
+
       if (dialogId) {
+        this._outputChannel.appendLine('[_handleWebviewReady] Loading history...');
         await this._loadLatestHistoryPage(dialogId, true);
+        this._outputChannel.appendLine('[_handleWebviewReady] History loaded');
 
         // Update header with current dialog title
+        this._outputChannel.appendLine('[_handleWebviewReady] Loading dialogs...');
         await this._dialogService.loadDialogs();
+        this._outputChannel.appendLine(`[_handleWebviewReady] Loaded ${this._dialogService.dialogs.length} dialogs`);
+
         const currentDialog = this._dialogService.currentDialog;
         const title = this._dialogService.getDialogDisplayTitle(currentDialog);
         this._postMessage({
@@ -458,10 +525,19 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
         this._postMessage({type: WEBVIEW_OUT_MSG.SCROLL_TO_BOTTOM, dialogId});
 
         // Update session status
+        this._outputChannel.appendLine('[_handleWebviewReady] Updating session status...');
         await this._updateSessionStatus(dialogId);
+        this._outputChannel.appendLine('[_handleWebviewReady] Complete!');
+      } else {
+        this._outputChannel.appendLine('[_handleWebviewReady] No dialog ID, skipping');
       }
-    } catch {
-      // noop
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      this._outputChannel.appendLine(`[_handleWebviewReady] ERROR: ${errorMessage}`);
+      // Don't show error if it's initial attempt before server is ready
+      // The refresh after server start will succeed
+    } finally {
+      this._isInitializing = false;
     }
   };
 
@@ -1055,6 +1131,13 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
       },
     };
   };
+
+  /**
+   * Dispose resources to prevent memory leaks
+   */
+  dispose(): void {
+    this._outputChannel.dispose();
+  }
 }
 
 const getNonce = (): string => {
