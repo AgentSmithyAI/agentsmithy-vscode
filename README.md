@@ -117,8 +117,7 @@ Access settings via `File → Preferences → Settings` → search for "AgentSmi
 ### Server Settings
 
 - `agentsmithy.autoStartServer`: Automatically start server on extension activation (default: `true`)
-- `agentsmithy.serverPort`: Port for AgentSmithy server (default: `8765`)
-- `agentsmithy.serverUrl`: Server URL override (default: `http://localhost:8765`)
+- `agentsmithy.serverUrl`: Server URL override (default: auto-detected from server status)
 
 ### UI Settings
 

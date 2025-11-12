@@ -39,24 +39,28 @@ Available in VSCode settings (`Preferences: Open Settings`):
 - **Default**: `true`
 - **Description**: Automatically start AgentSmithy server when extension activates
 
-#### `agentsmithy.serverPort`
-
-- **Type**: `number`
-- **Default**: `8765`
-- **Description**: Port for AgentSmithy server (requires restart)
-
 #### `agentsmithy.serverUrl`
 
 - **Type**: `string`
-- **Default**: `http://localhost:8765`
-- **Description**: AgentSmithy server URL
+- **Default**: auto-detected from server status file
+- **Description**: AgentSmithy server URL override (optional, only needed for external servers)
+
+**Note**: The managed server automatically selects an available port and writes it to `.agentsmithy/status.json`. The extension reads this file to determine the server URL, so manual port configuration is no longer needed.
 
 ### Example Configuration
 
 ```json
 {
-  "agentsmithy.autoStartServer": true,
-  "agentsmithy.serverPort": 8765,
+  "agentsmithy.autoStartServer": true
+  // serverUrl is auto-detected, no need to configure
+}
+```
+
+For using an external server:
+
+```json
+{
+  "agentsmithy.autoStartServer": false,
   "agentsmithy.serverUrl": "http://localhost:8765"
 }
 ```
@@ -94,7 +98,7 @@ The extension automatically checks if the server is running by making health che
 ### Server Won't Start
 
 1. Check the "AgentSmithy Server" output channel for errors
-2. Verify port 8765 (or configured port) is not in use
+2. The server automatically selects an available port, so port conflicts should not occur
 3. Try manually restarting: `AgentSmithy: Restart Server`
 4. Check your firewall settings
 
@@ -154,7 +158,7 @@ To test server management features during development:
 1. Clear the server directory to force a fresh download
 2. Use `agentsmithy.autoStartServer: false` to test manual start
 3. Monitor the output channel for debugging
-4. Test different ports with `agentsmithy.serverPort`
+4. Check `.agentsmithy/status.json` in workspace to see the auto-selected port
 
 ### Debugging
 
