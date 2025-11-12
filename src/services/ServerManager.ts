@@ -411,9 +411,12 @@ export class ServerManager {
 
   /**
    * Check if server is ready
+   * Returns true only if server successfully started (readyPromise resolved)
    */
   isReady = (): boolean => {
-    return this.readyResolve === null && this.processManager.isAlive();
+    // Server is ready when there's no pending promise AND process is alive
+    // readyPromise is null only on success, on error it's recreated for retry
+    return this.readyPromise === null && this.processManager.isAlive();
   };
 
   /**
