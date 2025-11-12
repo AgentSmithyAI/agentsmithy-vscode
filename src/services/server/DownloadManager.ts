@@ -179,6 +179,44 @@ export class DownloadManager {
   };
 
   /**
+   * Validate version tag format (semver with optional 'v' prefix)
+   */
+  private validateVersionTag(version: string): void {
+    // Check for empty or invalid input
+    if (!version || typeof version !== 'string') {
+      throw new Error(`Invalid version tag: empty or invalid value`);
+    }
+    // Allow optional 'v' prefix, then major.minor.patch
+    const semverPattern = /^v?\d+\.\d+\.\d+$/;
+    if (!semverPattern.test(version)) {
+      throw new Error(`Invalid version tag format: ${version}. Expected semver format like "v1.0.0" or "1.0.0"`);
+    }
+    // Additional check: prevent path traversal
+    if (version.includes('..') || version.includes('/') || version.includes('\\')) {
+      throw new Error(`Invalid version tag: contains path traversal characters`);
+    }
+  }
+
+  /**
+   * Validate clean version format (semver WITHOUT 'v' prefix)
+   */
+  private validateCleanVersion(version: string): void {
+    // Check for empty or invalid input
+    if (!version || typeof version !== 'string') {
+      throw new Error(`Invalid version: empty or invalid value`);
+    }
+    // NO 'v' prefix allowed - only major.minor.patch
+    const semverPattern = /^\d+\.\d+\.\d+$/;
+    if (!semverPattern.test(version)) {
+      throw new Error(`Invalid version format: ${version}. Expected semver format like "1.0.0" (without 'v' prefix)`);
+    }
+    // Additional check: prevent path traversal
+    if (version.includes('..') || version.includes('/') || version.includes('\\')) {
+      throw new Error(`Invalid version: contains path traversal characters`);
+    }
+  }
+
+  /**
    * Download server binary from GitHub with resume support
    * @param versionTag - version tag with 'v' prefix for GitHub URL (e.g., 'v1.9.0')
    * @param versionClean - version without 'v' for filenames (e.g., '1.9.0')
@@ -193,6 +231,10 @@ export class DownloadManager {
     expectedSize: number,
     onProgress?: (downloaded: number, total: number) => void,
   ): Promise<void> => {
+    // Security: Validate version strings to prevent path traversal and URL injection
+    this.validateVersionTag(versionTag);
+    this.validateCleanVersion(versionClean);
+
     const assetName = getAssetName(versionClean);
     const versionedPath = path.join(this.serverDir, getVersionedBinaryName(versionClean));
     const tempPath = `${versionedPath}.part`; // Temporary file for downloading

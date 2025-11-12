@@ -66,6 +66,76 @@ describe('DownloadManager', () => {
   });
 
   describe('downloadBinary', () => {
+    it('should reject invalid version tag format', async () => {
+      // Arrange
+      const invalidVersions = [
+        '../../../etc/passwd',
+        'v1.0.0/../../malicious',
+        '1.0.0; rm -rf /',
+        'v1.0',
+        '1.0.0.0',
+        'invalid',
+        'v1.0.0\\..\\file',
+      ];
+
+      for (const invalidVersion of invalidVersions) {
+        // Act & Assert
+        await expect(downloadManager.downloadBinary(invalidVersion, '1.0.0', '/test/link', 1000)).rejects.toThrow(
+          /Invalid version tag format|contains path traversal/,
+        );
+      }
+    });
+
+    it('should reject invalid version clean format', async () => {
+      // Test path traversal
+      await expect(downloadManager.downloadBinary('v1.0.0', '../1.0.0', '/test/link', 1000)).rejects.toThrow(
+        /Invalid version|contains path traversal/,
+      );
+
+      await expect(downloadManager.downloadBinary('v1.0.0', '1.0.0/..', '/test/link', 1000)).rejects.toThrow(
+        /Invalid version|contains path traversal/,
+      );
+
+      // Test wrong format (has 'v' prefix in clean version)
+      await expect(downloadManager.downloadBinary('v1.0.0', 'v1.0.0', '/test/link', 1000)).rejects.toThrow(
+        /Invalid version/,
+      );
+
+      // Test incomplete version
+      await expect(downloadManager.downloadBinary('v1.0.0', '1.0', '/test/link', 1000)).rejects.toThrow(
+        /Invalid version/,
+      );
+
+      // Test empty string
+      await expect(downloadManager.downloadBinary('v1.0.0', '', '/test/link', 1000)).rejects.toThrow(
+        /Invalid version|empty or invalid/,
+      );
+    });
+
+    it('should accept valid version formats', async () => {
+      // Arrange
+      const expectedSize = 1000;
+
+      vi.mocked(https.request).mockImplementation((options: unknown, callback?: (res: IncomingMessage) => void) => {
+        if (callback) {
+          setTimeout(() => {
+            callback(mockResponse as IncomingMessage);
+            mockResponse.emit('data', Buffer.from('x'.repeat(1000)));
+            mockWriteStream.emit('finish');
+          }, 0);
+        }
+        return mockRequest as ClientRequest;
+      });
+
+      // Act - should not throw
+      await downloadManager.downloadBinary('v1.0.0', '1.0.0', '/test/link', expectedSize);
+      await downloadManager.downloadBinary('v1.10.20', '1.10.20', '/test/link', expectedSize);
+      await downloadManager.downloadBinary('v0.0.1', '0.0.1', '/test/link', expectedSize);
+
+      // Assert - no exception means validation passed
+      expect(https.request).toHaveBeenCalled();
+    });
+
     it('should download file successfully from scratch', async () => {
       // Arrange
       const expectedSize = 1000;
