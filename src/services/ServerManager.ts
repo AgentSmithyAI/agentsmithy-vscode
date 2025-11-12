@@ -318,8 +318,12 @@ export class ServerManager {
       return;
     }
 
+    // Set flag immediately after check to prevent race condition
+    this.isStarting = true;
+
     if (this.processManager.isAlive()) {
       this.outputChannel.appendLine('Server is already running');
+      this.isStarting = false;
       return;
     }
 
@@ -327,11 +331,11 @@ export class ServerManager {
     if (!workspaceRoot) {
       this.outputChannel.appendLine('No workspace folder open');
       void vscode.window.showErrorMessage('AgentSmithy: Please open a workspace folder first');
+      this.isStarting = false;
       return;
     }
 
     this.outputChannel.appendLine(`Workspace: ${workspaceRoot}`);
-    this.isStarting = true;
 
     try {
       this.outputChannel.appendLine('Checking server binary...');

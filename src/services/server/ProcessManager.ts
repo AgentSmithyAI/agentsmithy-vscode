@@ -96,38 +96,82 @@ export class ProcessManager {
   };
 
   /**
-   * Wait for status.json to show server is ready
+   * Wait for status.json to show server is ready using file watcher
    * Checks for new PID (different from old one) to avoid stale status
    */
-  waitForStatusFile = async (workspaceRoot: string, maxAttempts = 60): Promise<boolean> => {
+  waitForStatusFile = async (workspaceRoot: string, timeoutMs = 30000): Promise<boolean> => {
     const statusPath = this.getStatusPath(workspaceRoot);
     const oldPid = this.getOldPid(statusPath);
 
-    for (let i = 0; i < maxAttempts; i++) {
-      const status = this.readStatus(statusPath);
-      const result = this.checkServerReady(status, oldPid);
+    return new Promise<boolean>((resolve) => {
+      let resolved = false;
+      let watcher: fs.FSWatcher | null = null;
+      let timeout: NodeJS.Timeout | null = null;
 
-      if (result.ready) {
-        // Server is ready!
-        if (result.pid !== undefined) {
-          this.serverPid = result.pid;
-          this.outputChannel.appendLine(`Server ready with PID ${result.pid} on port ${result.port as number}`);
-        } else {
-          this.outputChannel.appendLine(`Server ready on port ${result.port as number}`);
+      const finalizeWithResult = (result: boolean, message?: string) => {
+        if (resolved) {
+          return;
         }
-        return true;
-      }
+        resolved = true;
 
-      // Still waiting
-      if (oldPid !== null && i % 5 === 0) {
-        this.outputChannel.appendLine(`Still waiting for new status (has old PID ${oldPid})...`);
-      }
+        // Cleanup
+        if (watcher) {
+          watcher.close();
+        }
+        if (timeout) {
+          clearTimeout(timeout);
+        }
 
-      await new Promise((resolve) => {
-        setTimeout(resolve, 500);
-      });
-    }
-    return false;
+        if (message) {
+          this.outputChannel.appendLine(message);
+        }
+        resolve(result);
+      };
+
+      const checkAndResolve = () => {
+        if (resolved) {
+          return;
+        }
+
+        const status = this.readStatus(statusPath);
+        const result = this.checkServerReady(status, oldPid);
+
+        if (result.ready) {
+          // Server is ready!
+          this.serverPid = result.pid ?? null;
+          const message =
+            result.pid !== undefined
+              ? `Server ready with PID ${result.pid} on port ${result.port as number}`
+              : `Server ready on port ${result.port as number}`;
+          finalizeWithResult(true, message);
+        }
+      };
+
+      // Set timeout
+      timeout = setTimeout(() => {
+        finalizeWithResult(false, `Timeout waiting for server (${timeoutMs}ms)`);
+      }, timeoutMs);
+
+      // Watch for file changes
+      try {
+        watcher = fs.watch(path.dirname(statusPath), (_eventType, filename) => {
+          if (filename === 'status.json') {
+            checkAndResolve();
+          }
+        });
+
+        // Check immediately in case file already exists
+        checkAndResolve();
+      } catch (error) {
+        const errorMsg = `Failed to watch status file: ${error instanceof Error ? error.message : String(error)}`;
+        this.outputChannel.appendLine(errorMsg);
+
+        // Try one immediate check, then give up
+        checkAndResolve();
+        // If checkAndResolve didn't find ready status, give up
+        finalizeWithResult(false);
+      }
+    });
   };
 
   /**
@@ -222,10 +266,26 @@ export class ProcessManager {
   };
 
   /**
+   * Clean up process state and resolve
+   */
+  private cleanupProcess = (timeout: NodeJS.Timeout, resolve: () => void, message?: string): void => {
+    clearTimeout(timeout);
+    this.process = null;
+    this.serverPid = null;
+    this.isShuttingDown = false;
+    if (message) {
+      this.outputChannel.appendLine(message);
+    }
+    resolve();
+  };
+
+  /**
    * Stop server process
    */
   stop = async (): Promise<void> => {
-    if (!this.process) {
+    // Capture process reference to prevent race condition
+    const processRef = this.process;
+    if (!processRef) {
       return;
     }
 
@@ -233,28 +293,27 @@ export class ProcessManager {
     this.outputChannel.appendLine('Stopping server...');
 
     await new Promise<void>((resolve) => {
-      if (!this.process) {
-        resolve();
-        return;
-      }
-
+      // Use captured reference to avoid race condition
       const timeout = setTimeout(() => {
-        if (this.process) {
-          this.outputChannel.appendLine('Force killing server process');
-          this.process.kill('SIGKILL');
+        this.outputChannel.appendLine('Force killing server process');
+        try {
+          processRef.kill('SIGKILL');
+        } catch (error) {
+          this.outputChannel.appendLine(`Kill failed: ${error instanceof Error ? error.message : String(error)}`);
         }
+        this.cleanupProcess(timeout, resolve);
       }, 5000);
 
-      this.process.on('exit', () => {
-        clearTimeout(timeout);
-        this.outputChannel.appendLine('Server stopped');
-        this.process = null;
-        this.serverPid = null;
-        this.isShuttingDown = false;
-        resolve();
+      processRef.on('exit', () => {
+        this.cleanupProcess(timeout, resolve, 'Server stopped');
       });
 
-      this.process.kill('SIGTERM');
+      try {
+        processRef.kill('SIGTERM');
+      } catch {
+        // Process may have already exited
+        this.cleanupProcess(timeout, resolve);
+      }
     });
   };
 

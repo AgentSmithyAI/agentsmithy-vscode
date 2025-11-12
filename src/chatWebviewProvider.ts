@@ -195,10 +195,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     // Reset cached dialog ID to force reload from API
     this._historyService.currentDialogId = undefined;
 
-    // Wait a bit for server to be fully ready
-    await new Promise((resolve) => setTimeout(resolve, 500));
-
-    // Trigger data reload
+    // Trigger data reload (server is already ready when this is called)
     this._outputChannel.appendLine('[refreshAfterServerStart] Reloading data...');
     await this._handleWebviewReady();
   }
@@ -497,8 +494,9 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
       return;
     }
 
-    this._outputChannel.appendLine('[_handleWebviewReady] Starting...');
+    // Set flag immediately after check to prevent race condition
     this._isInitializing = true;
+    this._outputChannel.appendLine('[_handleWebviewReady] Starting...');
 
     try {
       this._outputChannel.appendLine('[_handleWebviewReady] Resolving current dialog...');
