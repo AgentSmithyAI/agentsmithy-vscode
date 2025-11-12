@@ -47,6 +47,8 @@ describe('DownloadManager', () => {
       statusCode: 200,
       headers: {},
       pipe: vi.fn().mockReturnValue(mockWriteStream),
+      unpipe: vi.fn(),
+      destroy: vi.fn(),
     });
 
     // Setup mock request

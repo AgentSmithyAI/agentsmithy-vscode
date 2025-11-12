@@ -354,8 +354,13 @@ export class DownloadManager {
             });
 
             file.on('error', (error) => {
-              // Don't delete temp file on error - allow resume
-              reject(new Error(`File write failed: ${error.message}`));
+              // Clean up streams to prevent resource leaks
+              response.unpipe(file);
+              response.destroy();
+              file.close(() => {
+                // Don't delete temp file on error - allow resume
+                reject(new Error(`File write failed: ${error.message}`));
+              });
             });
           } else if (response.statusCode === 416 && offset > 0) {
             // Range not satisfiable - file might be complete already
