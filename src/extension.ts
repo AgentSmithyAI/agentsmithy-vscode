@@ -50,6 +50,9 @@ export const activate = async (context: vscode.ExtensionContext) => {
     serverManager,
   );
 
+  // Register provider for disposal
+  context.subscriptions.push(provider);
+
   // Subscribe to server ready event
   const eventsChannel = vscode.window.createOutputChannel('AgentSmithy Events');
   context.subscriptions.push(eventsChannel);

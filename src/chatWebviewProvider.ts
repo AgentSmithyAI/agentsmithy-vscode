@@ -72,7 +72,7 @@ type WebviewOutMessage =
   | {type: typeof WEBVIEW_OUT_MSG.SESSION_OPERATION_CANCELLED}
   | {type: typeof WEBVIEW_OUT_MSG.FOCUS_INPUT}
   | {type: typeof WEBVIEW_OUT_MSG.SERVER_STATUS; status: 'launching' | 'ready' | 'error'; message?: string};
-export class ChatWebviewProvider implements vscode.WebviewViewProvider {
+export class ChatWebviewProvider implements vscode.WebviewViewProvider, vscode.Disposable {
   public static readonly viewType = VIEWS.CHAT;
 
   private _view?: vscode.WebviewView;
@@ -1131,6 +1131,13 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
       },
     };
   };
+
+  /**
+   * Dispose resources to prevent memory leaks
+   */
+  dispose(): void {
+    this._outputChannel.dispose();
+  }
 }
 
 const getNonce = (): string => {
