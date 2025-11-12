@@ -407,7 +407,7 @@ class ChatWebview {
         `;
         overlay.innerHTML = `
           <div class="codicon codicon-loading codicon-modifier-spin" style="font-size: 48px; margin-bottom: 16px;"></div>
-          <div style="font-size: 14px; color: var(--vscode-foreground);">${message || 'Launching server...'}</div>
+          <div style="font-size: 14px; color: var(--vscode-foreground);">${escapeHtml(message || 'Launching server...')}</div>
         `;
         container?.appendChild(overlay);
       }
@@ -417,7 +417,7 @@ class ChatWebview {
       if (overlay) {
         overlay.innerHTML = `
           <div class="codicon codicon-error" style="font-size: 48px; margin-bottom: 16px; color: var(--vscode-errorForeground);"></div>
-          <div style="font-size: 14px; color: var(--vscode-foreground); text-align: center; max-width: 400px;">${message || 'Failed to start server'}</div>
+          <div style="font-size: 14px; color: var(--vscode-foreground); text-align: center; max-width: 400px;">${escapeHtml(message || 'Failed to start server')}</div>
         `;
       }
     }
