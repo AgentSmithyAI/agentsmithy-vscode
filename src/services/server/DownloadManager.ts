@@ -233,7 +233,15 @@ export class DownloadManager {
     this.outputChannel.appendLine(`Downloading server from: ${downloadUrl}`);
 
     return new Promise((resolve, reject) => {
-      const makeRequest = (url: string, offset: number) => {
+      const MAX_REDIRECTS = 10;
+
+      const makeRequest = (url: string, offset: number, redirectCount = 0) => {
+        // Prevent infinite redirect loops
+        if (redirectCount > MAX_REDIRECTS) {
+          reject(new Error(`Too many redirects (>${MAX_REDIRECTS})`));
+          return;
+        }
+
         const protocol = url.startsWith('https') ? https : http;
         const parsedUrl = new URL(url);
 
@@ -257,7 +265,8 @@ export class DownloadManager {
               reject(new Error('Redirect location not found'));
               return;
             }
-            makeRequest(redirectUrl, offset);
+            this.outputChannel.appendLine(`Following redirect (${redirectCount + 1}/${MAX_REDIRECTS}): ${redirectUrl}`);
+            makeRequest(redirectUrl, offset, redirectCount + 1);
             return;
           }
 

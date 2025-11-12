@@ -221,6 +221,33 @@ describe('DownloadManager', () => {
       expect(mockResponse.statusCode).toBe(206);
     });
 
+    it('should reject after too many redirects', async () => {
+      // Arrange
+      const expectedSize = 1000;
+      const onProgress = vi.fn();
+
+      // Mock infinite redirect loop
+      vi.mocked(https.request).mockImplementation((options: unknown, callback?: (res: IncomingMessage) => void) => {
+        if (callback) {
+          setTimeout(() => {
+            // Always return redirect
+            mockResponse.statusCode = 302;
+            mockResponse.headers = {location: 'https://example.com/redirect-loop'};
+            callback(mockResponse as IncomingMessage);
+          }, 0);
+        }
+        return mockRequest as ClientRequest;
+      });
+
+      // Act & Assert
+      await expect(
+        downloadManager.downloadBinary('v1.0.0', '1.0.0', '/test/link', expectedSize, onProgress),
+      ).rejects.toThrow('Too many redirects');
+
+      // Should have tried exactly 11 times (initial + 10 redirects)
+      expect(https.request).toHaveBeenCalledTimes(11);
+    });
+
     it('should call progress callback with correct values', async () => {
       // Arrange
       const expectedSize = 1000;
