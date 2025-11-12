@@ -178,87 +178,184 @@ export class DownloadManager {
   };
 
   /**
-   * Download server binary from GitHub
+   * Download server binary from GitHub with resume support
    * @param versionTag - version tag with 'v' prefix for GitHub URL (e.g., 'v1.9.0')
    * @param versionClean - version without 'v' for filenames (e.g., '1.9.0')
+   * @param linkPath - path to create symlink
+   * @param expectedSize - expected file size in bytes
+   * @param onProgress - callback for progress updates (downloaded, total)
    */
-  downloadBinary = async (versionTag: string, versionClean: string, linkPath: string): Promise<void> => {
+  downloadBinary = async (
+    versionTag: string,
+    versionClean: string,
+    linkPath: string,
+    expectedSize: number,
+    onProgress?: (downloaded: number, total: number) => void,
+  ): Promise<void> => {
     const assetName = getAssetName(versionClean);
     const versionedPath = path.join(this.serverDir, getVersionedBinaryName(versionClean));
+    const tempPath = `${versionedPath}.part`; // Temporary file for downloading
     const downloadUrl = `https://github.com/AgentSmithyAI/agentsmithy-agent/releases/download/${versionTag}/${assetName}`;
+
+    // Check if partial download exists
+    let startByte = 0;
+    if (fs.existsSync(tempPath)) {
+      const stats = fs.statSync(tempPath);
+      startByte = stats.size;
+      if (startByte > 0) {
+        const percent = Math.round((startByte / expectedSize) * 100);
+        this.outputChannel.appendLine(
+          `Found partial download: ${startByte} / ${expectedSize} bytes (${percent}%), resuming...`,
+        );
+        // Report initial progress for resumed download
+        if (onProgress) {
+          onProgress(startByte, expectedSize);
+        }
+      } else {
+        // Empty .part file, remove it
+        fs.unlinkSync(tempPath);
+      }
+    }
 
     this.outputChannel.appendLine(`Downloading server from: ${downloadUrl}`);
 
     return new Promise((resolve, reject) => {
-      const file = fs.createWriteStream(versionedPath);
-      const protocol = downloadUrl.startsWith('https') ? https : http;
+      const makeRequest = (url: string, offset: number) => {
+        const protocol = url.startsWith('https') ? https : http;
+        const parsedUrl = new URL(url);
 
-      protocol
-        .get(downloadUrl, (response) => {
-          // Handle redirects
-          if (response.statusCode === 302 || response.statusCode === 301) {
+        const options = {
+          hostname: parsedUrl.hostname,
+          path: parsedUrl.pathname + parsedUrl.search,
+          method: 'GET',
+          headers: offset > 0 ? {Range: `bytes=${offset}-`} : {},
+        };
+
+        const req = protocol.request(options, (response) => {
+          // Handle redirects (301, 302, 307, 308)
+          if (
+            response.statusCode === 301 ||
+            response.statusCode === 302 ||
+            response.statusCode === 307 ||
+            response.statusCode === 308
+          ) {
             const redirectUrl = response.headers.location;
             if (!redirectUrl) {
               reject(new Error('Redirect location not found'));
               return;
             }
+            makeRequest(redirectUrl, offset);
+            return;
+          }
 
-            const redirectProtocol = redirectUrl.startsWith('https') ? https : http;
-            redirectProtocol
-              .get(redirectUrl, (redirectResponse) => {
-                redirectResponse.pipe(file);
+          // Check for successful response or partial content
+          if (response.statusCode === 200 || response.statusCode === 206) {
+            // If we requested a range but got 200, server doesn't support resume - start over
+            const shouldAppend = response.statusCode === 206 && offset > 0;
+            let actualOffset = offset;
 
-                file.on('finish', () => {
-                  file.close(() => {
-                    makeExecutable(versionedPath);
-                    try {
-                      createFileLink(versionedPath, linkPath);
-                      this.outputChannel.appendLine('Server downloaded successfully');
-                    } catch (error) {
-                      const errorMessage = error instanceof Error ? error.message : String(error);
-                      this.outputChannel.appendLine(`Failed to create link: ${errorMessage}`);
-                      reject(new Error(`Failed to create link: ${errorMessage}`));
-                      return;
-                    }
-                    resolve();
-                  });
-                });
-              })
-              .on('error', (error) => {
-                fs.unlinkSync(versionedPath);
-                reject(new Error(`Download failed: ${error.message}`));
-              });
-          } else if (response.statusCode === 200) {
+            if (shouldAppend) {
+              this.outputChannel.appendLine(`Resuming download from byte ${offset}`);
+            } else if (offset > 0 && response.statusCode === 200) {
+              this.outputChannel.appendLine('Server does not support resume, starting from beginning');
+              // Delete partial file and start fresh
+              if (fs.existsSync(tempPath)) {
+                fs.unlinkSync(tempPath);
+              }
+              actualOffset = 0; // Reset offset since we're starting over
+            }
+
+            // Open file in append mode if resuming, otherwise create new
+            const file = fs.createWriteStream(tempPath, {flags: shouldAppend ? 'a' : 'w'});
+
+            // Track download progress
+            let downloadedBytes = actualOffset;
+            let lastReportTime = Date.now();
+            let lastLogTime = Date.now();
+
+            response.on('data', (chunk: Buffer) => {
+              downloadedBytes += chunk.length;
+
+              const now = Date.now();
+
+              // Report progress to UI (throttle to every 100ms to avoid too many updates)
+              if (onProgress && now - lastReportTime >= 100) {
+                onProgress(downloadedBytes, expectedSize);
+                lastReportTime = now;
+              }
+
+              // Log progress to output channel (throttle to every 2 seconds)
+              if (now - lastLogTime >= 2000) {
+                const percent = Math.round((downloadedBytes / expectedSize) * 100);
+                this.outputChannel.appendLine(
+                  `Download progress: ${percent}% (${downloadedBytes} / ${expectedSize} bytes)`,
+                );
+                lastLogTime = now;
+              }
+            });
+
             response.pipe(file);
 
             file.on('finish', () => {
               file.close(() => {
-                makeExecutable(versionedPath);
+                // Final progress report
+                if (onProgress) {
+                  onProgress(expectedSize, expectedSize);
+                }
+
+                // Rename temp file to final name
                 try {
+                  if (fs.existsSync(versionedPath)) {
+                    fs.unlinkSync(versionedPath);
+                  }
+                  fs.renameSync(tempPath, versionedPath);
+                  makeExecutable(versionedPath);
                   createFileLink(versionedPath, linkPath);
                   this.outputChannel.appendLine('Server downloaded successfully');
+                  resolve();
                 } catch (error) {
                   const errorMessage = error instanceof Error ? error.message : String(error);
-                  this.outputChannel.appendLine(`Failed to create link: ${errorMessage}`);
-                  reject(new Error(`Failed to create link: ${errorMessage}`));
-                  return;
+                  this.outputChannel.appendLine(`Failed to finalize download: ${errorMessage}`);
+                  reject(new Error(`Failed to finalize download: ${errorMessage}`));
                 }
-                resolve();
               });
             });
+
+            file.on('error', (error) => {
+              // Don't delete temp file on error - allow resume
+              reject(new Error(`File write failed: ${error.message}`));
+            });
+          } else if (response.statusCode === 416 && offset > 0) {
+            // Range not satisfiable - file might be complete already
+            this.outputChannel.appendLine('Download appears to be complete, finalizing...');
+            try {
+              if (fs.existsSync(versionedPath)) {
+                fs.unlinkSync(versionedPath);
+              }
+              fs.renameSync(tempPath, versionedPath);
+              makeExecutable(versionedPath);
+              createFileLink(versionedPath, linkPath);
+              this.outputChannel.appendLine('Server downloaded successfully');
+              resolve();
+            } catch (error) {
+              const errorMessage = error instanceof Error ? error.message : String(error);
+              reject(new Error(`Failed to finalize download: ${errorMessage}`));
+            }
           } else {
+            // On error, keep temp file for resume but report error
             reject(new Error(`Download failed with status code: ${response.statusCode}`));
           }
-        })
-        .on('error', (error) => {
-          fs.unlinkSync(versionedPath);
+        });
+
+        req.on('error', (error) => {
+          // Don't delete temp file on error - allow resume
           reject(new Error(`Download failed: ${error.message}`));
         });
 
-      file.on('error', (error) => {
-        fs.unlinkSync(versionedPath);
-        reject(new Error(`File write failed: ${error.message}`));
-      });
+        req.end();
+      };
+
+      makeRequest(downloadUrl, startByte);
     });
   };
 
@@ -308,7 +405,7 @@ export class DownloadManager {
   };
 
   /**
-   * Clean up old versions
+   * Clean up old versions and partial downloads
    */
   cleanupOldVersions = async (currentVersion: string): Promise<void> => {
     const allVersions = getInstalledVersions(this.serverDir);
@@ -316,10 +413,17 @@ export class DownloadManager {
     for (const version of allVersions) {
       if (version !== currentVersion) {
         const oldPath = path.join(this.serverDir, getVersionedBinaryName(version));
+        const oldPartPath = `${oldPath}.part`;
+
         try {
           if (fs.existsSync(oldPath)) {
             fs.unlinkSync(oldPath);
             this.outputChannel.appendLine(`Removed old version: ${version}`);
+          }
+          // Also remove partial downloads of old versions
+          if (fs.existsSync(oldPartPath)) {
+            fs.unlinkSync(oldPartPath);
+            this.outputChannel.appendLine(`Removed partial download: ${version}`);
           }
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : String(error);

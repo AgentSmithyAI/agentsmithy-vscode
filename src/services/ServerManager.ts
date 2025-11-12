@@ -128,7 +128,7 @@ export class ServerManager {
 
       if (!isValid) {
         this.outputChannel.appendLine(`Re-downloading corrupted binary...`);
-        await this.downloadWithLock(latestVersionTag, latestVersion, 'Re-downloading');
+        await this.downloadWithLock(latestVersionTag, latestVersion, expectedSize, 'Re-downloading');
         return true;
       }
 
@@ -233,7 +233,7 @@ export class ServerManager {
       }
 
       // Download new version
-      await this.downloadWithLock(latestVersionTag, latestVersion, 'Downloading');
+      await this.downloadWithLock(latestVersionTag, latestVersion, expectedSize, 'Downloading');
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       this.outputChannel.appendLine(`ERROR in ensureServer: ${errorMessage}`);
@@ -248,8 +248,14 @@ export class ServerManager {
    * Download server with lock protection
    * @param versionTag - version tag with 'v' prefix for GitHub URL (e.g., 'v1.9.0')
    * @param versionClean - version without 'v' for filenames (e.g., '1.9.0')
+   * @param expectedSize - expected file size in bytes
    */
-  private downloadWithLock = async (versionTag: string, versionClean: string, actionName: string): Promise<void> => {
+  private downloadWithLock = async (
+    versionTag: string,
+    versionClean: string,
+    expectedSize: number,
+    actionName: string,
+  ): Promise<void> => {
     await vscode.window.withProgress(
       {
         location: vscode.ProgressLocation.Notification,
@@ -265,10 +271,30 @@ export class ServerManager {
         }
 
         try {
-          progress.report({message: `${actionName} server ${versionClean}...`});
-
           const linkPath = this.getServerPath();
-          await this.downloadManager.downloadBinary(versionTag, versionClean, linkPath);
+
+          // Download with progress tracking
+          let lastPercent = 0;
+          await this.downloadManager.downloadBinary(
+            versionTag,
+            versionClean,
+            linkPath,
+            expectedSize,
+            (downloaded, total) => {
+              const percent = Math.round((downloaded / total) * 100);
+              const downloadedFormatted = this.formatFileSize(downloaded);
+              const totalFormatted = this.formatFileSize(total);
+
+              // Calculate increment from last reported percentage
+              const increment = percent - lastPercent;
+              lastPercent = percent;
+
+              progress.report({
+                message: `${actionName} server ${versionClean}... ${percent}% (${downloadedFormatted} / ${totalFormatted})`,
+                increment: increment,
+              });
+            },
+          );
 
           progress.report({message: 'Cleaning up old versions...'});
           await this.downloadManager.cleanupOldVersions(versionClean);
