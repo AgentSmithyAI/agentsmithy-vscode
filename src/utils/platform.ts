@@ -4,8 +4,8 @@ import * as path from 'path';
 import semver from 'semver';
 
 export interface PlatformInfo {
-  platform: 'linux' | 'darwin' | 'win32';
-  arch: 'x64' | 'arm64';
+  platform: string;
+  arch: string;
 }
 
 /**
@@ -14,10 +14,10 @@ export interface PlatformInfo {
  * Use DownloadManager.fetchLatestRelease() to check if asset exists for this platform.
  */
 export const getPlatformInfo = (): PlatformInfo => {
-  const platform = process.platform as 'linux' | 'darwin' | 'win32';
-  const arch = process.arch as 'x64' | 'arm64';
-
-  return {platform, arch};
+  return {
+    platform: process.platform,
+    arch: process.arch,
+  };
 };
 
 /**

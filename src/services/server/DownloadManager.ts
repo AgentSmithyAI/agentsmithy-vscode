@@ -198,7 +198,7 @@ export class DownloadManager {
   /**
    * Validate version tag format using semver library
    */
-  private validateVersionTag(version: string): void {
+  validateVersionTag = (version: string): void => {
     // Check for empty or invalid input
     if (!version || typeof version !== 'string') {
       throw new Error(`Invalid version tag: empty or invalid value`);
@@ -214,12 +214,12 @@ export class DownloadManager {
     if (!valid) {
       throw new Error(`Invalid version tag format: ${version}. Expected valid semver like "v1.0.0" or "1.0.0"`);
     }
-  }
+  };
 
   /**
    * Validate clean version format (semver WITHOUT 'v' prefix)
    */
-  private validateCleanVersion(version: string): void {
+  validateCleanVersion = (version: string): void => {
     // Check for empty or invalid input
     if (!version || typeof version !== 'string') {
       throw new Error(`Invalid version: empty or invalid value`);
@@ -240,7 +240,7 @@ export class DownloadManager {
     if (version.startsWith('v')) {
       throw new Error(`Invalid version format: ${version}. Clean version should not have 'v' prefix`);
     }
-  }
+  };
 
   /**
    * Download server binary from GitHub with resume support
