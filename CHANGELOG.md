@@ -1,3 +1,10 @@
+# [1.5.0](https://github.com/AgentSmithyAI/agentsmithy-vscode/compare/v1.4.0...v1.5.0) (2025-11-12)
+
+
+### Features
+
+* Server handling ([#28](https://github.com/AgentSmithyAI/agentsmithy-vscode/issues/28)) ([92b3b0d](https://github.com/AgentSmithyAI/agentsmithy-vscode/commit/92b3b0d78783df596f714ced42678702cabb04bf))
+
 # [1.4.0](https://github.com/AgentSmithyAI/agentsmithy-vscode/compare/v1.3.0...v1.4.0) (2025-11-08)
 
 
