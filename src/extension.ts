@@ -56,7 +56,7 @@ export const activate = async (context: vscode.ExtensionContext) => {
 
   const serverReadyDisposable = serverManager.onServerReady(() => {
     eventsChannel.appendLine(`[onServerReady callback] Event received at ${new Date().toISOString()}`);
-    eventsChannel.appendLine(`[onServerReady callback] Provider has view: ${provider['_view'] !== undefined}`);
+    eventsChannel.appendLine(`[onServerReady callback] Provider has view: ${provider.hasView()}`);
     void provider.refreshAfterServerStart();
   });
   context.subscriptions.push(serverReadyDisposable);

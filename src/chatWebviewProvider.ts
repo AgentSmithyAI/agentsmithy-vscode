@@ -103,6 +103,13 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider {
     });
   }
 
+  /**
+   * Check if the webview is currently visible/initialized
+   */
+  public hasView(): boolean {
+    return this._view !== undefined;
+  }
+
   private _postMessage(msg: WebviewOutMessage): void {
     this._view?.webview.postMessage(msg);
   }
