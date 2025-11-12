@@ -14,9 +14,7 @@ export class ServerManager {
   private readonly downloadManager: DownloadManager;
   private readonly processManager: ProcessManager;
   private isStarting = false;
-  private readyPromise: Promise<void> | null = null;
-  private readyResolve: (() => void) | null = null;
-  private readyReject: ((error: Error) => void) | null = null;
+  private startPromise: Promise<void> | null = null;
   private readonly _onServerReady = new vscode.EventEmitter<void>();
   public readonly onServerReady = this._onServerReady.event;
 
@@ -34,12 +32,6 @@ export class ServerManager {
 
     this.downloadManager = new DownloadManager(this.serverDir, this.outputChannel);
     this.processManager = new ProcessManager(this.outputChannel);
-
-    // Create ready promise
-    this.readyPromise = new Promise((resolve, reject) => {
-      this.readyResolve = resolve;
-      this.readyReject = reject;
-    });
   }
 
   /**
@@ -309,13 +301,15 @@ export class ServerManager {
 
   /**
    * Start server
+   * Returns the same promise if already starting (allows multiple callers to wait on same start)
    */
   startServer = async (): Promise<void> => {
     this.outputChannel.appendLine('=== Starting server ===');
 
-    if (this.isStarting) {
-      this.outputChannel.appendLine('Server is already starting...');
-      return;
+    // If already starting, return existing promise so all callers wait on same operation
+    if (this.isStarting && this.startPromise) {
+      this.outputChannel.appendLine('Server is already starting, waiting on existing operation...');
+      return this.startPromise;
     }
 
     // Set flag immediately after check to prevent race condition
@@ -324,7 +318,7 @@ export class ServerManager {
     if (this.processManager.isAlive()) {
       this.outputChannel.appendLine('Server is already running');
       this.isStarting = false;
-      return;
+      return Promise.resolve();
     }
 
     const workspaceRoot = this.configService.getWorkspaceRoot();
@@ -332,66 +326,56 @@ export class ServerManager {
       this.outputChannel.appendLine('No workspace folder open');
       void vscode.window.showErrorMessage('AgentSmithy: Please open a workspace folder first');
       this.isStarting = false;
-      return;
+      return Promise.resolve();
     }
 
     this.outputChannel.appendLine(`Workspace: ${workspaceRoot}`);
 
-    try {
-      this.outputChannel.appendLine('Checking server binary...');
-      await this.ensureServer();
-      this.outputChannel.appendLine('Server binary check complete');
-
-      const serverPath = this.getServerPath();
-
-      await this.processManager.start(
-        serverPath,
-        workspaceRoot,
-        () => {
-          // On ready callback
-          const serverUrl = this.configService.getServerUrl();
-          this.outputChannel.appendLine(`Server is ready! URL: ${serverUrl}`);
-
-          if (this.readyResolve) {
-            this.readyResolve();
-            this.readyResolve = null;
-            this.readyPromise = null;
-          }
-
-          // Fire ready event for listeners
-          this._onServerReady.fire();
-        },
-        (error: Error) => {
-          // On error callback
-          if (this.readyReject) {
-            this.readyReject(error);
-            this.readyReject = null;
-            this.readyResolve = null;
-          }
-
-          // Reset ready promise for potential restart
-          this.readyPromise = new Promise((resolve, reject) => {
-            this.readyResolve = resolve;
-            this.readyReject = reject;
-          });
-        },
-      );
-    } catch (error) {
-      this.outputChannel.appendLine('Server failed to start. Check the output for details.');
-      void vscode.window.showErrorMessage('AgentSmithy server failed to start. Check the output for details.');
-
-      // Try to stop the process, but don't let stop errors mask the original error
+    // Create new promise for this start attempt
+    this.startPromise = (async () => {
       try {
-        await this.processManager.stop();
-      } catch (stopError) {
-        const stopErrorMsg = stopError instanceof Error ? stopError.message : String(stopError);
-        this.outputChannel.appendLine(`Error stopping process: ${stopErrorMsg}`);
-      }
+        this.outputChannel.appendLine('Checking server binary...');
+        await this.ensureServer();
+        this.outputChannel.appendLine('Server binary check complete');
 
-      throw error;
-    } finally {
-      this.isStarting = false;
-    }
+        const serverPath = this.getServerPath();
+
+        await this.processManager.start(
+          serverPath,
+          workspaceRoot,
+          () => {
+            // On ready callback
+            const serverUrl = this.configService.getServerUrl();
+            this.outputChannel.appendLine(`Server is ready! URL: ${serverUrl}`);
+
+            // Fire ready event for listeners
+            this._onServerReady.fire();
+          },
+          (error: Error) => {
+            // On error callback - just log, error will be thrown from start()
+            this.outputChannel.appendLine(`Server error: ${error.message}`);
+          },
+        );
+      } catch (error) {
+        this.outputChannel.appendLine('Server failed to start. Check the output for details.');
+        void vscode.window.showErrorMessage('AgentSmithy server failed to start. Check the output for details.');
+
+        // Try to stop the process, but don't let stop errors mask the original error
+        try {
+          await this.processManager.stop();
+        } catch (stopError) {
+          const stopErrorMsg = stopError instanceof Error ? stopError.message : String(stopError);
+          this.outputChannel.appendLine(`Error stopping process: ${stopErrorMsg}`);
+        }
+
+        throw error;
+      } finally {
+        this.isStarting = false;
+        this.startPromise = null;
+      }
+    })();
+
+    return this.startPromise;
   };
 
   /**
@@ -411,26 +395,29 @@ export class ServerManager {
 
   /**
    * Wait for server to be ready
+   * If server is starting, waits for the start operation to complete
    */
   waitForReady = async (): Promise<void> => {
-    if (!this.readyPromise) {
-      if (this.processManager.isAlive()) {
-        return;
-      }
-      throw new Error('Server is not running');
+    // If currently starting, wait for it
+    if (this.startPromise) {
+      await this.startPromise;
+      return;
     }
 
-    await this.readyPromise;
+    // If already running, return immediately
+    if (this.processManager.isAlive()) {
+      return;
+    }
+
+    // Not starting and not running - throw error
+    throw new Error('Server is not starting or running');
   };
 
   /**
    * Check if server is ready
-   * Returns true only if server successfully started (readyPromise resolved)
    */
   isReady = (): boolean => {
-    // Server is ready when there's no pending promise AND process is alive
-    // readyPromise is null only on success, on error it's recreated for retry
-    return this.readyPromise === null && this.processManager.isAlive();
+    return !this.isStarting && this.processManager.isAlive();
   };
 
   /**
