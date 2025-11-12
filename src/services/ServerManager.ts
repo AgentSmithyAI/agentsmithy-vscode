@@ -373,7 +373,15 @@ export class ServerManager {
     } catch (error) {
       this.outputChannel.appendLine('Server failed to start. Check the output for details.');
       void vscode.window.showErrorMessage('AgentSmithy server failed to start. Check the output for details.');
-      await this.processManager.stop();
+
+      // Try to stop the process, but don't let stop errors mask the original error
+      try {
+        await this.processManager.stop();
+      } catch (stopError) {
+        const stopErrorMsg = stopError instanceof Error ? stopError.message : String(stopError);
+        this.outputChannel.appendLine(`Error stopping process: ${stopErrorMsg}`);
+      }
+
       throw error;
     } finally {
       this.isStarting = false;
