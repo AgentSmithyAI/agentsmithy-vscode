@@ -83,26 +83,15 @@ describe('DownloadManager', () => {
       });
 
       // Act
-      const promise = downloadManager.downloadBinary(
-        'v1.0.0',
-        '1.0.0',
-        '/test/link',
-        expectedSize,
-        onProgress,
-      );
+      const promise = downloadManager.downloadBinary('v1.0.0', '1.0.0', '/test/link', expectedSize, onProgress);
 
       await promise;
 
       // Assert
       expect(https.request).toHaveBeenCalled();
-      expect(fs.createWriteStream).toHaveBeenCalledWith(
-        '/test/server/dir/agentsmithy-agent-1.0.0.part',
-        {flags: 'w'},
-      );
+      expect(fs.createWriteStream).toHaveBeenCalledWith('/test/server/dir/agentsmithy-agent-1.0.0.part', {flags: 'w'});
       expect(onProgress).toHaveBeenCalled();
-      expect(mockOutputChannel.appendLine).toHaveBeenCalledWith(
-        expect.stringContaining('Downloading server from:'),
-      );
+      expect(mockOutputChannel.appendLine).toHaveBeenCalledWith(expect.stringContaining('Downloading server from:'));
       expect(mockOutputChannel.appendLine).toHaveBeenCalledWith('Server downloaded successfully');
     });
 
@@ -132,29 +121,19 @@ describe('DownloadManager', () => {
       });
 
       // Act
-      const promise = downloadManager.downloadBinary(
-        'v1.0.0',
-        '1.0.0',
-        '/test/link',
-        expectedSize,
-        onProgress,
-      );
+      const promise = downloadManager.downloadBinary('v1.0.0', '1.0.0', '/test/link', expectedSize, onProgress);
 
       await promise;
 
       // Assert
-      expect(mockOutputChannel.appendLine).toHaveBeenCalledWith(
-        expect.stringContaining('Found partial download'),
-      );
+      expect(mockOutputChannel.appendLine).toHaveBeenCalledWith(expect.stringContaining('Found partial download'));
       expect(requestOptions.headers?.Range).toBe(`bytes=${partialSize}-`);
       expect(mockResponse.statusCode).toBe(206);
       expect(fs.createWriteStream).toHaveBeenCalledWith(
         '/test/server/dir/agentsmithy-agent-1.0.0.part',
         {flags: 'a'}, // Append mode
       );
-      expect(mockOutputChannel.appendLine).toHaveBeenCalledWith(
-        expect.stringContaining('Resuming download from byte'),
-      );
+      expect(mockOutputChannel.appendLine).toHaveBeenCalledWith(expect.stringContaining('Resuming download from byte'));
     });
 
     it('should start over when server does not support resume', async () => {
@@ -179,13 +158,7 @@ describe('DownloadManager', () => {
       });
 
       // Act
-      const promise = downloadManager.downloadBinary(
-        'v1.0.0',
-        '1.0.0',
-        '/test/link',
-        expectedSize,
-        onProgress,
-      );
+      const promise = downloadManager.downloadBinary('v1.0.0', '1.0.0', '/test/link', expectedSize, onProgress);
 
       await promise;
 
@@ -236,13 +209,7 @@ describe('DownloadManager', () => {
       });
 
       // Act
-      const promise = downloadManager.downloadBinary(
-        'v1.0.0',
-        '1.0.0',
-        '/test/link',
-        expectedSize,
-        onProgress,
-      );
+      const promise = downloadManager.downloadBinary('v1.0.0', '1.0.0', '/test/link', expectedSize, onProgress);
 
       await promise;
 
@@ -274,13 +241,7 @@ describe('DownloadManager', () => {
       });
 
       // Act
-      const promise = downloadManager.downloadBinary(
-        'v1.0.0',
-        '1.0.0',
-        '/test/link',
-        expectedSize,
-        onProgress,
-      );
+      const promise = downloadManager.downloadBinary('v1.0.0', '1.0.0', '/test/link', expectedSize, onProgress);
 
       await promise;
 
@@ -314,13 +275,7 @@ describe('DownloadManager', () => {
       });
 
       // Act
-      const promise = downloadManager.downloadBinary(
-        'v1.0.0',
-        '1.0.0',
-        '/test/link',
-        expectedSize,
-        onProgress,
-      );
+      const promise = downloadManager.downloadBinary('v1.0.0', '1.0.0', '/test/link', expectedSize, onProgress);
 
       await promise;
 
@@ -396,13 +351,7 @@ describe('DownloadManager', () => {
       });
 
       // Act
-      const promise = downloadManager.downloadBinary(
-        'v1.0.0',
-        '1.0.0',
-        '/test/link',
-        expectedSize,
-        onProgress,
-      );
+      const promise = downloadManager.downloadBinary('v1.0.0', '1.0.0', '/test/link', expectedSize, onProgress);
 
       await promise;
 
@@ -475,4 +424,3 @@ describe('DownloadManager', () => {
     });
   });
 });
-
