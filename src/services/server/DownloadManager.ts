@@ -243,9 +243,37 @@ export class DownloadManager {
   };
 
   /**
-   * Finalize downloaded file: rename temp to final, make executable, create link
+   * Finalize downloaded file: verify SHA256, rename temp to final, make executable, create link
    */
-  private finalizeDownload = (tempPath: string, versionedPath: string, linkPath: string): void => {
+  private finalizeDownload = async (
+    tempPath: string,
+    versionedPath: string,
+    linkPath: string,
+    _version: string,
+    expectedSHA256?: string,
+  ): Promise<void> => {
+    // Security: Verify SHA256 BEFORE making file executable
+    if (expectedSHA256) {
+      this.outputChannel.appendLine('Verifying SHA256...');
+      const actualSHA256 = await calculateFileSHA256(tempPath);
+      const match = actualSHA256.toLowerCase() === expectedSHA256.toLowerCase();
+
+      if (!match) {
+        this.outputChannel.appendLine(`SHA256 mismatch: expected ${expectedSHA256}, got ${actualSHA256}`);
+        // Delete compromised file
+        try {
+          fs.unlinkSync(tempPath);
+        } catch {
+          // Ignore errors during cleanup
+        }
+        throw new Error('SHA256 verification failed - file may be corrupted or compromised');
+      }
+      this.outputChannel.appendLine('SHA256 verified successfully');
+    } else {
+      this.outputChannel.appendLine('Warning: No SHA256 provided, skipping verification');
+    }
+
+    // Now safe to finalize
     try {
       fs.unlinkSync(versionedPath);
     } catch (error) {
@@ -302,6 +330,8 @@ export class DownloadManager {
     linkPath: string,
     offset: number,
     expectedSize: number,
+    version: string,
+    expectedSHA256: string | undefined,
     onProgress: ((downloaded: number, total: number) => void) | undefined,
     resolve: () => void,
     reject: (error: Error) => void,
@@ -359,15 +389,14 @@ export class DownloadManager {
           onProgress(expectedSize, expectedSize);
         }
 
-        // Finalize download
-        try {
-          this.finalizeDownload(tempPath, versionedPath, linkPath);
-          resolve();
-        } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : String(error);
-          this.outputChannel.appendLine(`Failed to finalize download: ${errorMessage}`);
-          reject(new Error(`Failed to finalize download: ${errorMessage}`));
-        }
+        // Finalize download (includes SHA256 verification)
+        this.finalizeDownload(tempPath, versionedPath, linkPath, version, expectedSHA256)
+          .then(() => resolve())
+          .catch((error) => {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            this.outputChannel.appendLine(`Failed to finalize download: ${errorMessage}`);
+            reject(new Error(`Failed to finalize download: ${errorMessage}`));
+          });
       });
     });
 
@@ -436,6 +465,7 @@ export class DownloadManager {
    * @param versionClean - version without 'v' for filenames (e.g., '1.9.0')
    * @param linkPath - path to create symlink
    * @param expectedSize - expected file size in bytes
+   * @param expectedSHA256 - expected SHA256 hash for security verification (optional but recommended)
    * @param onProgress - callback for progress updates (downloaded, total)
    */
   downloadBinary = async (
@@ -443,6 +473,7 @@ export class DownloadManager {
     versionClean: string,
     linkPath: string,
     expectedSize: number,
+    expectedSHA256: string | undefined,
     onProgress?: (downloaded: number, total: number) => void,
   ): Promise<void> => {
     // Security: Validate version strings to prevent path traversal and URL injection
@@ -506,6 +537,8 @@ export class DownloadManager {
               linkPath,
               offset,
               expectedSize,
+              versionClean,
+              expectedSHA256,
               onProgress,
               resolve,
               reject,
@@ -513,13 +546,12 @@ export class DownloadManager {
           } else if (response.statusCode === 416 && offset > 0) {
             // Range not satisfiable - file might be complete already
             this.outputChannel.appendLine('Download appears to be complete, finalizing...');
-            try {
-              this.finalizeDownload(tempPath, versionedPath, linkPath);
-              resolve();
-            } catch (error) {
-              const errorMessage = error instanceof Error ? error.message : String(error);
-              reject(new Error(`Failed to finalize download: ${errorMessage}`));
-            }
+            this.finalizeDownload(tempPath, versionedPath, linkPath, versionClean, expectedSHA256)
+              .then(() => resolve())
+              .catch((error) => {
+                const errorMessage = error instanceof Error ? error.message : String(error);
+                reject(new Error(`Failed to finalize download: ${errorMessage}`));
+              });
           } else {
             // On error, keep temp file for resume but report error
             reject(new Error(`Download failed with status code: ${response.statusCode}`));

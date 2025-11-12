@@ -125,7 +125,7 @@ export class ServerManager {
 
       if (!isValid) {
         this.outputChannel.appendLine(`Re-downloading corrupted binary...`);
-        await this.downloadWithLock(latestVersionTag, latestVersion, expectedSize, 'Re-downloading');
+        await this.downloadWithLock(latestVersionTag, latestVersion, expectedSize, expectedSHA, 'Re-downloading');
         return true;
       }
 
@@ -231,7 +231,7 @@ export class ServerManager {
       }
 
       // Download new version
-      await this.downloadWithLock(latestVersionTag, latestVersion, expectedSize, 'Downloading');
+      await this.downloadWithLock(latestVersionTag, latestVersion, expectedSize, expectedSHA, 'Downloading');
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       this.outputChannel.appendLine(`ERROR in ensureServer: ${errorMessage}`);
@@ -252,6 +252,7 @@ export class ServerManager {
     versionTag: string,
     versionClean: string,
     expectedSize: number,
+    expectedSHA: string,
     actionName: string,
   ): Promise<void> => {
     await vscode.window.withProgress(
@@ -271,13 +272,14 @@ export class ServerManager {
         try {
           const linkPath = this.getServerPath();
 
-          // Download with progress tracking
+          // Download with progress tracking (includes SHA256 verification)
           let lastPercent = 0;
           await this.downloadManager.downloadBinary(
             versionTag,
             versionClean,
             linkPath,
             expectedSize,
+            expectedSHA,
             (downloaded, total) => {
               const percent = Math.round((downloaded / total) * 100);
               const downloadedFormatted = this.formatFileSize(downloaded);

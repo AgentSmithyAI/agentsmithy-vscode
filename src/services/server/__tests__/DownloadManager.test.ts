@@ -21,7 +21,7 @@ vi.mock('../../../utils/platform', () => ({
   getPlatformInfo: vi.fn(() => ({platform: 'linux', arch: 'x64'})),
 }));
 vi.mock('../../../utils/crypto', () => ({
-  calculateFileSHA256: vi.fn(),
+  calculateFileSHA256: vi.fn().mockResolvedValue('abc123def456'),
 }));
 
 describe('DownloadManager', () => {
@@ -81,34 +81,34 @@ describe('DownloadManager', () => {
 
       for (const invalidVersion of invalidVersions) {
         // Act & Assert
-        await expect(downloadManager.downloadBinary(invalidVersion, '1.0.0', '/test/link', 1000)).rejects.toThrow(
-          /Invalid version tag format|contains path traversal/,
-        );
+        await expect(
+          downloadManager.downloadBinary(invalidVersion, '1.0.0', '/test/link', 1000, undefined),
+        ).rejects.toThrow(/Invalid version tag format|contains path traversal/);
       }
     });
 
     it('should reject invalid version clean format', async () => {
       // Test path traversal
-      await expect(downloadManager.downloadBinary('v1.0.0', '../1.0.0', '/test/link', 1000)).rejects.toThrow(
+      await expect(downloadManager.downloadBinary('v1.0.0', '../1.0.0', '/test/link', 1000, undefined)).rejects.toThrow(
         /Invalid version|contains path traversal/,
       );
 
-      await expect(downloadManager.downloadBinary('v1.0.0', '1.0.0/..', '/test/link', 1000)).rejects.toThrow(
+      await expect(downloadManager.downloadBinary('v1.0.0', '1.0.0/..', '/test/link', 1000, undefined)).rejects.toThrow(
         /Invalid version|contains path traversal/,
       );
 
       // Test wrong format (has 'v' prefix in clean version)
-      await expect(downloadManager.downloadBinary('v1.0.0', 'v1.0.0', '/test/link', 1000)).rejects.toThrow(
+      await expect(downloadManager.downloadBinary('v1.0.0', 'v1.0.0', '/test/link', 1000, undefined)).rejects.toThrow(
         /Invalid version/,
       );
 
       // Test incomplete version
-      await expect(downloadManager.downloadBinary('v1.0.0', '1.0', '/test/link', 1000)).rejects.toThrow(
+      await expect(downloadManager.downloadBinary('v1.0.0', '1.0', '/test/link', 1000, undefined)).rejects.toThrow(
         /Invalid version/,
       );
 
       // Test empty string
-      await expect(downloadManager.downloadBinary('v1.0.0', '', '/test/link', 1000)).rejects.toThrow(
+      await expect(downloadManager.downloadBinary('v1.0.0', '', '/test/link', 1000, undefined)).rejects.toThrow(
         /Invalid version|empty or invalid/,
       );
     });
@@ -129,12 +129,65 @@ describe('DownloadManager', () => {
       });
 
       // Act - should not throw
-      await downloadManager.downloadBinary('v1.0.0', '1.0.0', '/test/link', expectedSize);
-      await downloadManager.downloadBinary('v1.10.20', '1.10.20', '/test/link', expectedSize);
-      await downloadManager.downloadBinary('v0.0.1', '0.0.1', '/test/link', expectedSize);
+      await downloadManager.downloadBinary('v1.0.0', '1.0.0', '/test/link', expectedSize, undefined);
+      await downloadManager.downloadBinary('v1.10.20', '1.10.20', '/test/link', expectedSize, undefined);
+      await downloadManager.downloadBinary('v0.0.1', '0.0.1', '/test/link', expectedSize, undefined);
 
       // Assert - no exception means validation passed
       expect(https.request).toHaveBeenCalled();
+    });
+
+    it('should verify SHA256 before making file executable', async () => {
+      // Arrange
+      const expectedSize = 1000;
+      const expectedSHA = 'abc123def456';
+      const {calculateFileSHA256} = await import('../../../utils/crypto');
+
+      vi.mocked(https.request).mockImplementation((options: unknown, callback?: (res: IncomingMessage) => void) => {
+        if (callback) {
+          setTimeout(() => {
+            callback(mockResponse as IncomingMessage);
+            mockResponse.emit('data', Buffer.from('x'.repeat(1000)));
+            mockWriteStream.emit('finish');
+          }, 0);
+        }
+        return mockRequest as ClientRequest;
+      });
+
+      // Act
+      await downloadManager.downloadBinary('v1.0.0', '1.0.0', '/test/link', expectedSize, expectedSHA);
+
+      // Assert - SHA256 should be calculated from temp file (before making executable)
+      expect(calculateFileSHA256).toHaveBeenCalledWith('/test/server/dir/agentsmithy-agent-1.0.0.part');
+      expect(mockOutputChannel.appendLine).toHaveBeenCalledWith('Verifying SHA256...');
+      expect(mockOutputChannel.appendLine).toHaveBeenCalledWith('SHA256 verified successfully');
+    });
+
+    it('should reject and delete file when SHA256 mismatch', async () => {
+      // Arrange
+      const expectedSize = 1000;
+      const expectedSHA = 'wronghash';
+      const {calculateFileSHA256} = await import('../../../utils/crypto');
+      vi.mocked(calculateFileSHA256).mockResolvedValue('abc123def456');
+
+      vi.mocked(https.request).mockImplementation((options: unknown, callback?: (res: IncomingMessage) => void) => {
+        if (callback) {
+          setTimeout(() => {
+            callback(mockResponse as IncomingMessage);
+            mockResponse.emit('data', Buffer.from('x'.repeat(1000)));
+            mockWriteStream.emit('finish');
+          }, 0);
+        }
+        return mockRequest as ClientRequest;
+      });
+
+      // Act & Assert
+      await expect(
+        downloadManager.downloadBinary('v1.0.0', '1.0.0', '/test/link', expectedSize, expectedSHA),
+      ).rejects.toThrow('SHA256 verification failed');
+
+      // Compromised file should be deleted
+      expect(fs.unlinkSync).toHaveBeenCalledWith('/test/server/dir/agentsmithy-agent-1.0.0.part');
     });
 
     it('should download file successfully from scratch', async () => {
@@ -156,7 +209,14 @@ describe('DownloadManager', () => {
       });
 
       // Act
-      const promise = downloadManager.downloadBinary('v1.0.0', '1.0.0', '/test/link', expectedSize, onProgress);
+      const promise = downloadManager.downloadBinary(
+        'v1.0.0',
+        '1.0.0',
+        '/test/link',
+        expectedSize,
+        undefined,
+        onProgress,
+      );
 
       await promise;
 
@@ -194,7 +254,14 @@ describe('DownloadManager', () => {
       });
 
       // Act
-      const promise = downloadManager.downloadBinary('v1.0.0', '1.0.0', '/test/link', expectedSize, onProgress);
+      const promise = downloadManager.downloadBinary(
+        'v1.0.0',
+        '1.0.0',
+        '/test/link',
+        expectedSize,
+        undefined,
+        onProgress,
+      );
 
       await promise;
 
@@ -231,7 +298,14 @@ describe('DownloadManager', () => {
       });
 
       // Act
-      const promise = downloadManager.downloadBinary('v1.0.0', '1.0.0', '/test/link', expectedSize, onProgress);
+      const promise = downloadManager.downloadBinary(
+        'v1.0.0',
+        '1.0.0',
+        '/test/link',
+        expectedSize,
+        undefined,
+        onProgress,
+      );
 
       await promise;
 
@@ -282,7 +356,14 @@ describe('DownloadManager', () => {
       });
 
       // Act
-      const promise = downloadManager.downloadBinary('v1.0.0', '1.0.0', '/test/link', expectedSize, onProgress);
+      const promise = downloadManager.downloadBinary(
+        'v1.0.0',
+        '1.0.0',
+        '/test/link',
+        expectedSize,
+        undefined,
+        onProgress,
+      );
 
       await promise;
 
@@ -314,7 +395,7 @@ describe('DownloadManager', () => {
 
       // Act & Assert
       await expect(
-        downloadManager.downloadBinary('v1.0.0', '1.0.0', '/test/link', expectedSize, onProgress),
+        downloadManager.downloadBinary('v1.0.0', '1.0.0', '/test/link', expectedSize, undefined, onProgress),
       ).rejects.toThrow('Too many redirects');
 
       // Should have tried exactly 11 times (initial + 10 redirects)
@@ -341,7 +422,14 @@ describe('DownloadManager', () => {
       });
 
       // Act
-      const promise = downloadManager.downloadBinary('v1.0.0', '1.0.0', '/test/link', expectedSize, onProgress);
+      const promise = downloadManager.downloadBinary(
+        'v1.0.0',
+        '1.0.0',
+        '/test/link',
+        expectedSize,
+        undefined,
+        onProgress,
+      );
 
       await promise;
 
@@ -375,7 +463,14 @@ describe('DownloadManager', () => {
       });
 
       // Act
-      const promise = downloadManager.downloadBinary('v1.0.0', '1.0.0', '/test/link', expectedSize, onProgress);
+      const promise = downloadManager.downloadBinary(
+        'v1.0.0',
+        '1.0.0',
+        '/test/link',
+        expectedSize,
+        undefined,
+        onProgress,
+      );
 
       await promise;
 
@@ -411,7 +506,7 @@ describe('DownloadManager', () => {
 
       // Act & Assert
       await expect(
-        downloadManager.downloadBinary('v1.0.0', '1.0.0', '/test/link', expectedSize, onProgress),
+        downloadManager.downloadBinary('v1.0.0', '1.0.0', '/test/link', expectedSize, undefined, onProgress),
       ).rejects.toThrow('File write failed');
 
       // Partial file should NOT be deleted (to allow resume)
@@ -439,7 +534,7 @@ describe('DownloadManager', () => {
 
       // Act & Assert
       await expect(
-        downloadManager.downloadBinary('v1.0.0', '1.0.0', '/test/link', expectedSize, onProgress),
+        downloadManager.downloadBinary('v1.0.0', '1.0.0', '/test/link', expectedSize, undefined, onProgress),
       ).rejects.toThrow('Download failed');
 
       // Partial file should NOT be deleted (to allow resume)
@@ -465,7 +560,14 @@ describe('DownloadManager', () => {
       });
 
       // Act
-      const promise = downloadManager.downloadBinary('v1.0.0', '1.0.0', '/test/link', expectedSize, onProgress);
+      const promise = downloadManager.downloadBinary(
+        'v1.0.0',
+        '1.0.0',
+        '/test/link',
+        expectedSize,
+        undefined,
+        onProgress,
+      );
 
       await promise;
 
@@ -811,7 +913,14 @@ describe('DownloadManager', () => {
       });
 
       // Act
-      const promise = downloadManager.downloadBinary('v1.0.0', '1.0.0', '/test/link', expectedSize, onProgress);
+      const promise = downloadManager.downloadBinary(
+        'v1.0.0',
+        '1.0.0',
+        '/test/link',
+        expectedSize,
+        undefined,
+        onProgress,
+      );
 
       await promise;
 
@@ -836,7 +945,7 @@ describe('DownloadManager', () => {
 
       // Act & Assert
       await expect(
-        downloadManager.downloadBinary('v1.0.0', '1.0.0', '/test/link', expectedSize, onProgress),
+        downloadManager.downloadBinary('v1.0.0', '1.0.0', '/test/link', expectedSize, undefined, onProgress),
       ).rejects.toThrow('Download failed with status code: 404');
     });
 
@@ -862,7 +971,7 @@ describe('DownloadManager', () => {
 
       // Act & Assert
       await expect(
-        downloadManager.downloadBinary('v1.0.0', '1.0.0', '/test/link', expectedSize, onProgress),
+        downloadManager.downloadBinary('v1.0.0', '1.0.0', '/test/link', expectedSize, undefined, onProgress),
       ).rejects.toThrow('Failed to finalize download');
     });
   });
