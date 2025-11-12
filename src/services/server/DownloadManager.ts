@@ -243,6 +243,194 @@ export class DownloadManager {
   };
 
   /**
+   * Finalize downloaded file: rename temp to final, make executable, create link
+   */
+  private finalizeDownload = (tempPath: string, versionedPath: string, linkPath: string): void => {
+    try {
+      fs.unlinkSync(versionedPath);
+    } catch (error) {
+      // Ignore ENOENT - file doesn't exist
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+        throw error;
+      }
+    }
+    fs.renameSync(tempPath, versionedPath);
+    makeExecutable(versionedPath);
+    createFileLink(versionedPath, linkPath);
+    this.outputChannel.appendLine('Server downloaded successfully');
+  };
+
+  /**
+   * Setup progress tracking callbacks for download stream
+   */
+  private setupProgressTracking = (
+    response: http.IncomingMessage,
+    actualOffset: number,
+    expectedSize: number,
+    onProgress?: (downloaded: number, total: number) => void,
+  ): void => {
+    let downloadedBytes = actualOffset;
+    let lastReportTime = Date.now();
+    let lastLogTime = Date.now();
+
+    response.on('data', (chunk: Buffer) => {
+      downloadedBytes += chunk.length;
+      const now = Date.now();
+
+      // Report progress to UI (throttle to every 100ms)
+      if (onProgress && now - lastReportTime >= 100) {
+        onProgress(downloadedBytes, expectedSize);
+        lastReportTime = now;
+      }
+
+      // Log progress to output channel (throttle to every 2 seconds)
+      if (now - lastLogTime >= 2000) {
+        const percent = Math.round((downloadedBytes / expectedSize) * 100);
+        this.outputChannel.appendLine(`Download progress: ${percent}% (${downloadedBytes} / ${expectedSize} bytes)`);
+        lastLogTime = now;
+      }
+    });
+  };
+
+  /**
+   * Handle successful HTTP response (200 or 206)
+   */
+  private handleSuccessfulResponse = (
+    response: http.IncomingMessage,
+    tempPath: string,
+    versionedPath: string,
+    linkPath: string,
+    offset: number,
+    expectedSize: number,
+    onProgress: ((downloaded: number, total: number) => void) | undefined,
+    resolve: () => void,
+    reject: (error: Error) => void,
+  ): void => {
+    // If we requested a range but got 200, server doesn't support resume - start over
+    const shouldAppend = response.statusCode === 206 && offset > 0;
+    let actualOffset = offset;
+
+    if (shouldAppend) {
+      this.outputChannel.appendLine(`Resuming download from byte ${offset}`);
+    } else if (offset > 0 && response.statusCode === 200) {
+      this.outputChannel.appendLine('Server does not support resume, starting from beginning');
+      // Delete partial file and start fresh
+      try {
+        fs.unlinkSync(tempPath);
+      } catch (error) {
+        // Ignore ENOENT - file was already removed
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          reject(new Error(`Failed to remove partial file: ${errorMessage}`));
+          return;
+        }
+      }
+      actualOffset = 0; // Reset offset since we're starting over
+    }
+
+    // Open file in append mode if resuming, otherwise create new
+    const file = fs.createWriteStream(tempPath, {flags: shouldAppend ? 'a' : 'w'});
+
+    // Track download progress
+    this.setupProgressTracking(response, actualOffset, expectedSize, onProgress);
+
+    // Flag to prevent multiple error handlers from running
+    let errorHandled = false;
+
+    // Handle response stream errors (network errors during download)
+    response.on('error', (error) => {
+      if (errorHandled) {
+        return;
+      }
+      errorHandled = true;
+
+      file.close(() => {
+        // Don't delete temp file on error - allow resume
+        reject(new Error(`Download stream error: ${error.message}`));
+      });
+    });
+
+    response.pipe(file);
+
+    file.on('finish', () => {
+      file.close(() => {
+        // Final progress report
+        if (onProgress) {
+          onProgress(expectedSize, expectedSize);
+        }
+
+        // Finalize download
+        try {
+          this.finalizeDownload(tempPath, versionedPath, linkPath);
+          resolve();
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          this.outputChannel.appendLine(`Failed to finalize download: ${errorMessage}`);
+          reject(new Error(`Failed to finalize download: ${errorMessage}`));
+        }
+      });
+    });
+
+    file.on('error', (error) => {
+      if (errorHandled) {
+        return;
+      }
+      errorHandled = true;
+
+      // Clean up streams to prevent resource leaks
+      response.unpipe(file);
+      response.destroy();
+      file.close(() => {
+        // Don't delete temp file on error - allow resume
+        reject(new Error(`File write failed: ${error.message}`));
+      });
+    });
+  };
+
+  /**
+   * Check if partial download exists and return start byte for resume
+   */
+  private checkPartialDownload = (
+    tempPath: string,
+    expectedSize: number,
+    onProgress?: (downloaded: number, total: number) => void,
+  ): number => {
+    try {
+      const stats = fs.statSync(tempPath);
+      const startByte = stats.size;
+
+      if (startByte > 0) {
+        const percent = Math.round((startByte / expectedSize) * 100);
+        this.outputChannel.appendLine(
+          `Found partial download: ${startByte} / ${expectedSize} bytes (${percent}%), resuming...`,
+        );
+        // Report initial progress for resumed download
+        if (onProgress) {
+          onProgress(startByte, expectedSize);
+        }
+      } else {
+        // Empty .part file, remove it
+        try {
+          fs.unlinkSync(tempPath);
+        } catch (error) {
+          // Ignore ENOENT - file was already removed
+          if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+            throw error;
+          }
+        }
+      }
+
+      return startByte;
+    } catch (error) {
+      // Ignore ENOENT - partial file doesn't exist
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+        throw error;
+      }
+      return 0;
+    }
+  };
+
+  /**
    * Download server binary from GitHub with resume support
    * @param versionTag - version tag with 'v' prefix for GitHub URL (e.g., 'v1.9.0')
    * @param versionClean - version without 'v' for filenames (e.g., '1.9.0')
@@ -267,36 +455,7 @@ export class DownloadManager {
     const downloadUrl = `https://github.com/AgentSmithyAI/agentsmithy-agent/releases/download/${versionTag}/${assetName}`;
 
     // Check if partial download exists
-    let startByte = 0;
-    try {
-      const stats = fs.statSync(tempPath);
-      startByte = stats.size;
-      if (startByte > 0) {
-        const percent = Math.round((startByte / expectedSize) * 100);
-        this.outputChannel.appendLine(
-          `Found partial download: ${startByte} / ${expectedSize} bytes (${percent}%), resuming...`,
-        );
-        // Report initial progress for resumed download
-        if (onProgress) {
-          onProgress(startByte, expectedSize);
-        }
-      } else {
-        // Empty .part file, remove it
-        try {
-          fs.unlinkSync(tempPath);
-        } catch (error) {
-          // Ignore ENOENT - file was already removed
-          if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-            throw error;
-          }
-        }
-      }
-    } catch (error) {
-      // Ignore ENOENT - partial file doesn't exist
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-        throw error;
-      }
-    }
+    const startByte = this.checkPartialDownload(tempPath, expectedSize, onProgress);
 
     this.outputChannel.appendLine(`Downloading server from: ${downloadUrl}`);
 
@@ -340,112 +499,22 @@ export class DownloadManager {
 
           // Check for successful response or partial content
           if (response.statusCode === 200 || response.statusCode === 206) {
-            // If we requested a range but got 200, server doesn't support resume - start over
-            const shouldAppend = response.statusCode === 206 && offset > 0;
-            let actualOffset = offset;
-
-            if (shouldAppend) {
-              this.outputChannel.appendLine(`Resuming download from byte ${offset}`);
-            } else if (offset > 0 && response.statusCode === 200) {
-              this.outputChannel.appendLine('Server does not support resume, starting from beginning');
-              // Delete partial file and start fresh
-              try {
-                fs.unlinkSync(tempPath);
-              } catch (error) {
-                // Ignore ENOENT - file was already removed
-                if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-                  throw error;
-                }
-              }
-              actualOffset = 0; // Reset offset since we're starting over
-            }
-
-            // Open file in append mode if resuming, otherwise create new
-            const file = fs.createWriteStream(tempPath, {flags: shouldAppend ? 'a' : 'w'});
-
-            // Track download progress
-            let downloadedBytes = actualOffset;
-            let lastReportTime = Date.now();
-            let lastLogTime = Date.now();
-
-            response.on('data', (chunk: Buffer) => {
-              downloadedBytes += chunk.length;
-
-              const now = Date.now();
-
-              // Report progress to UI (throttle to every 100ms to avoid too many updates)
-              if (onProgress && now - lastReportTime >= 100) {
-                onProgress(downloadedBytes, expectedSize);
-                lastReportTime = now;
-              }
-
-              // Log progress to output channel (throttle to every 2 seconds)
-              if (now - lastLogTime >= 2000) {
-                const percent = Math.round((downloadedBytes / expectedSize) * 100);
-                this.outputChannel.appendLine(
-                  `Download progress: ${percent}% (${downloadedBytes} / ${expectedSize} bytes)`,
-                );
-                lastLogTime = now;
-              }
-            });
-
-            response.pipe(file);
-
-            file.on('finish', () => {
-              file.close(() => {
-                // Final progress report
-                if (onProgress) {
-                  onProgress(expectedSize, expectedSize);
-                }
-
-                // Rename temp file to final name
-                try {
-                  try {
-                    fs.unlinkSync(versionedPath);
-                  } catch (error) {
-                    // Ignore ENOENT - file doesn't exist
-                    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-                      throw error;
-                    }
-                  }
-                  fs.renameSync(tempPath, versionedPath);
-                  makeExecutable(versionedPath);
-                  createFileLink(versionedPath, linkPath);
-                  this.outputChannel.appendLine('Server downloaded successfully');
-                  resolve();
-                } catch (error) {
-                  const errorMessage = error instanceof Error ? error.message : String(error);
-                  this.outputChannel.appendLine(`Failed to finalize download: ${errorMessage}`);
-                  reject(new Error(`Failed to finalize download: ${errorMessage}`));
-                }
-              });
-            });
-
-            file.on('error', (error) => {
-              // Clean up streams to prevent resource leaks
-              response.unpipe(file);
-              response.destroy();
-              file.close(() => {
-                // Don't delete temp file on error - allow resume
-                reject(new Error(`File write failed: ${error.message}`));
-              });
-            });
+            this.handleSuccessfulResponse(
+              response,
+              tempPath,
+              versionedPath,
+              linkPath,
+              offset,
+              expectedSize,
+              onProgress,
+              resolve,
+              reject,
+            );
           } else if (response.statusCode === 416 && offset > 0) {
             // Range not satisfiable - file might be complete already
             this.outputChannel.appendLine('Download appears to be complete, finalizing...');
             try {
-              try {
-                fs.unlinkSync(versionedPath);
-              } catch (error) {
-                // Ignore ENOENT - file doesn't exist
-                if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-                  throw error;
-                }
-              }
-              fs.renameSync(tempPath, versionedPath);
-              makeExecutable(versionedPath);
-              createFileLink(versionedPath, linkPath);
-              this.outputChannel.appendLine('Server downloaded successfully');
+              this.finalizeDownload(tempPath, versionedPath, linkPath);
               resolve();
             } catch (error) {
               const errorMessage = error instanceof Error ? error.message : String(error);
@@ -513,6 +582,22 @@ export class DownloadManager {
   };
 
   /**
+   * Remove a single file with error handling
+   */
+  private removeFileIfExists = (filePath: string, description: string): void => {
+    try {
+      fs.unlinkSync(filePath);
+      this.outputChannel.appendLine(`Removed ${description}`);
+    } catch (error) {
+      // Ignore ENOENT - file doesn't exist or was already removed
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        this.outputChannel.appendLine(`Failed to remove ${description}: ${errorMessage}`);
+      }
+    }
+  };
+
+  /**
    * Clean up old versions and partial downloads
    */
   cleanupOldVersions = async (currentVersion: string): Promise<void> => {
@@ -523,28 +608,8 @@ export class DownloadManager {
         const oldPath = path.join(this.serverDir, getVersionedBinaryName(version));
         const oldPartPath = `${oldPath}.part`;
 
-        try {
-          fs.unlinkSync(oldPath);
-          this.outputChannel.appendLine(`Removed old version: ${version}`);
-        } catch (error) {
-          // Ignore ENOENT - file doesn't exist or was already removed
-          if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            this.outputChannel.appendLine(`Failed to remove old version ${version}: ${errorMessage}`);
-          }
-        }
-
-        // Also remove partial downloads of old versions
-        try {
-          fs.unlinkSync(oldPartPath);
-          this.outputChannel.appendLine(`Removed partial download: ${version}`);
-        } catch (error) {
-          // Ignore ENOENT - file doesn't exist or was already removed
-          if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            this.outputChannel.appendLine(`Failed to remove partial download ${version}: ${errorMessage}`);
-          }
-        }
+        this.removeFileIfExists(oldPath, `old version: ${version}`);
+        this.removeFileIfExists(oldPartPath, `partial download: ${version}`);
       }
     }
   };

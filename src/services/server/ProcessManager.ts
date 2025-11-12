@@ -4,6 +4,12 @@ import * as fs from 'fs';
 import * as path from 'path';
 import {ChildProcess, spawn} from 'child_process';
 
+interface ServerStatus {
+  server_status?: string;
+  port?: number;
+  server_pid?: number;
+}
+
 export class ProcessManager {
   private process: ChildProcess | null = null;
   private readonly outputChannel: vscode.OutputChannel;
@@ -13,6 +19,13 @@ export class ProcessManager {
   constructor(outputChannel: vscode.OutputChannel) {
     this.outputChannel = outputChannel;
   }
+
+  /**
+   * Get path to status.json file
+   */
+  private getStatusPath = (workspaceRoot: string): string => {
+    return path.join(workspaceRoot, '.agentsmithy', 'status.json');
+  };
 
   /**
    * Check if process with given PID is running
@@ -27,62 +40,87 @@ export class ProcessManager {
   };
 
   /**
+   * Read and parse status.json file
+   */
+  private readStatus = (statusPath: string): ServerStatus | null => {
+    try {
+      const content = fs.readFileSync(statusPath, 'utf8');
+      return JSON.parse(content) as ServerStatus;
+    } catch {
+      // Ignore ENOENT and parse errors
+      return null;
+    }
+  };
+
+  /**
+   * Get old PID from status file if it exists
+   */
+  private getOldPid = (statusPath: string): number | null => {
+    const status = this.readStatus(statusPath);
+    if (!status) {
+      return null;
+    }
+
+    const oldPid = status.server_pid ?? null;
+    if (oldPid !== null) {
+      this.outputChannel.appendLine(`Old status file has PID ${oldPid}, waiting for new one...`);
+    }
+    return oldPid;
+  };
+
+  /**
+   * Check if status shows server is ready with a new PID
+   */
+  private checkServerReady = (
+    status: ServerStatus | null,
+    oldPid: number | null,
+  ): {ready: boolean; pid?: number; port?: number} => {
+    if (!status) {
+      return {ready: false};
+    }
+
+    const serverStatus = status.server_status;
+    const port = status.port;
+    const pid = status.server_pid;
+
+    // Server is ready when server_status === "ready" and has port
+    if (serverStatus === 'ready' && typeof port === 'number') {
+      // Check if it's a new PID (not the old one)
+      if (oldPid !== null && pid === oldPid) {
+        return {ready: false}; // Still old status
+      }
+      return {ready: true, pid, port};
+    }
+
+    return {ready: false};
+  };
+
+  /**
    * Wait for status.json to show server is ready
    * Checks for new PID (different from old one) to avoid stale status
    */
   waitForStatusFile = async (workspaceRoot: string, maxAttempts = 60): Promise<boolean> => {
-    const statusPath = path.join(workspaceRoot, '.agentsmithy', 'status.json');
-
-    // Remember old PID if status file exists
-    let oldPid: number | null = null;
-    try {
-      const content = fs.readFileSync(statusPath, 'utf8');
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      const status = JSON.parse(content);
-
-      oldPid = (status.server_pid as number | undefined) ?? null;
-      if (oldPid !== null) {
-        this.outputChannel.appendLine(`Old status file has PID ${oldPid}, waiting for new one...`);
-      }
-    } catch {
-      // Ignore ENOENT and parse errors
-    }
+    const statusPath = this.getStatusPath(workspaceRoot);
+    const oldPid = this.getOldPid(statusPath);
 
     for (let i = 0; i < maxAttempts; i++) {
-      try {
-        const content = fs.readFileSync(statusPath, 'utf8');
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-        const status = JSON.parse(content);
+      const status = this.readStatus(statusPath);
+      const result = this.checkServerReady(status, oldPid);
 
-        const serverStatus = status.server_status as string | undefined;
-
-        // Server is ready when server_status === "ready"
-        if (serverStatus === 'ready' && typeof status.port === 'number') {
-          const pid = status.server_pid as number | undefined;
-
-          // Check if it's a new PID (not the old one)
-          if (oldPid !== null && pid === oldPid) {
-            // Still old status, continue waiting
-            if (i % 5 === 0) {
-              this.outputChannel.appendLine(`Still waiting for new status (has old PID ${oldPid})...`);
-            }
-            await new Promise((resolve) => {
-              setTimeout(resolve, 500);
-            });
-            continue;
-          }
-
-          // New status! Server is ready
-          if (pid !== undefined) {
-            this.serverPid = pid;
-            this.outputChannel.appendLine(`Server ready with PID ${pid} on port ${status.port as number}`);
-          } else {
-            this.outputChannel.appendLine(`Server ready on port ${status.port as number}`);
-          }
-          return true;
+      if (result.ready) {
+        // Server is ready!
+        if (result.pid !== undefined) {
+          this.serverPid = result.pid;
+          this.outputChannel.appendLine(`Server ready with PID ${result.pid} on port ${result.port as number}`);
+        } else {
+          this.outputChannel.appendLine(`Server ready on port ${result.port as number}`);
         }
-      } catch {
-        // Ignore ENOENT and parse errors
+        return true;
+      }
+
+      // Still waiting
+      if (oldPid !== null && i % 5 === 0) {
+        this.outputChannel.appendLine(`Still waiting for new status (has old PID ${oldPid})...`);
       }
 
       await new Promise((resolve) => {
@@ -96,22 +134,19 @@ export class ProcessManager {
    * Check if server is already running by checking status.json
    */
   private checkExistingServer = (workspaceRoot: string): boolean => {
-    const statusPath = path.join(workspaceRoot, '.agentsmithy', 'status.json');
+    const statusPath = this.getStatusPath(workspaceRoot);
+    const status = this.readStatus(statusPath);
 
-    try {
-      const content = fs.readFileSync(statusPath, 'utf8');
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      const status = JSON.parse(content);
+    if (!status) {
+      return false;
+    }
 
-      const existingPid = status.server_pid as number | undefined;
+    const existingPid = status.server_pid;
 
-      if (existingPid !== undefined && this.isProcessAlive(existingPid)) {
-        this.outputChannel.appendLine(`Found existing server process (PID ${existingPid})`);
-        this.serverPid = existingPid;
-        return true;
-      }
-    } catch {
-      // Ignore ENOENT and parse errors
+    if (existingPid !== undefined && this.isProcessAlive(existingPid)) {
+      this.outputChannel.appendLine(`Found existing server process (PID ${existingPid})`);
+      this.serverPid = existingPid;
+      return true;
     }
 
     return false;
@@ -231,15 +266,11 @@ export class ProcessManager {
       return {running: false, port: null, pid: null};
     }
 
-    const statusPath = path.join(workspaceRoot, '.agentsmithy', 'status.json');
+    const statusPath = this.getStatusPath(workspaceRoot);
+    const status = this.readStatus(statusPath);
 
-    try {
-      const content = fs.readFileSync(statusPath, 'utf8');
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      const status = JSON.parse(content);
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    if (status) {
       const portValue = status.port;
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       const pidValue = status.server_pid;
 
       const port = typeof portValue === 'number' ? portValue : null;
@@ -248,8 +279,6 @@ export class ProcessManager {
       const running = pid !== null ? this.isProcessAlive(pid) : this.process !== null;
 
       return {running, port, pid};
-    } catch {
-      // Ignore ENOENT and parse errors
     }
 
     return {running: this.process !== null, port: null, pid: this.serverPid};
