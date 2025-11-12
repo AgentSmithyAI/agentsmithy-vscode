@@ -520,9 +520,12 @@ export class DownloadManager {
           ) {
             const redirectUrl = response.headers.location;
             if (!redirectUrl) {
+              response.destroy();
               reject(new Error('Redirect location not found'));
               return;
             }
+            // Destroy response before following redirect (it won't be used)
+            response.destroy();
             this.outputChannel.appendLine(`Following redirect (${redirectCount + 1}/${MAX_REDIRECTS}): ${redirectUrl}`);
             makeRequest(redirectUrl, offset, redirectCount + 1);
             return;
@@ -546,6 +549,8 @@ export class DownloadManager {
           } else if (response.statusCode === 416 && offset > 0) {
             // Range not satisfiable - file might be complete already
             this.outputChannel.appendLine('Download appears to be complete, finalizing...');
+            // Response is complete for 416, safe to destroy
+            response.destroy();
             this.finalizeDownload(tempPath, versionedPath, linkPath, versionClean, expectedSHA256)
               .then(() => resolve())
               .catch((error) => {
@@ -554,6 +559,7 @@ export class DownloadManager {
               });
           } else {
             // On error, keep temp file for resume but report error
+            response.destroy();
             reject(new Error(`Download failed with status code: ${response.statusCode}`));
           }
         });

@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import {ChildProcess, spawn} from 'child_process';
+import {withResources} from '../../utils/disposable';
 
 interface ServerStatus {
   server_status?: string;
@@ -98,79 +99,57 @@ export class ProcessManager {
   /**
    * Wait for status.json to show server is ready using file watcher
    * Checks for new PID (different from old one) to avoid stale status
+   * Uses automatic resource cleanup pattern
    */
   waitForStatusFile = async (workspaceRoot: string, timeoutMs = 30000): Promise<boolean> => {
     const statusPath = this.getStatusPath(workspaceRoot);
     const oldPid = this.getOldPid(statusPath);
 
-    return new Promise<boolean>((resolve) => {
-      let resolved = false;
-      let watcher: fs.FSWatcher | null = null;
-      let timeout: NodeJS.Timeout | null = null;
-
-      const finalizeWithResult = (result: boolean, message?: string) => {
-        if (resolved) {
-          return;
-        }
-        resolved = true;
-
-        // Cleanup
-        if (watcher) {
-          watcher.close();
-        }
-        if (timeout) {
-          clearTimeout(timeout);
-        }
-
-        if (message) {
-          this.outputChannel.appendLine(message);
-        }
-        resolve(result);
-      };
-
-      const checkAndResolve = () => {
-        if (resolved) {
-          return;
-        }
-
-        const status = this.readStatus(statusPath);
-        const result = this.checkServerReady(status, oldPid);
-
-        if (result.ready) {
-          // Server is ready!
-          this.serverPid = result.pid ?? null;
-          const message =
-            result.pid !== undefined
-              ? `Server ready with PID ${result.pid} on port ${result.port as number}`
-              : `Server ready on port ${result.port as number}`;
-          finalizeWithResult(true, message);
-        }
-      };
-
-      // Set timeout
-      timeout = setTimeout(() => {
-        finalizeWithResult(false, `Timeout waiting for server (${timeoutMs}ms)`);
-      }, timeoutMs);
-
-      // Watch for file changes
+    return withResources(async (rm) => {
       try {
-        watcher = fs.watch(path.dirname(statusPath), (_eventType, filename) => {
-          if (filename === 'status.json') {
-            checkAndResolve();
-          }
+        return await new Promise<boolean>((resolve, reject) => {
+          const checkAndResolve = () => {
+            const status = this.readStatus(statusPath);
+            const result = this.checkServerReady(status, oldPid);
+
+            if (result.ready) {
+              // Server is ready!
+              this.serverPid = result.pid ?? null;
+              const message =
+                result.pid !== undefined
+                  ? `Server ready with PID ${result.pid} on port ${result.port as number}`
+                  : `Server ready on port ${result.port as number}`;
+              this.outputChannel.appendLine(message);
+              resolve(true);
+            }
+          };
+
+          // Register timeout with automatic cleanup
+          rm.register(
+            setTimeout(() => reject(new Error(`Timeout waiting for server (${timeoutMs}ms)`)), timeoutMs),
+            (t) => clearTimeout(t),
+          );
+
+          // Register file watcher with automatic cleanup
+          rm.register(
+            fs.watch(path.dirname(statusPath), (_eventType, filename) => {
+              if (filename === 'status.json') {
+                checkAndResolve();
+              }
+            }),
+            (w) => w.close(),
+          );
+
+          // Check immediately in case file already exists
+          checkAndResolve();
         });
-
-        // Check immediately in case file already exists
-        checkAndResolve();
       } catch (error) {
-        const errorMsg = `Failed to watch status file: ${error instanceof Error ? error.message : String(error)}`;
+        // Log and return false on any error (timeout, watch failure, etc)
+        const errorMsg = error instanceof Error ? error.message : String(error);
         this.outputChannel.appendLine(errorMsg);
-
-        // Try one immediate check, then give up
-        checkAndResolve();
-        // If checkAndResolve didn't find ready status, give up
-        finalizeWithResult(false);
+        return false;
       }
+      // All registered resources automatically cleaned up here!
     });
   };
 
@@ -266,21 +245,7 @@ export class ProcessManager {
   };
 
   /**
-   * Clean up process state and resolve
-   */
-  private cleanupProcess = (timeout: NodeJS.Timeout, resolve: () => void, message?: string): void => {
-    clearTimeout(timeout);
-    this.process = null;
-    this.serverPid = null;
-    this.isShuttingDown = false;
-    if (message) {
-      this.outputChannel.appendLine(message);
-    }
-    resolve();
-  };
-
-  /**
-   * Stop server process
+   * Stop server process with automatic resource cleanup
    */
   stop = async (): Promise<void> => {
     // Capture process reference to prevent race condition
@@ -292,28 +257,46 @@ export class ProcessManager {
     this.isShuttingDown = true;
     this.outputChannel.appendLine('Stopping server...');
 
-    await new Promise<void>((resolve) => {
-      // Use captured reference to avoid race condition
-      const timeout = setTimeout(() => {
-        this.outputChannel.appendLine('Force killing server process');
-        try {
-          processRef.kill('SIGKILL');
-        } catch (error) {
-          this.outputChannel.appendLine(`Kill failed: ${error instanceof Error ? error.message : String(error)}`);
-        }
-        this.cleanupProcess(timeout, resolve);
-      }, 5000);
-
-      processRef.on('exit', () => {
-        this.cleanupProcess(timeout, resolve, 'Server stopped');
-      });
-
+    await withResources(async (rm) => {
       try {
-        processRef.kill('SIGTERM');
-      } catch {
-        // Process may have already exited
-        this.cleanupProcess(timeout, resolve);
+        await new Promise<void>((resolve, reject) => {
+          // Register timeout with automatic cleanup
+          rm.register(
+            setTimeout(() => {
+              this.outputChannel.appendLine('Force killing server process');
+              try {
+                processRef.kill('SIGKILL');
+              } catch (error) {
+                this.outputChannel.appendLine(`Kill failed: ${error instanceof Error ? error.message : String(error)}`);
+              }
+              resolve();
+            }, 5000),
+            (t) => clearTimeout(t),
+          );
+
+          processRef.on('exit', () => {
+            this.outputChannel.appendLine('Server stopped');
+            resolve();
+          });
+
+          try {
+            processRef.kill('SIGTERM');
+          } catch (error) {
+            const errorMsg = error instanceof Error ? error.message : String(error);
+            reject(new Error(`Failed to send SIGTERM: ${errorMsg}`));
+          }
+        });
+      } catch (error) {
+        // Log but don't throw - stop should be best-effort
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        this.outputChannel.appendLine(`Stop error: ${errorMsg}`);
+      } finally {
+        // Process state cleanup (not managed by ResourceManager)
+        this.process = null;
+        this.serverPid = null;
+        this.isShuttingDown = false;
       }
+      // Timeout automatically cleaned up by ResourceManager!
     });
   };
 
