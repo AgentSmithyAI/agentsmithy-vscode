@@ -148,7 +148,7 @@ export class ProcessManager {
     const ideName = vscode.env.appName.toLowerCase().replace(/\s+/g, '-');
     this.outputChannel.appendLine(`IDE: ${ideName}`);
 
-    this.process = spawn(serverPath, ['--workdir', workspaceRoot, '--ide', ideName, '--log-colors', 'false'], {
+    this.process = spawn(serverPath, ['--workdir', workspaceRoot, '--ide', ideName, '--no-log-colors'], {
       cwd: path.dirname(serverPath),
       env: {...process.env},
     });
