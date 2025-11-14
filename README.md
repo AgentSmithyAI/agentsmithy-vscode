@@ -1,5 +1,6 @@
 # AgentSmithy VSCode Extension
 
+[![Open VSX](https://img.shields.io/open-vsx/v/agentsmithy/agentsmithy?label=Open%20VSX)](https://open-vsx.org/extension/agentsmithy/agentsmithy)
 [![GitHub release](https://img.shields.io/github/v/release/AgentSmithyAI/agentsmithy-vscode)](https://github.com/AgentSmithyAI/agentsmithy-vscode/releases)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 [![CI](https://github.com/AgentSmithyAI/agentsmithy-vscode/actions/workflows/workflow.yaml/badge.svg?branch=master)](https://github.com/AgentSmithyAI/agentsmithy-vscode/actions/workflows/workflow.yaml)
@@ -74,11 +75,21 @@ See [server management documentation](docs/server-management.md) for details.
 
 ## Installation
 
+### From Open VSX Registry
+
+For VSCodium, Code-OSS, and other VSCode alternatives:
+
+1. Open Extensions view (`Ctrl+Shift+X`)
+2. Search for "AgentSmithy"
+3. Click Install
+
+Or visit: https://open-vsx.org/extension/agentsmithy/agentsmithy
+
 ### From VSIX
 
 ```bash
 npm run format && npm run lint:fix && npm ci && npm run compile && npx @vscode/vsce package
-code --install-extension $(ls -t agentsmithy-vscode-*.vsix | head -1) --force
+code --install-extension $(ls -t agentsmithy-*.vsix | head -1) --force
 ```
 
 Or install manually: `Ctrl+Shift+P` → `Extensions: Install from VSIX...`
