@@ -17,6 +17,8 @@ export class ServerManager {
   private startPromise: Promise<void> | null = null;
   private readonly _onServerReady = new vscode.EventEmitter<void>();
   public readonly onServerReady = this._onServerReady.event;
+  private readonly _onConfigInvalid = new vscode.EventEmitter<{errors: string[]}>();
+  public readonly onConfigInvalid = this._onConfigInvalid.event;
 
   constructor(
     context: vscode.ExtensionContext,
@@ -348,6 +350,9 @@ export class ServerManager {
             const serverUrl = this.configService.getServerUrl();
             this.outputChannel.appendLine(`Server is ready! URL: ${serverUrl}`);
 
+            // Check health status (fire and forget)
+            void this.checkHealthStatus();
+
             // Fire ready event for listeners
             this._onServerReady.fire();
           },
@@ -428,11 +433,48 @@ export class ServerManager {
   };
 
   /**
+   * Check server health status
+   */
+  private checkHealthStatus = async (): Promise<void> => {
+    try {
+      const serverUrl = this.configService.getServerUrl();
+      const response = await fetch(`${serverUrl}/health`);
+
+      if (!response.ok) {
+        this.outputChannel.appendLine(`Health check failed: ${response.status}`);
+        return;
+      }
+
+      const health: unknown = await response.json();
+
+      if (health !== null && typeof health === 'object') {
+        const configValid = Boolean((health as {config_valid?: boolean}).config_valid);
+        const configErrors = Array.isArray((health as {config_errors?: unknown}).config_errors)
+          ? ((health as {config_errors: unknown[]}).config_errors as string[])
+          : [];
+
+        this.outputChannel.appendLine(`Config valid: ${configValid}`);
+
+        if (!configValid) {
+          this.outputChannel.appendLine(`Config errors: ${configErrors.join(', ')}`);
+
+          // Fire event to notify listeners
+          this._onConfigInvalid.fire({errors: configErrors});
+        }
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      this.outputChannel.appendLine(`Failed to check health status: ${errorMessage}`);
+    }
+  };
+
+  /**
    * Dispose resources
    */
   dispose = (): void => {
     void this.stopServer();
     this.outputChannel.dispose();
     this._onServerReady.dispose();
+    this._onConfigInvalid.dispose();
   };
 }

@@ -39,11 +39,21 @@ Supports Code-OSS, VSCodium, and any VSCode fork.
    ```json
    {
      "providers": {
-       "gpt5": {
+       "openai": {
          "type": "openai",
-         "model": "gpt-4o",
-         "api_key": "your_key_here"
+         "api_key": "your_key_here",
+         "base_url": "https://api.openai.com/v1"
        }
+     },
+     "workloads": {
+       "reasoning": {"provider": "openai", "model": "gpt-4o"},
+       "embeddings": {"provider": "openai", "model": "text-embedding-3-large"}
+     },
+     "models": {
+       "agents": {
+         "universal": {"workload": "reasoning"}
+       },
+       "embeddings": {"workload": "embeddings"}
      }
    }
    ```

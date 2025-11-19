@@ -84,6 +84,12 @@
         "title": "Show Server Status",
         "category": "AgentSmithy",
         "icon": "$(pulse)"
+      },
+      {
+        "command": "agentsmithy.openConfig",
+        "title": "Open Configuration",
+        "category": "AgentSmithy",
+        "icon": "$(settings-gear)"
       }
     ],
     "menus": {
@@ -116,6 +122,9 @@
         },
         {
           "command": "agentsmithy.serverStatus"
+        },
+        {
+          "command": "agentsmithy.openConfig"
         }
       ]
     },
