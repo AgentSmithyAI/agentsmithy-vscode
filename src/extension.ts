@@ -70,17 +70,17 @@ export const activate = async (context: vscode.ExtensionContext) => {
   context.subscriptions.push(serverReadyDisposable);
 
   // Subscribe to config invalid event
-  const configInvalidDisposable = serverManager.onConfigInvalid(({errors}) => {
+  const configInvalidDisposable = serverManager.onConfigInvalid(async ({errors}) => {
     eventsChannel.appendLine(`[onConfigInvalid callback] Config invalid: ${errors.join(', ')}`);
-
-    // Show notification and open config panel
-    void vscode.window
-      .showWarningMessage(`AgentSmithy configuration is incomplete: ${errors.join(', ')}`, 'Open Settings', 'Dismiss')
-      .then((choice) => {
-        if (choice === 'Open Settings') {
-          void vscode.commands.executeCommand(COMMANDS.OPEN_CONFIG);
-        }
-      });
+    void vscode.window.showWarningMessage(
+      `AgentSmithy configuration is incomplete: ${errors.join(', ')}. Opening configuration panel...`,
+    );
+    try {
+      await configProvider.show();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      eventsChannel.appendLine(`[onConfigInvalid callback] Failed to open config panel: ${message}`);
+    }
   });
   context.subscriptions.push(configInvalidDisposable);
 

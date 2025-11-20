@@ -112,7 +112,7 @@ class ChatWebview {
   }
 
   private setupModelSelector(): void {
-    // Settings button - opens VSCode settings
+    // Settings button - opens AgentSmithy configuration panel
     const settingsBtn = document.getElementById(DOM_IDS.SETTINGS_BTN);
     // If needed, settingsBtn id should be kept centralized in constants.ts
     if (settingsBtn) {
