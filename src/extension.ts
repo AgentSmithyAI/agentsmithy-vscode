@@ -76,7 +76,7 @@ export const activate = async (context: vscode.ExtensionContext) => {
       `AgentSmithy configuration is incomplete: ${errors.join(', ')}. Opening configuration panel...`,
     );
     try {
-      await configProvider.show();
+      await configProvider.show(errors);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       eventsChannel.appendLine(`[onConfigInvalid callback] Failed to open config panel: ${message}`);

@@ -15,6 +15,7 @@ const CONFIG_OUT_MSG = {
   CONFIG_SAVED: 'configSaved',
   ERROR: 'error',
   LOADING: 'loading',
+  VALIDATION_ERRORS: 'validationErrors',
 } as const;
 
 type ConfigInMessage =
@@ -26,11 +27,14 @@ type ConfigOutMessage =
   | {type: typeof CONFIG_OUT_MSG.CONFIG_LOADED; data: ConfigResponse}
   | {type: typeof CONFIG_OUT_MSG.CONFIG_SAVED; data: UpdateConfigResponse}
   | {type: typeof CONFIG_OUT_MSG.ERROR; message: string}
-  | {type: typeof CONFIG_OUT_MSG.LOADING};
+  | {type: typeof CONFIG_OUT_MSG.LOADING}
+  | {type: typeof CONFIG_OUT_MSG.VALIDATION_ERRORS; errors: string[]};
 
 export class ConfigWebviewProvider implements vscode.Disposable {
   private panel: vscode.WebviewPanel | undefined;
   private readonly disposables: vscode.Disposable[] = [];
+  private pendingValidationErrors: string[] = [];
+  private webviewReady = false;
 
   constructor(
     private readonly extensionUri: vscode.Uri,
@@ -40,10 +44,13 @@ export class ConfigWebviewProvider implements vscode.Disposable {
   /**
    * Show configuration panel
    */
-  public async show(): Promise<void> {
+  public async show(validationErrors?: string[]): Promise<void> {
+    this.pendingValidationErrors = Array.isArray(validationErrors) ? validationErrors : [];
+
     // If panel already exists, reveal it
     if (this.panel) {
       this.panel.reveal(vscode.ViewColumn.One);
+      this.postValidationErrors();
       return;
     }
 
@@ -69,18 +76,17 @@ export class ConfigWebviewProvider implements vscode.Disposable {
     this.panel.webview.html = this.getHtmlContent(this.panel.webview);
 
     // Handle messages from webview
-    this.panel.webview.onDidReceiveMessage(
-      async (message: ConfigInMessage) => {
-        await this.handleMessage(message);
-      },
-      undefined,
-      this.disposables,
-    );
+    const messageDisposable = this.panel.webview.onDidReceiveMessage(async (message: ConfigInMessage) => {
+      await this.handleMessage(message);
+    });
+    this.disposables.push(messageDisposable);
 
     // Handle panel disposal
     this.panel.onDidDispose(
       () => {
         this.panel = undefined;
+        this.webviewReady = false;
+        this.pendingValidationErrors = [];
       },
       undefined,
       this.disposables,
@@ -93,12 +99,15 @@ export class ConfigWebviewProvider implements vscode.Disposable {
   private async handleMessage(message: ConfigInMessage): Promise<void> {
     switch (message.type) {
       case CONFIG_IN_MSG.READY:
+        this.webviewReady = true;
         // Load config when webview is ready
         await this.loadConfig();
+        this.postValidationErrors();
         break;
 
       case CONFIG_IN_MSG.LOAD_CONFIG:
         await this.loadConfig();
+        this.postValidationErrors();
         break;
 
       case CONFIG_IN_MSG.SAVE_CONFIG:
@@ -171,6 +180,20 @@ export class ConfigWebviewProvider implements vscode.Disposable {
     if (this.panel) {
       void this.panel.webview.postMessage(message);
     }
+  }
+
+  /**
+   * Send validation errors (if any) to the webview to highlight fields
+   */
+  private postValidationErrors(): void {
+    if (!this.panel || !this.webviewReady) {
+      return;
+    }
+
+    void this.panel.webview.postMessage({
+      type: CONFIG_OUT_MSG.VALIDATION_ERRORS,
+      errors: this.pendingValidationErrors,
+    });
   }
 
   /**
@@ -439,6 +462,40 @@ export class ConfigWebviewProvider implements vscode.Disposable {
       margin-right: 8px;
     }
 
+    .validation-summary {
+      border: 1px solid var(--vscode-inputValidation-errorBorder);
+      background-color: var(--vscode-inputValidation-errorBackground);
+      padding: 12px 14px;
+      margin-bottom: 16px;
+      font-size: 13px;
+      color: var(--vscode-foreground);
+    }
+
+    .validation-summary.hidden {
+      display: none;
+    }
+
+    .validation-summary-title {
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: var(--vscode-errorForeground);
+    }
+
+    .validation-summary ul {
+      margin: 0;
+      padding-left: 18px;
+    }
+
+    .setting-item.error-highlight {
+      border-left: 2px solid var(--vscode-inputValidation-errorBorder);
+      background-color: var(--vscode-inputValidation-errorBackground);
+    }
+
+    .config-field-error {
+      border-color: var(--vscode-inputValidation-errorBorder) !important;
+      box-shadow: 0 0 0 1px var(--vscode-inputValidation-errorBorder) inset;
+    }
+
     .provider-content {
       max-height: 0;
       overflow: hidden;
@@ -477,6 +534,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
 
     <div id="errorContainer"></div>
     <div id="successContainer"></div>
+    <div id="validationSummary" class="validation-summary hidden"></div>
 
     <div id="loadingContainer" class="loading">
       <p>Loading configuration...</p>

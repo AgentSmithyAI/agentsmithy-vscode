@@ -22,6 +22,7 @@ const CONFIG_OUT_MSG = {
   CONFIG_SAVED: 'configSaved',
   ERROR: 'error',
   LOADING: 'loading',
+  VALIDATION_ERRORS: 'validationErrors',
 } as const;
 
 // State
@@ -35,12 +36,16 @@ let modelCatalog: Record<string, Record<string, string[]>> = {};
 let isDirty = false;
 let suppressedSuccessMessages = 0;
 let pendingReloadAfterSaveCount = 0;
+let pendingValidationErrors: string[] = [];
+let highlightedFields: HTMLElement[] = [];
+let highlightedItems: HTMLElement[] = [];
 
 // DOM elements
 let errorContainer: HTMLElement;
 let successContainer: HTMLElement;
 let loadingContainer: HTMLElement;
 let configContainer: HTMLElement;
+let validationSummary: HTMLElement;
 let saveButton: HTMLButtonElement;
 let reloadButton: HTMLButtonElement;
 
@@ -53,6 +58,7 @@ function init(): void {
   successContainer = document.getElementById('successContainer')!;
   loadingContainer = document.getElementById('loadingContainer')!;
   configContainer = document.getElementById('configContainer')!;
+  validationSummary = document.getElementById('validationSummary')!;
   saveButton = document.getElementById('saveButton') as HTMLButtonElement;
   reloadButton = document.getElementById('reloadButton') as HTMLButtonElement;
 
@@ -78,7 +84,7 @@ function init(): void {
 /**
  * Handle messages from extension
  */
-function handleMessage(message: {type: string; data?: unknown; message?: string}): void {
+function handleMessage(message: {type: string; data?: unknown; message?: string; errors?: string[]}): void {
   switch (message.type) {
     case CONFIG_OUT_MSG.LOADING:
       showLoading();
@@ -166,6 +172,12 @@ function handleMessage(message: {type: string; data?: unknown; message?: string}
     case CONFIG_OUT_MSG.ERROR:
       showError(message.message || 'An error occurred');
       hideLoading();
+      break;
+
+    case CONFIG_OUT_MSG.VALIDATION_ERRORS:
+      pendingValidationErrors = Array.isArray(message.errors) ? message.errors : [];
+      updateValidationSummary();
+      applyValidationHighlights();
       break;
   }
 }
@@ -302,6 +314,7 @@ function renderConfig(): void {
 
   // Attach event listeners
   attachEventListeners();
+  applyValidationHighlights();
 }
 
 /**
@@ -331,15 +344,26 @@ function renderProvider(name: string, config: Record<string, unknown>, hasApiKey
   html.push('</div>');
 
   html.push(`<div class="provider-content" id="${providerId}">`);
-  // Render provider fields (skip 'model' - it's in workloads now)
+
+  // 1. Render 'type' field first (Dropdown)
+  if ('type' in config) {
+    html.push(renderProviderTypeDropdown(config.type, ['config', 'providers', name, 'type']));
+  } else {
+    // Default fallback if type is missing (unlikely but safe)
+    html.push(renderProviderTypeDropdown('openai', ['config', 'providers', name, 'type']));
+  }
+
+  // 2. Render 'api_key' field explicitly (Masked Input)
+  // Ensure it appears even if missing from config object
+  const currentApiKey = 'api_key' in config ? config.api_key : '';
+  html.push(renderSettingItem('api_key', currentApiKey, ['config', 'providers', name, 'api_key']));
+
+  // 3. Render other provider fields (skip 'type', 'api_key', 'model')
   for (const [key, value] of Object.entries(config)) {
-    if (key === 'type') {
-      html.push(renderProviderTypeDropdown(value, ['config', 'providers', name, key]));
-    } else if (key === 'model') {
-      // Skip - model is deprecated in providers, use workloads instead
-    } else {
-      html.push(renderSettingItem(key, value, ['config', 'providers', name, key]));
+    if (key === 'type' || key === 'api_key' || key === 'model') {
+      continue;
     }
+    html.push(renderSettingItem(key, value, ['config', 'providers', name, key]));
   }
   html.push('</div>');
   html.push('</div>');
@@ -757,11 +781,13 @@ function attachEventListeners(): void {
     const path = JSON.parse(pathStr) as string[];
 
     element.addEventListener('input', () => {
+      removeHighlightFromField(element);
       updateConfigValue(path, element);
       markDirty();
     });
 
     element.addEventListener('change', () => {
+      removeHighlightFromField(element);
       updateConfigValue(path, element);
       markDirty();
     });
@@ -827,19 +853,11 @@ function attachEventListeners(): void {
  */
 function toggleProvider(providerName: string): void {
   const content = document.getElementById(`provider-${providerName}`);
-  const header = document.querySelector(`[data-provider="${providerName}"]`);
-
-  if (content && header) {
-    const chevron = header.querySelector('.provider-chevron');
-
-    if (content.classList.contains('expanded')) {
-      content.classList.remove('expanded');
-      chevron?.classList.remove('expanded');
-    } else {
-      content.classList.add('expanded');
-      chevron?.classList.add('expanded');
-    }
+  if (!content) {
+    return;
   }
+  const shouldExpand = !content.classList.contains('expanded');
+  setProviderExpanded(providerName, shouldExpand);
 }
 
 /**
@@ -847,18 +865,44 @@ function toggleProvider(providerName: string): void {
  */
 function toggleWorkload(workloadName: string): void {
   const content = document.getElementById(`workload-${workloadName}`);
+  if (!content) {
+    return;
+  }
+  const shouldExpand = !content.classList.contains('expanded');
+  setWorkloadExpanded(workloadName, shouldExpand);
+}
+
+function setProviderExpanded(providerName: string, expanded: boolean): void {
+  const content = document.getElementById(`provider-${providerName}`);
+  const header = document.querySelector(`[data-provider="${providerName}"]`);
+  if (!content || !header) {
+    return;
+  }
+
+  const chevron = header.querySelector('.provider-chevron');
+  if (expanded) {
+    content.classList.add('expanded');
+    chevron?.classList.add('expanded');
+  } else {
+    content.classList.remove('expanded');
+    chevron?.classList.remove('expanded');
+  }
+}
+
+function setWorkloadExpanded(workloadName: string, expanded: boolean): void {
+  const content = document.getElementById(`workload-${workloadName}`);
   const header = document.querySelector(`[data-workload="${workloadName}"]`);
+  if (!content || !header) {
+    return;
+  }
 
-  if (content && header) {
-    const chevron = header.querySelector('.provider-chevron');
-
-    if (content.classList.contains('expanded')) {
-      content.classList.remove('expanded');
-      chevron?.classList.remove('expanded');
-    } else {
-      content.classList.add('expanded');
-      chevron?.classList.add('expanded');
-    }
+  const chevron = header.querySelector('.provider-chevron');
+  if (expanded) {
+    content.classList.add('expanded');
+    chevron?.classList.add('expanded');
+  } else {
+    content.classList.remove('expanded');
+    chevron?.classList.remove('expanded');
   }
 }
 
@@ -1057,6 +1101,199 @@ function markDirty(): void {
     isDirty = true;
     saveButton.disabled = false;
   }
+}
+
+/**
+ * Show or hide validation summary banner
+ */
+function updateValidationSummary(): void {
+  if (!validationSummary) {
+    return;
+  }
+
+  const implicitHints = getImplicitValidationHints();
+
+  if (!pendingValidationErrors.length && implicitHints.length === 0) {
+    validationSummary.classList.add('hidden');
+    validationSummary.innerHTML = '';
+    return;
+  }
+
+  const listItems = [
+    ...pendingValidationErrors.map((error) => `<li>${escapeHtml(error)}</li>`),
+    ...implicitHints.map((hint) => `<li>${escapeHtml(hint.message)}</li>`),
+  ].join('');
+
+  validationSummary.innerHTML = `
+    <div class="validation-summary-title">Configuration issues detected</div>
+    <ul>${listItems}</ul>
+  `;
+  validationSummary.classList.remove('hidden');
+}
+
+type ParsedValidationHint = {message: string; path?: string[]};
+
+function applyValidationHighlights(): void {
+  clearValidationHighlights();
+
+  if (!pendingValidationErrors.length) {
+    return;
+  }
+
+  const parsedHints = [
+    ...pendingValidationErrors
+      .map((error) => parseValidationError(error))
+      .filter((hint): hint is ParsedValidationHint => Boolean(hint)),
+    ...getImplicitValidationHints(),
+  ];
+
+  const hintsWithPath = parsedHints.filter((hint) => Array.isArray(hint.path));
+  if (hintsWithPath.length === 0) {
+    return;
+  }
+
+  let firstField: HTMLElement | null = null;
+
+  for (const hint of hintsWithPath) {
+    if (!hint.path) continue;
+    ensureSectionExpandedForPath(hint.path);
+    const field = findFieldByPath(hint.path);
+    if (field) {
+      highlightField(field);
+      if (!firstField) {
+        firstField = field;
+      }
+    }
+  }
+
+  if (firstField) {
+    requestAnimationFrame(() => {
+      firstField.scrollIntoView({behavior: 'smooth', block: 'center'});
+      try {
+        (firstField as HTMLElement).focus();
+      } catch {
+        // ignore focus errors
+      }
+    });
+  }
+}
+
+function clearValidationHighlights(): void {
+  for (const field of highlightedFields) {
+    field.classList.remove('config-field-error');
+  }
+  for (const item of highlightedItems) {
+    item.classList.remove('error-highlight');
+  }
+  highlightedFields = [];
+  highlightedItems = [];
+}
+
+function highlightField(field: Element): void {
+  const element = field as HTMLElement;
+  element.classList.add('config-field-error');
+  highlightedFields.push(element);
+  const settingItem = element.closest('.setting-item') as HTMLElement | null;
+  if (settingItem) {
+    settingItem.classList.add('error-highlight');
+    highlightedItems.push(settingItem);
+  }
+}
+
+function removeHighlightFromField(field: Element): void {
+  const element = field as HTMLElement;
+  element.classList.remove('config-field-error');
+  highlightedFields = highlightedFields.filter((item) => item !== element);
+  const settingItem = element.closest('.setting-item') as HTMLElement | null;
+  if (settingItem) {
+    settingItem.classList.remove('error-highlight');
+    highlightedItems = highlightedItems.filter((item) => item !== settingItem);
+  }
+}
+
+function findFieldByPath(path: string[]): HTMLElement | null {
+  const fields = document.querySelectorAll('.config-field');
+  for (const field of Array.from(fields)) {
+    const attr = field.getAttribute('data-path');
+    if (!attr) continue;
+    try {
+      const parsed = JSON.parse(attr) as string[];
+      if (arraysEqual(parsed, path)) {
+        return field as HTMLElement;
+      }
+    } catch {
+      // ignore parse errors
+    }
+  }
+  return null;
+}
+
+function arraysEqual(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) {
+    return false;
+  }
+  return a.every((value, index) => value === b[index]);
+}
+
+function ensureSectionExpandedForPath(path: string[]): void {
+  if (path.length < 3) {
+    return;
+  }
+  const section = path[1];
+  const entry = path[2];
+  if (section === 'providers' && entry) {
+    setProviderExpanded(entry, true);
+  } else if (section === 'workloads' && entry) {
+    setWorkloadExpanded(entry, true);
+  }
+}
+
+function parseValidationError(error: string): ParsedValidationHint | null {
+  if (typeof error !== 'string') {
+    return null;
+  }
+  const trimmed = error.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const pathMatch = trimmed.match(/(config\.[\w.-]+|providers\.[\w.-]+|workloads\.[\w.-]+|models\.[\w.-]+)/);
+  if (!pathMatch) {
+    return {message: trimmed};
+  }
+
+  let rawPath = pathMatch[0];
+  if (!rawPath.startsWith('config.')) {
+    rawPath = `config.${rawPath}`;
+  }
+  const segments = rawPath.split('.').filter(Boolean);
+  if (segments.length === 0) {
+    return {message: trimmed};
+  }
+
+  return {
+    message: trimmed,
+    path: segments,
+  };
+}
+
+function getImplicitValidationHints(): ParsedValidationHint[] {
+  if (!pendingValidationErrors.length) {
+    return [];
+  }
+
+  const hints: ParsedValidationHint[] = [];
+
+  for (const provider of availableProviders) {
+    if (!provider.has_api_key) {
+      hints.push({
+        message: `Provider "${provider.name}" is missing an API key.`,
+        path: ['config', 'providers', provider.name, 'api_key'],
+      });
+    }
+  }
+
+  return hints;
 }
 
 /**
