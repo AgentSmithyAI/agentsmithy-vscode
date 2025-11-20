@@ -67,7 +67,7 @@ export const mockWorkspaceMethods = () => {
   (vscode.workspace as any).onDidChangeConfiguration = vi.fn(() => ({dispose: vi.fn()}));
   (vscode.workspace as any).getConfiguration = vi.fn(() => ({
     get: vi.fn((key: string) => {
-      if (key === 'serverUrl') return 'http://localhost:8000';
+      if (key === 'autoStartServer') return true;
       return undefined;
     }),
   }));

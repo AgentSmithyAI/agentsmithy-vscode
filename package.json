@@ -131,20 +131,11 @@
     "configuration": {
       "title": "AgentSmithy",
       "properties": {
-        "agentsmithy.serverUrl": {
-          "type": "string",
-          "default": "http://localhost:8765",
-          "description": "AgentSmithy server URL"
-        },
-        "agentsmithy.showReasoning": {
-          "type": "boolean",
-          "default": false,
-          "description": "Show reasoning/thinking process in chat"
-        },
         "agentsmithy.autoStartServer": {
           "type": "boolean",
           "default": true,
-          "description": "Automatically start AgentSmithy server when extension activates"
+          "description": "Automatically start AgentSmithy server when extension activates",
+          "markdownDescription": "Automatically start AgentSmithy server when the extension activates.\n\nAll other server settings are managed inside the [AgentSmithy configuration panel](command:agentsmithy.openConfig)."
         }
       }
     }

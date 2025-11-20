@@ -15,8 +15,6 @@ export const VIEWS = {
 } as const;
 
 export const CONFIG_KEYS = {
-  SERVER_URL: 'agentsmithy.serverUrl',
-  SHOW_REASONING: 'agentsmithy.showReasoning',
   AUTO_START_SERVER: 'agentsmithy.autoStartServer',
 } as const;
 
