@@ -344,26 +344,15 @@ function renderProvider(name: string, config: Record<string, unknown>, hasApiKey
   html.push('</div>');
 
   html.push(`<div class="provider-content" id="${providerId}">`);
-
-  // 1. Render 'type' field first (Dropdown)
-  if ('type' in config) {
-    html.push(renderProviderTypeDropdown(config.type, ['config', 'providers', name, 'type']));
-  } else {
-    // Default fallback if type is missing (unlikely but safe)
-    html.push(renderProviderTypeDropdown('openai', ['config', 'providers', name, 'type']));
-  }
-
-  // 2. Render 'api_key' field explicitly (Masked Input)
-  // Ensure it appears even if missing from config object
-  const currentApiKey = 'api_key' in config ? config.api_key : '';
-  html.push(renderSettingItem('api_key', currentApiKey, ['config', 'providers', name, 'api_key']));
-
-  // 3. Render other provider fields (skip 'type', 'api_key', 'model')
+  // Render provider fields (skip 'model' - it's in workloads now)
   for (const [key, value] of Object.entries(config)) {
-    if (key === 'type' || key === 'api_key' || key === 'model') {
-      continue;
+    if (key === 'type') {
+      html.push(renderProviderTypeDropdown(value, ['config', 'providers', name, key]));
+    } else if (key === 'model') {
+      // Skip - model is deprecated in providers, use workloads instead
+    } else {
+      html.push(renderSettingItem(key, value, ['config', 'providers', name, key]));
     }
-    html.push(renderSettingItem(key, value, ['config', 'providers', name, key]));
   }
   html.push('</div>');
   html.push('</div>');

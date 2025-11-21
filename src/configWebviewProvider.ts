@@ -222,8 +222,18 @@ export class ConfigWebviewProvider implements vscode.Disposable {
       font-size: var(--vscode-font-size);
       color: var(--vscode-foreground);
       background-color: var(--vscode-editor-background);
+      padding: 0;
+      margin: 0;
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .scroll-container {
+      flex: 1;
+      overflow-y: auto;
       padding: 20px;
-      line-height: 1.6;
     }
 
     .container {
@@ -354,12 +364,17 @@ export class ConfigWebviewProvider implements vscode.Disposable {
       cursor: pointer;
     }
 
-    .button-toolbar {
+    .footer-toolbar {
+      padding: 16px 20px;
+      background-color: var(--vscode-editor-background);
+      border-top: 1px solid var(--vscode-settings-headerBorder, var(--vscode-panel-border));
+      position: sticky;
+      bottom: 0;
+      z-index: 100;
       display: flex;
       gap: 8px;
-      margin: 20px 0;
-      padding-top: 12px;
-      border-top: 1px solid var(--vscode-settings-headerBorder, var(--vscode-panel-border));
+      /* Ensure footer stays on top if content scrolls behind */
+      box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
     }
 
     .btn {
@@ -528,23 +543,27 @@ export class ConfigWebviewProvider implements vscode.Disposable {
   </style>
 </head>
 <body>
-  <div class="container">
-    <h1>AgentSmithy Configuration</h1>
-    <p class="subtitle">Configure your AgentSmithy server settings</p>
+  <div class="scroll-container">
+    <div class="container">
+      <h1>AgentSmithy Configuration</h1>
+      <p class="subtitle">Configure your AgentSmithy server settings</p>
 
-    <div id="errorContainer"></div>
-    <div id="successContainer"></div>
-    <div id="validationSummary" class="validation-summary hidden"></div>
+      <div id="errorContainer"></div>
+      <div id="successContainer"></div>
+      <div id="validationSummary" class="validation-summary hidden"></div>
 
-    <div id="loadingContainer" class="loading">
-      <p>Loading configuration...</p>
+      <div id="loadingContainer" class="loading">
+        <p>Loading configuration...</p>
+      </div>
+
+      <div id="configContainer" class="hidden">
+        <!-- Configuration form will be rendered here -->
+      </div>
     </div>
+  </div>
 
-    <div id="configContainer" class="hidden">
-      <!-- Configuration form will be rendered here -->
-    </div>
-
-    <div class="button-toolbar">
+  <div class="footer-toolbar">
+    <div class="container" style="width: 100%; display: flex; gap: 8px; padding: 0;">
       <button id="saveButton" class="btn" disabled>Save Configuration</button>
       <button id="reloadButton" class="btn btn-secondary">Reload</button>
     </div>
