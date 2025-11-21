@@ -158,6 +158,11 @@ export class ConfigWebviewProvider implements vscode.Disposable {
     try {
       this.postMessage({type: CONFIG_OUT_MSG.LOADING});
       const result = await this.apiService.updateConfig(config);
+
+      // Clear pending validation errors on successful save since we expect the user fixed them
+      this.pendingValidationErrors = [];
+      this.postValidationErrors();
+
       this.postMessage({
         type: CONFIG_OUT_MSG.CONFIG_SAVED,
         data: result,

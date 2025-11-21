@@ -153,6 +153,11 @@ function handleMessage(message: {type: string; data?: unknown; message?: string;
         isDirty = false;
         saveButton.disabled = true;
 
+        // Clear pending validation errors on successful save
+        pendingValidationErrors = [];
+        updateValidationSummary();
+        applyValidationHighlights();
+
         if (suppressedSuccessMessages > 0) {
           suppressedSuccessMessages -= 1;
           successContainer.innerHTML = '';
