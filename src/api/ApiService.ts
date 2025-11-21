@@ -100,6 +100,24 @@ export interface HistoryResponse {
   last_idx: number | null;
 }
 
+export interface HealthResponse {
+  server_status: string;
+  port: number | null;
+  config_valid: boolean;
+  config_errors: string[];
+}
+
+export interface ConfigResponse {
+  config: Record<string, unknown>;
+  metadata: Record<string, unknown> | null;
+}
+
+export interface UpdateConfigResponse {
+  success: boolean;
+  message: string;
+  config: Record<string, unknown>;
+}
+
 /**
  * Service for REST API calls to AgentSmithy server
  */
@@ -117,13 +135,17 @@ export class ApiService {
     reset: (dialogId: string) => `/api/dialogs/${encodeURIComponent(dialogId)}/reset`,
   };
 
-  constructor(private readonly baseUrl: string) {}
+  constructor(private readonly baseUrlOrGetter: string | (() => string)) {}
+
+  private getBaseUrl(): string {
+    return typeof this.baseUrlOrGetter === 'function' ? this.baseUrlOrGetter() : this.baseUrlOrGetter;
+  }
 
   /**
    * Get current dialog ID
    */
   async getCurrentDialog(): Promise<CurrentDialogResponse> {
-    const url = `${this.baseUrl}${this.endpoints.currentDialog}`;
+    const url = `${this.getBaseUrl()}${this.endpoints.currentDialog}`;
     try {
       const resp = await fetch(url, {headers: {Accept: 'application/json'}});
       if (!resp.ok) {
@@ -144,7 +166,7 @@ export class ApiService {
    * List all dialogs
    */
   async listDialogs(): Promise<ListDialogsResponse> {
-    const url = `${this.baseUrl}${this.endpoints.dialogs}`;
+    const url = `${this.getBaseUrl()}${this.endpoints.dialogs}`;
     const resp = await fetch(url, {headers: {Accept: 'application/json'}});
     if (!resp.ok) {
       throw new Error(`HTTP error! status: ${resp.status}`);
@@ -183,7 +205,7 @@ export class ApiService {
     }
     const queryString = params.toString();
     const suffix = queryString ? `?${queryString}` : '';
-    const url = `${this.baseUrl}${this.endpoints.history(dialogId)}${suffix}`;
+    const url = `${this.getBaseUrl()}${this.endpoints.history(dialogId)}${suffix}`;
 
     const resp = await fetch(url, {headers: {Accept: 'application/json'}});
     if (!resp.ok) {
@@ -235,7 +257,7 @@ export class ApiService {
    * Create a new dialog
    */
   async createDialog(title?: string): Promise<CreateDialogResponse> {
-    const url = `${this.baseUrl}${this.endpoints.dialogs}`;
+    const url = `${this.getBaseUrl()}${this.endpoints.dialogs}`;
     const body = title ? {title} : {};
     const resp = await fetch(url, {
       method: 'POST',
@@ -267,7 +289,7 @@ export class ApiService {
    * Set current active dialog
    */
   async setCurrentDialog(dialogId: string): Promise<void> {
-    const url = `${this.baseUrl}${this.endpoints.currentDialog}?id=${encodeURIComponent(dialogId)}`;
+    const url = `${this.getBaseUrl()}${this.endpoints.currentDialog}?id=${encodeURIComponent(dialogId)}`;
     const resp = await fetch(url, {
       method: 'PATCH',
       headers: {Accept: 'application/json'},
@@ -282,7 +304,7 @@ export class ApiService {
    * Get dialog metadata
    */
   async getDialog(dialogId: string): Promise<Dialog> {
-    const url = `${this.baseUrl}${this.endpoints.dialog(dialogId)}`;
+    const url = `${this.getBaseUrl()}${this.endpoints.dialog(dialogId)}`;
     const resp = await fetch(url, {headers: {Accept: 'application/json'}});
 
     if (!resp.ok) {
@@ -306,7 +328,7 @@ export class ApiService {
    * Update dialog (e.g., change title)
    */
   async updateDialog(dialogId: string, updates: {title?: string}): Promise<UpdateDialogResponse> {
-    const url = `${this.baseUrl}${this.endpoints.dialog(dialogId)}`;
+    const url = `${this.getBaseUrl()}${this.endpoints.dialog(dialogId)}`;
     const resp = await fetch(url, {
       method: 'PATCH',
       headers: {
@@ -336,7 +358,7 @@ export class ApiService {
    * Delete a dialog
    */
   async deleteDialog(dialogId: string): Promise<void> {
-    const url = `${this.baseUrl}${this.endpoints.dialog(dialogId)}`;
+    const url = `${this.getBaseUrl()}${this.endpoints.dialog(dialogId)}`;
     const resp = await fetch(url, {
       method: 'DELETE',
       headers: {Accept: 'application/json'},
@@ -351,7 +373,7 @@ export class ApiService {
    * List all checkpoints for a dialog
    */
   async listCheckpoints(dialogId: string): Promise<ListCheckpointsResponse> {
-    const url = `${this.baseUrl}${this.endpoints.checkpoints(dialogId)}`;
+    const url = `${this.getBaseUrl()}${this.endpoints.checkpoints(dialogId)}`;
     const resp = await fetch(url, {headers: {Accept: 'application/json'}});
 
     if (!resp.ok) {
@@ -382,7 +404,7 @@ export class ApiService {
    * Restore dialog to a specific checkpoint
    */
   async restoreCheckpoint(dialogId: string, checkpointId: string): Promise<RestoreCheckpointResponse> {
-    const url = `${this.baseUrl}${this.endpoints.restore(dialogId)}`;
+    const url = `${this.getBaseUrl()}${this.endpoints.restore(dialogId)}`;
     const resp = await fetch(url, {
       method: 'POST',
       headers: {
@@ -411,7 +433,7 @@ export class ApiService {
    * Get session status for a dialog
    */
   async getSessionStatus(dialogId: string): Promise<SessionStatus> {
-    const url = `${this.baseUrl}${this.endpoints.session(dialogId)}`;
+    const url = `${this.getBaseUrl()}${this.endpoints.session(dialogId)}`;
     const resp = await fetch(url, {headers: {Accept: 'application/json'}});
 
     if (!resp.ok) {
@@ -450,7 +472,7 @@ export class ApiService {
    * Approve current session
    */
   async approveSession(dialogId: string): Promise<ApproveSessionResponse> {
-    const url = `${this.baseUrl}${this.endpoints.approve(dialogId)}`;
+    const url = `${this.getBaseUrl()}${this.endpoints.approve(dialogId)}`;
     const resp = await fetch(url, {
       method: 'POST',
       headers: {Accept: 'application/json'},
@@ -476,7 +498,7 @@ export class ApiService {
    * Reset to approved state (discard current session)
    */
   async resetToApproved(dialogId: string): Promise<ResetToApprovedResponse> {
-    const url = `${this.baseUrl}${this.endpoints.reset(dialogId)}`;
+    const url = `${this.getBaseUrl()}${this.endpoints.reset(dialogId)}`;
     const resp = await fetch(url, {
       method: 'POST',
       headers: {Accept: 'application/json'},
@@ -494,6 +516,93 @@ export class ApiService {
     return {
       reset_to: typeof data.reset_to === 'string' ? data.reset_to : '',
       new_session: typeof data.new_session === 'string' ? data.new_session : '',
+    };
+  }
+
+  /**
+   * Get server health status
+   */
+  async getHealth(): Promise<HealthResponse> {
+    const url = `${this.getBaseUrl()}/health`;
+    const resp = await fetch(url, {headers: {Accept: 'application/json'}});
+
+    if (!resp.ok) {
+      throw new Error(`HTTP error! status: ${resp.status}`);
+    }
+
+    const data: unknown = await resp.json();
+    if (!isRecord(data)) {
+      throw new Error('Malformed health response');
+    }
+
+    let config_errors: string[] = [];
+    if (Array.isArray(data.config_errors)) {
+      const rawErrors = data.config_errors as unknown[];
+      config_errors = rawErrors.filter((x): x is string => typeof x === 'string');
+      if (config_errors.length !== rawErrors.length) {
+        // eslint-disable-next-line no-console
+        console.warn('[api] health response contained non-string config_errors entries');
+      }
+    }
+
+    return {
+      server_status: typeof data.server_status === 'string' ? data.server_status : 'unknown',
+      port: typeof data.port === 'number' ? data.port : null,
+      config_valid: Boolean(data.config_valid),
+      config_errors,
+    };
+  }
+
+  /**
+   * Get configuration
+   */
+  async getConfig(): Promise<ConfigResponse> {
+    const url = `${this.getBaseUrl()}/api/config`;
+    const resp = await fetch(url, {headers: {Accept: 'application/json'}});
+
+    if (!resp.ok) {
+      throw new Error(`HTTP error! status: ${resp.status}`);
+    }
+
+    const data: unknown = await resp.json();
+
+    if (!isRecord(data)) {
+      throw new Error('Malformed config response');
+    }
+
+    return {
+      config: isRecord(data.config) ? data.config : {},
+      metadata: isRecord(data.metadata) ? data.metadata : null,
+    };
+  }
+
+  /**
+   * Update configuration
+   */
+  async updateConfig(config: Record<string, unknown>): Promise<UpdateConfigResponse> {
+    const url = `${this.getBaseUrl()}/api/config`;
+    const resp = await fetch(url, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({config}),
+    });
+
+    if (!resp.ok) {
+      throw new Error(`HTTP error! status: ${resp.status}`);
+    }
+
+    const data: unknown = await resp.json();
+    if (!isRecord(data)) {
+      throw new Error('Malformed update config response');
+    }
+
+    return {
+      success: Boolean(data.success),
+      message: typeof data.message === 'string' ? data.message : '',
+      config: isRecord(data.config) ? data.config : {},
     };
   }
 }

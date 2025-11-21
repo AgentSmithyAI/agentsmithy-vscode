@@ -1,3 +1,10 @@
+# [1.6.0](https://github.com/AgentSmithyAI/agentsmithy-vscode/compare/v1.5.0...v1.6.0) (2025-11-21)
+
+
+### Features
+
+* Check configuration on start ([#36](https://github.com/AgentSmithyAI/agentsmithy-vscode/issues/36)) ([8413ba0](https://github.com/AgentSmithyAI/agentsmithy-vscode/commit/8413ba077b22a7b2a0298bfd9bce095cbc361534))
+
 # [1.5.0](https://github.com/AgentSmithyAI/agentsmithy-vscode/compare/v1.4.0...v1.5.0) (2025-11-12)
 
 

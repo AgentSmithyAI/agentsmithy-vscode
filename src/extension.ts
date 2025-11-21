@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import {ApiService} from './api/ApiService';
 import {ChatWebviewProvider} from './chatWebviewProvider';
+import {ConfigWebviewProvider} from './configWebviewProvider';
 import {registerCommands} from './commands';
 import {COMMANDS, ERROR_MESSAGES, STATE_KEYS, VIEWS, WELCOME_MESSAGE} from './constants';
 import {ConfigService} from './services/ConfigService';
@@ -18,9 +19,9 @@ export const activate = async (context: vscode.ExtensionContext) => {
   // Add ServerManager to subscriptions for proper cleanup
   context.subscriptions.push(serverManager);
 
-  // Create API services
+  // Create API services (use getter to always get fresh URL)
+  const apiService = new ApiService(() => configService.getServerUrl());
   const serverUrl = configService.getServerUrl();
-  const apiService = new ApiService(serverUrl);
   const streamService = new StreamService(serverUrl, normalizeSSEEvent);
   const historyService = new HistoryService(apiService);
   const dialogService = new DialogService(apiService);
@@ -53,6 +54,10 @@ export const activate = async (context: vscode.ExtensionContext) => {
   // Register provider for disposal
   context.subscriptions.push(provider);
 
+  // Create config webview provider
+  const configProvider = new ConfigWebviewProvider(context.extensionUri, apiService);
+  context.subscriptions.push(configProvider);
+
   // Subscribe to server ready event
   const eventsChannel = vscode.window.createOutputChannel('AgentSmithy Events');
   context.subscriptions.push(eventsChannel);
@@ -63,6 +68,21 @@ export const activate = async (context: vscode.ExtensionContext) => {
     void provider.refreshAfterServerStart();
   });
   context.subscriptions.push(serverReadyDisposable);
+
+  // Subscribe to config invalid event
+  const configInvalidDisposable = serverManager.onConfigInvalid(async ({errors}) => {
+    eventsChannel.appendLine(`[onConfigInvalid callback] Config invalid: ${errors.join(', ')}`);
+    void vscode.window.showWarningMessage(
+      `AgentSmithy configuration is incomplete: ${errors.join(', ')}. Opening configuration panel...`,
+    );
+    try {
+      await configProvider.show(errors);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      eventsChannel.appendLine(`[onConfigInvalid callback] Failed to open config panel: ${message}`);
+    }
+  });
+  context.subscriptions.push(configInvalidDisposable);
 
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(VIEWS.CHAT, provider, {
@@ -104,6 +124,13 @@ export const activate = async (context: vscode.ExtensionContext) => {
         : `AgentSmithy server is not running`;
 
       void vscode.window.showInformationMessage(statusMessage);
+    }),
+  );
+
+  // Register config command
+  context.subscriptions.push(
+    vscode.commands.registerCommand(COMMANDS.OPEN_CONFIG, async () => {
+      await configProvider.show();
     }),
   );
 

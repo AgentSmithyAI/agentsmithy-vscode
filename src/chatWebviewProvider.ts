@@ -3,7 +3,7 @@ import * as path from 'path';
 import type {HistoryEvent, ChangedFile} from './api/ApiService';
 import {ApiService} from './api/ApiService';
 import {StreamService, type ChatContext} from './api/StreamService';
-import {CSS_CLASSES, DOM_IDS, SSE_EVENT_TYPES as E, ERROR_MESSAGES, ERROR_NAMES, VIEWS} from './constants';
+import {CSS_CLASSES, DOM_IDS, SSE_EVENT_TYPES as E, ERROR_MESSAGES, ERROR_NAMES, VIEWS, COMMANDS} from './constants';
 import {ConfigService} from './services/ConfigService';
 import {DialogService} from './services/DialogService';
 import {StreamEventHandlers} from './services/EventHandlers';
@@ -287,7 +287,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider, vscode.D
           await this._handleResetToApproved(message.dialogId);
           break;
         case WEBVIEW_IN_MSG.OPEN_SETTINGS:
-          await vscode.commands.executeCommand('workbench.action.openSettings', 'agentsmithy');
+          await vscode.commands.executeCommand(COMMANDS.OPEN_CONFIG);
           break;
         case WEBVIEW_IN_MSG.TOGGLE_DIFF_VIEW:
           await this._handleToggleDiffView();

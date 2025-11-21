@@ -1,10 +1,9 @@
 {
   "name": "agentsmithy",
   "publisher": "agentsmithy",
-  "displayName": "AgentSmithy",
-  "description": "AI coding assistant that writes code for you. Ask it to implement features, refactor code, or fix bugs - it understands your codebase and makes changes directly.",
-  "icon": "icon.png",
-  "version": "1.5.0",
+  "displayName": "AgentSmithy VSCode",
+  "description": "VSCode extension for AgentSmithy coding assistant",
+  "version": "1.6.0",
   "license": "Apache-2.0",
   "author": {
     "name": "Alexander Morozov",
@@ -114,6 +113,12 @@
         "title": "Show Server Status",
         "category": "AgentSmithy",
         "icon": "$(pulse)"
+      },
+      {
+        "command": "agentsmithy.openConfig",
+        "title": "Open Configuration",
+        "category": "AgentSmithy",
+        "icon": "$(settings-gear)"
       }
     ],
     "menus": {
@@ -146,26 +151,20 @@
         },
         {
           "command": "agentsmithy.serverStatus"
+        },
+        {
+          "command": "agentsmithy.openConfig"
         }
       ]
     },
     "configuration": {
       "title": "AgentSmithy",
       "properties": {
-        "agentsmithy.serverUrl": {
-          "type": "string",
-          "default": "http://localhost:8765",
-          "description": "AgentSmithy server URL"
-        },
-        "agentsmithy.showReasoning": {
-          "type": "boolean",
-          "default": false,
-          "description": "Show reasoning/thinking process in chat"
-        },
         "agentsmithy.autoStartServer": {
           "type": "boolean",
           "default": true,
-          "description": "Automatically start AgentSmithy server when extension activates"
+          "description": "Automatically start AgentSmithy server when extension activates",
+          "markdownDescription": "Automatically start AgentSmithy server when the extension activates.\n\nUse “AgentSmithy: Open Configuration” to edit providers, credentials, and model settings."
         }
       }
     }

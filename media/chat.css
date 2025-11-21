@@ -537,6 +537,63 @@ body {
   outline-offset: -1px;
 }
 
+/* Server status overlay */
+#serverStatusOverlay {
+  text-align: center;
+  padding: 16px;
+}
+
+#serverStatusOverlay .server-status-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+  color: var(--vscode-errorForeground);
+}
+
+#serverStatusOverlay .server-status-icon.codicon-loading {
+  color: var(--vscode-foreground);
+}
+
+#serverStatusOverlay .server-status-message {
+  font-size: 14px;
+  color: var(--vscode-foreground);
+  max-width: 420px;
+  line-height: 1.4;
+}
+
+#serverStatusOverlay .server-status-actions {
+  margin-top: 20px;
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+#serverStatusOverlay .server-status-btn {
+  border: none;
+  border-radius: 4px;
+  font-size: 13px;
+  padding: 6px 16px;
+  cursor: pointer;
+  font-family: inherit;
+  transition:
+    background-color 0.1s,
+    filter 0.1s;
+}
+
+#serverStatusOverlay .server-status-btn.primary {
+  background-color: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+}
+
+#serverStatusOverlay .server-status-btn.primary:hover {
+  background-color: var(--vscode-button-hoverBackground);
+}
+
+#serverStatusOverlay .server-status-btn:focus {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: 2px;
+}
+
 .new-dialog-btn svg {
   width: 14px;
   height: 14px;
