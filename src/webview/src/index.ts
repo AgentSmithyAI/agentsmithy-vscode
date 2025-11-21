@@ -30,7 +30,7 @@ declare const marked: {
 /**
  * Main webview coordinator - delegates responsibilities to specialized managers
  */
-class ChatWebview {
+export class ChatWebview {
   private vscode: VSCodeAPI;
   private renderer: MessageRenderer;
   private scrollManager: ScrollManager;
@@ -604,5 +604,15 @@ class ChatWebview {
 }
 
 // Initialize when DOM is ready
-const workspaceRoot = (window as unknown as {WORKSPACE_ROOT: string}).WORKSPACE_ROOT || '';
-new ChatWebview(workspaceRoot);
+declare global {
+  interface Window {
+    WORKSPACE_ROOT?: string;
+    __AGENTSMITHY_TEST__?: boolean;
+  }
+}
+
+const globalWindow = window as Window & {__AGENTSMITHY_TEST__?: boolean};
+if (!globalWindow.__AGENTSMITHY_TEST__) {
+  const workspaceRoot = globalWindow.WORKSPACE_ROOT || '';
+  new ChatWebview(workspaceRoot);
+}

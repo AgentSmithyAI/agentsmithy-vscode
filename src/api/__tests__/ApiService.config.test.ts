@@ -125,6 +125,27 @@ describe('ApiService - Configuration', () => {
       expect(result.config_valid).toBe(false);
       expect(result.config_errors).toEqual(['API key not configured']);
     });
+
+    it('filters non-string errors and warns', async () => {
+      const mockResponse = {
+        server_status: 'ready',
+        port: 8000,
+        config_valid: false,
+        config_errors: ['ok', {unexpected: true}],
+      };
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockResponse,
+      });
+
+      const result = await apiService.getHealth();
+
+      expect(result.config_errors).toEqual(['ok']);
+      expect(warnSpy).toHaveBeenCalledWith('[api] health response contained non-string config_errors entries');
+      warnSpy.mockRestore();
+    });
   });
 
   describe('updateConfig', () => {
