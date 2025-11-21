@@ -88,4 +88,24 @@ describe('ServerManager checkHealthStatus', () => {
     expect(outputChannel.appendLine).toHaveBeenCalledWith('Config valid: true');
     expect(outputChannel.appendLine).toHaveBeenCalledTimes(1);
   });
+
+  it('logs and aborts when health endpoint responds with non-OK status', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 503,
+    }) as unknown as typeof fetch;
+
+    await (manager as any).checkHealthStatus();
+
+    expect(outputChannel.appendLine).toHaveBeenCalledWith('Health check failed: 503');
+    expect(configInvalidEvents).toEqual([]);
+  });
+
+  it('logs failure when fetch throws', async () => {
+    global.fetch = vi.fn().mockRejectedValue(new Error('network down')) as unknown as typeof fetch;
+
+    await (manager as any).checkHealthStatus();
+
+    expect(outputChannel.appendLine).toHaveBeenCalledWith('Failed to check health status: network down');
+  });
 });

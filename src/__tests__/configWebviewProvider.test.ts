@@ -81,4 +81,35 @@ describe('ConfigWebviewProvider - validation refresh', () => {
     expect(panel.reveal).toHaveBeenCalled();
     expect(refreshSpy).toHaveBeenCalled();
   });
+
+  it('saveConfig clears validation errors and posts CONFIG_SAVED', async () => {
+    apiService.updateConfig.mockResolvedValue({config: {}});
+    apiService.getHealth.mockResolvedValue({config_valid: true, config_errors: []});
+
+    (provider as any).panel = mockPanel;
+    (provider as any).webviewReady = true;
+    (provider as any).pendingValidationErrors = ['stale'];
+
+    await (provider as any).saveConfig({providers: {}});
+
+    expect(apiService.updateConfig).toHaveBeenCalledWith({providers: {}});
+    expect((provider as any).pendingValidationErrors).toEqual([]);
+    expect(mockPanel.webview.postMessage).toHaveBeenCalledWith({type: 'loading'});
+    expect(mockPanel.webview.postMessage).toHaveBeenCalledWith({type: 'validationErrors', errors: []});
+    expect(mockPanel.webview.postMessage).toHaveBeenCalledWith({type: 'configSaved', data: {config: {}}});
+  });
+
+  it('saveConfig posts error when update fails', async () => {
+    apiService.updateConfig.mockRejectedValue(new Error('boom'));
+
+    (provider as any).panel = mockPanel;
+    (provider as any).webviewReady = true;
+
+    await (provider as any).saveConfig({});
+
+    expect(mockPanel.webview.postMessage).toHaveBeenCalledWith({type: 'loading'});
+    const errorPayload = mockPanel.webview.postMessage.mock.calls.find(([msg]) => msg.type === 'error')?.[0];
+    expect(errorPayload).toBeDefined();
+    expect(errorPayload.message).toContain('Failed to save configuration');
+  });
 });
