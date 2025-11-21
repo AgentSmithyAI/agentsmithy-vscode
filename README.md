@@ -137,7 +137,7 @@ Or visit the extension page on Open VSX:
 
 ### From VSIX (user)
 
-1. Download the latest `agentsmithy-vscode-<version>.vsix` from the [releases page](https://github.com/AgentSmithyAI/agentsmithy-vscode/releases).
+1. Download the latest `.vsix` from the [releases page](https://github.com/AgentSmithyAI/agentsmithy-vscode/releases) (for example, `agentsmithy.agentsmithy-<version>.vsix`).
 2. In VS Code / Code‑OSS / VSCodium, open the Command Palette: `Ctrl+Shift+P`.
 3. Run **`Extensions: Install from VSIX...`** and select the downloaded file.
 
@@ -151,7 +151,7 @@ npm run compile
 npx @vscode/vsce package
 ```
 
-This produces `agentsmithy-vscode-<version>.vsix` in the project root, which you can install as described above.
+This produces a `.vsix` file in the project root (for example, `agentsmithy.agentsmithy-<version>.vsix`), which you can then install as described above.
 
 ## Limitations (Alpha)
 
