@@ -334,8 +334,10 @@ function renderProvider(name: string, config: Record<string, unknown>, hasApiKey
   const warningClass = hasApiKey ? '' : ' provider-warning';
 
   html.push(`<div class="provider-item${warningClass}">`);
-  html.push(`<div class="provider-header" data-provider="${name}">`);
-  html.push('<span class="provider-chevron">▶</span>');
+  html.push(
+    `<div class="provider-header" data-provider="${name}" role="button" aria-expanded="false" aria-controls="${providerId}">`,
+  );
+  html.push('<span class="provider-chevron" aria-hidden="true">▶</span>');
   html.push(`<span class="provider-name">${escapeHtml(name)}</span>`);
 
   // Show type badge
@@ -376,8 +378,10 @@ function renderWorkload(name: string, config: Record<string, unknown>): string {
   const workloadId = `workload-${name}`;
 
   html.push('<div class="provider-item">');
-  html.push(`<div class="provider-header" data-workload="${name}">`);
-  html.push('<span class="provider-chevron">▶</span>');
+  html.push(
+    `<div class="provider-header" data-workload="${name}" role="button" aria-expanded="false" aria-controls="${workloadId}">`,
+  );
+  html.push('<span class="provider-chevron" aria-hidden="true">▶</span>');
   html.push(`<span class="provider-name">${escapeHtml(name)}</span>`);
 
   // Show provider and model badges
@@ -870,9 +874,11 @@ function setProviderExpanded(providerName: string, expanded: boolean): void {
   if (expanded) {
     content.classList.add('expanded');
     chevron?.classList.add('expanded');
+    header.setAttribute('aria-expanded', 'true');
   } else {
     content.classList.remove('expanded');
     chevron?.classList.remove('expanded');
+    header.setAttribute('aria-expanded', 'false');
   }
 }
 
@@ -887,9 +893,11 @@ function setWorkloadExpanded(workloadName: string, expanded: boolean): void {
   if (expanded) {
     content.classList.add('expanded');
     chevron?.classList.add('expanded');
+    header.setAttribute('aria-expanded', 'true');
   } else {
     content.classList.remove('expanded');
     chevron?.classList.remove('expanded');
+    header.setAttribute('aria-expanded', 'false');
   }
 }
 

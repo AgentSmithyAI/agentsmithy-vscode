@@ -50,7 +50,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
     // If panel already exists, reveal it
     if (this.panel) {
       this.panel.reveal(vscode.ViewColumn.One);
-      this.postValidationErrors();
+      void this.refreshValidationErrors();
       return;
     }
 
@@ -66,14 +66,12 @@ export class ConfigWebviewProvider implements vscode.Disposable {
       },
     );
 
-    // Set icon
-    this.panel.iconPath = {
-      light: vscode.Uri.parse('$(settings-gear)'),
-      dark: vscode.Uri.parse('$(settings-gear)'),
-    };
+    // Set icon (reuse extension icon for consistency)
+    this.panel.iconPath = vscode.Uri.joinPath(this.extensionUri, 'icon.png');
 
     // Set HTML content
     this.panel.webview.html = this.getHtmlContent(this.panel.webview);
+    void this.refreshValidationErrors();
 
     // Handle messages from webview
     const messageDisposable = this.panel.webview.onDidReceiveMessage(async (message: ConfigInMessage) => {
@@ -102,12 +100,10 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         this.webviewReady = true;
         // Load config when webview is ready
         await this.loadConfig();
-        this.postValidationErrors();
         break;
 
       case CONFIG_IN_MSG.LOAD_CONFIG:
         await this.loadConfig();
-        this.postValidationErrors();
         break;
 
       case CONFIG_IN_MSG.SAVE_CONFIG:
@@ -138,6 +134,8 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         type: CONFIG_OUT_MSG.CONFIG_LOADED,
         data: serializableConfig,
       });
+
+      await this.refreshValidationErrors();
     } catch (error) {
       const errorMsg = getErrorMessage(error, 'Unknown error');
       this.postMessage({
@@ -199,6 +197,24 @@ export class ConfigWebviewProvider implements vscode.Disposable {
       type: CONFIG_OUT_MSG.VALIDATION_ERRORS,
       errors: this.pendingValidationErrors,
     });
+  }
+
+  /**
+   * Refresh validation errors by querying server health
+   */
+  private async refreshValidationErrors(): Promise<void> {
+    try {
+      const health = await this.apiService.getHealth();
+      if (!health.config_valid) {
+        this.pendingValidationErrors = Array.isArray(health.config_errors) ? health.config_errors : [];
+      } else {
+        this.pendingValidationErrors = [];
+      }
+    } catch {
+      // Keep existing validation errors if health check fails
+    }
+
+    this.postValidationErrors();
   }
 
   /**

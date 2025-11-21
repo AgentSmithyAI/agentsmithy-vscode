@@ -37,6 +37,11 @@ export class MockEventEmitter<T = void> {
  */
 export const createVSCodeMock = () => ({
   EventEmitter: MockEventEmitter,
+  ViewColumn: {
+    One: 1,
+    Two: 2,
+    Three: 3,
+  },
   Uri: {
     parse: (value: string) => ({
       scheme: 'file',
