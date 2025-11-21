@@ -71,7 +71,7 @@ The extension supports loading and managing dynamic server configuration through
 - After server startup, extension checks `/health` endpoint
 - If `config_valid` is `false`, displays warning notification
 - Option to open configuration panel automatically
-- Configuration errors logged in output channel
+- Configuration errors are passed directly to the panel for display
 
 ### 2. Configuration Webview
 
@@ -108,7 +108,18 @@ Custom webview panel in main editor area (not sidebar) for dynamic configuration
 
 - All other server configuration (ports, logging, etc.)
 
-### 3. Schema-Driven UI
+### 3. Validation & Highlights
+
+The configuration panel features real-time validation feedback:
+
+- **Validation Banner:** Displays a summary of all configuration errors at the top of the panel
+- **Field Highlighting:** Invalid fields (e.g., missing API keys) are highlighted with a red border
+- **Auto-Expansion:** Sections containing errors are automatically expanded when the panel opens
+- **Focus:** The panel automatically scrolls to and focuses the first invalid field
+- **Real-time Clearance:** Highlights disappear immediately when the user edits the field
+- **Implicit Hints:** Automatically detects and flags providers missing API keys, even if not explicitly reported by the server
+
+### 4. Schema-Driven UI
 
 The UI automatically adapts to server configuration:
 
@@ -126,7 +137,7 @@ The UI automatically adapts to server configuration:
 - Automatically adapts to new providers/workloads
 - Server defines what UI should render
 
-### 4. Model Catalog Integration
+### 5. Model Catalog Integration
 
 Models are loaded from `metadata.model_catalog`:
 
@@ -146,7 +157,7 @@ Models are loaded from `metadata.model_catalog`:
 - Combines chat + embeddings models
 - Deduplicates model list
 
-### 5. Dynamic API Service URL
+### 6. Dynamic API Service URL
 
 ApiService now uses a getter function instead of static URL:
 
@@ -281,12 +292,14 @@ Configuration webview built separately:
 - Manages webview panel lifecycle
 - Handles extension ↔ webview communication
 - Loads/saves configuration via ApiService
+- Manages validation error state and highlighting
 
 **Config Webview Script** (`src/webview/src/config-webview.ts`)
 
 - Client-side rendering logic
 - Form generation from server schema
 - Event handling (expand/collapse, add/delete)
+- Validation UI (banners, highlights, scrolling)
 
 ### Message Protocol
 
@@ -297,6 +310,7 @@ Configuration webview built separately:
 {type: 'configLoaded', data: {config, metadata}}
 {type: 'configSaved', data: {success, message, config}}
 {type: 'error', message: string}
+{type: 'validationErrors', errors: string[]}
 ```
 
 **Webview → Extension:**
@@ -336,6 +350,8 @@ Uses native VSCode CSS variables:
 --vscode-settings-textInputForeground
 --vscode-list-hoverBackground
 --vscode-focusBorder
+--vscode-inputValidation-errorBorder
+--vscode-inputValidation-errorBackground
 ```
 
 **Theme Support:**
@@ -394,6 +410,18 @@ Run tests: `npm test`
 3. Check output channel for errors
 4. Ensure server has write permissions to config file
 
+### Validation errors persist after fix
+
+**Issue:** Red validation banner remains after entering correct key
+
+**Cause:** Webview state not cleared
+
+**Fix:**
+
+1. The extension should auto-clear errors on save
+2. Click "Reload" button at bottom of panel
+3. If persistent, check server logs for rejection reasons
+
 ### Provider/Workload not expanding
 
 **Issue:** Click on header doesn't expand provider/workload
@@ -424,10 +452,10 @@ Run tests: `npm test`
 ```json
 "providers": {
   "openai": {"type": "openai", "api_key": "..."}
-},
+}
 "workloads": {
   "reasoning": {"provider": "openai", "model": "gpt-5"}
-},
+}
 "models": {
   "agents": {
     "universal": {"workload": "reasoning"}
