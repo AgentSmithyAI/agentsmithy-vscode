@@ -121,7 +121,6 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
 
       - name: Install dependencies
         run: npm ci
@@ -218,7 +217,6 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
 
       - name: Publish to Open VSX
         run: npx ovsx publish *.vsix -p ${{ secrets.OPEN_VSX_TOKEN }}
