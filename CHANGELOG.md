@@ -1,3 +1,10 @@
+## [1.7.1](https://github.com/AgentSmithyAI/agentsmithy-vscode/compare/v1.7.0...v1.7.1) (2025-11-21)
+
+
+### Bug Fixes
+
+* Fix workflow & bump version to trigger deployment ([3b2e5f6](https://github.com/AgentSmithyAI/agentsmithy-vscode/commit/3b2e5f6d941fe7e059a289d1bd13d2bc6e3db29d))
+
 # [1.7.0](https://github.com/AgentSmithyAI/agentsmithy-vscode/compare/v1.6.0...v1.7.0) (2025-11-21)
 
 
