@@ -705,7 +705,10 @@ function renderSettingItem(key: string, value: unknown, path: string[]): string 
     const checked = value ? 'checked' : '';
     html.push('<div class="setting-checkbox-container">');
     html.push(
-      `<input type="checkbox" id="${fieldId}" class="setting-checkbox config-field" data-path='${dataPath}' ${checked}>`,
+      `<label class="setting-checkbox-label">
+        <input type="checkbox" id="${fieldId}" class="setting-checkbox config-field" data-path='${dataPath}' ${checked} aria-label="${escapeHtml(formatFieldName(key))}">
+        <span class="visually-hidden">${escapeHtml(formatFieldName(key))}</span>
+      </label>`,
     );
     html.push('</div>');
   } else if (typeof value === 'number') {
