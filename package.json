@@ -186,7 +186,7 @@
     "format:check": "prettier . --check",
     "vsce:package": "vsce package --no-git-tag-version --no-update-package-json",
     "package": "npm run format && npm run lint:fix && npm run compile && npm run vsce:package",
-    "publish:ovsx": "ovsx publish $(ls -t agentsmithy-*.vsix | head -1)",
+    "publish:ovsx": "npx ovsx publish *.vsix",
     "publish:prepare": "npm run package && echo 'Package ready! To publish to Open VSX, run: npm run publish:ovsx'"
   },
   "devDependencies": {
@@ -200,6 +200,7 @@
     "@types/vscode": "^1.100.0",
     "@vitest/coverage-v8": "^4.0.8",
     "@vscode/vsce": "^3.6.2",
+    "ovsx": "^0.9.0",
     "concurrently": "^9.2.1",
     "esbuild": "^0.27.0",
     "eslint": "^9.39.1",
