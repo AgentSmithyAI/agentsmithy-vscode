@@ -1,3 +1,10 @@
+# [1.7.0](https://github.com/AgentSmithyAI/agentsmithy-vscode/compare/v1.6.0...v1.7.0) (2025-11-21)
+
+
+### Features
+
+* Description for publication ([#35](https://github.com/AgentSmithyAI/agentsmithy-vscode/issues/35)) ([dfb6ee2](https://github.com/AgentSmithyAI/agentsmithy-vscode/commit/dfb6ee271a584046b8e353b6fb8f71a43ff6b96b))
+
 # [1.6.0](https://github.com/AgentSmithyAI/agentsmithy-vscode/compare/v1.5.0...v1.6.0) (2025-11-21)
 
 
