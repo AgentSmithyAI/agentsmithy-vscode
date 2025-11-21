@@ -457,7 +457,9 @@ export class ServerManager {
         this.outputChannel.appendLine(`Config valid: ${configValid}`);
 
         if (!configValid) {
-          this.outputChannel.appendLine(`Config errors: ${configErrors.join(', ')}`);
+          const formattedErrors =
+            configErrors.length > 0 ? `\n  - ${configErrors.join('\n  - ')}` : '\n  - (no details provided)';
+          this.outputChannel.appendLine(`Config errors:${formattedErrors}`);
 
           // Fire event to notify listeners
           this._onConfigInvalid.fire({errors: configErrors});

@@ -240,6 +240,14 @@ Changes apply immediately via hot reload - no server restart required.
 }
 ```
 
+Possible `server_status` values:
+
+- `starting` – server is booting and not ready for requests yet
+- `ready` – server is listening and healthy
+- `stopping` / `stopped` – server is shutting down or already offline
+- `error` – startup/validation failure
+- `crashed` – process died unexpectedly
+
 ### GET /api/config
 
 ```json

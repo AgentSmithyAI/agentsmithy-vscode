@@ -35,6 +35,9 @@ let providerTypes: string[] = [];
 let modelCatalog: Record<string, Record<string, string[]>> = {};
 let isDirty = false;
 let suppressedSuccessMessages = 0;
+// Tracks how many save operations are still awaiting CONFIG_SAVED/CONFIG_SAVED responses.
+// Each successful save decrements and triggers a fresh load so the UI always reflects
+// the server's persisted state, even when multiple auto-saves run back-to-back.
 let pendingReloadAfterSaveCount = 0;
 let pendingValidationErrors: string[] = [];
 let highlightedFields: HTMLElement[] = [];
@@ -685,9 +688,6 @@ function renderProviderDropdown(fieldName: string, currentProvider: string, path
 }
 
 /**
- * Render provider dropdown for model slot configuration (legacy paths)
- */
-/**
  * Render a setting item in VSCode settings style
  */
 function renderSettingItem(key: string, value: unknown, path: string[]): string {
@@ -762,17 +762,19 @@ function attachEventListeners(): void {
 
     const path = JSON.parse(pathStr) as string[];
 
-    element.addEventListener('input', () => {
+    const handleChange = () => {
       removeHighlightFromField(element);
       updateConfigValue(path, element);
       markDirty();
-    });
+    };
 
-    element.addEventListener('change', () => {
-      removeHighlightFromField(element);
-      updateConfigValue(path, element);
-      markDirty();
-    });
+    // For text-like inputs we rely on 'input' for real-time updates.
+    element.addEventListener('input', handleChange);
+
+    // For selects/checkboxes some browsers only fire 'change', so add it as fallback.
+    if (element.tagName === 'SELECT' || element.type === 'checkbox' || element.type === 'radio') {
+      element.addEventListener('change', handleChange);
+    }
   }
 
   // Provider header clicks (expand/collapse)

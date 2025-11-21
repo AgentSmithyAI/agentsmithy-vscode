@@ -535,9 +535,15 @@ export class ApiService {
       throw new Error('Malformed health response');
     }
 
-    const config_errors = Array.isArray(data.config_errors)
-      ? (data.config_errors as unknown[]).filter((x): x is string => typeof x === 'string')
-      : [];
+    let config_errors: string[] = [];
+    if (Array.isArray(data.config_errors)) {
+      const rawErrors = data.config_errors as unknown[];
+      config_errors = rawErrors.filter((x): x is string => typeof x === 'string');
+      if (config_errors.length !== rawErrors.length) {
+        // eslint-disable-next-line no-console
+        console.warn('[api] health response contained non-string config_errors entries');
+      }
+    }
 
     return {
       server_status: typeof data.server_status === 'string' ? data.server_status : 'unknown',
