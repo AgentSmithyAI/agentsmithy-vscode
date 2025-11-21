@@ -230,11 +230,8 @@ class ChatWebview {
         // Guard the call and log in dev if something goes wrong instead of swallowing silently.
         try {
           e.stopImmediatePropagation();
-        } catch (err) {
-          // Safe to ignore: failure to stop immediate propagation only affects other listeners,
-          // not our own send flow. Log for debugging without spamming the user.
-          // eslint-disable-next-line no-console
-          console.debug('[chat] stopImmediatePropagation failed', err);
+        } catch {
+          // Safe to ignore: failure to stop immediate propagation only affects other listeners.
         }
         this.sendMessage();
       }

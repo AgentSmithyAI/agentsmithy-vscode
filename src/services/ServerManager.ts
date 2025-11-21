@@ -449,9 +449,10 @@ export class ServerManager {
 
       if (health !== null && typeof health === 'object') {
         const configValid = Boolean((health as {config_valid?: boolean}).config_valid);
-        const configErrors = Array.isArray((health as {config_errors?: unknown}).config_errors)
-          ? ((health as {config_errors: unknown[]}).config_errors as string[])
+        const rawErrors = Array.isArray((health as {config_errors?: unknown}).config_errors)
+          ? (health as {config_errors: unknown[]}).config_errors
           : [];
+        const configErrors = rawErrors.filter((err): err is string => typeof err === 'string');
 
         this.outputChannel.appendLine(`Config valid: ${configValid}`);
 

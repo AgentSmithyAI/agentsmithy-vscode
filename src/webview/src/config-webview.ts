@@ -403,12 +403,6 @@ function renderWorkload(name: string, config: Record<string, unknown>): string {
       const providerMeta = availableProviders.find((p) => p.name === providerName);
       const providerType = providerMeta?.type || '';
 
-      // eslint-disable-next-line no-console
-      console.log(
-        `[Workload Model] workload="${name}", providerName="${providerName}", found=${!!providerMeta}, providerType="${providerType}", availableProviders:`,
-        availableProviders,
-      );
-
       html.push(renderModelDropdown(providerType, value, ['config', 'workloads', name, key]));
     } else {
       html.push(renderSettingItem(key, value, ['config', 'workloads', name, key]));
@@ -572,12 +566,6 @@ function renderModelDropdown(providerType: string, value: unknown, path: string[
 
   // Deduplicate models
   const uniqueModels = Array.from(new Set(models));
-
-  // eslint-disable-next-line no-console
-  console.log(
-    `[Model Dropdown] type="${providerType}", catalog has type: ${providerType in modelCatalog}, models count: ${uniqueModels.length}, models:`,
-    uniqueModels,
-  );
 
   html.push('<div class="setting-item">');
   html.push('<div class="setting-item-label">');

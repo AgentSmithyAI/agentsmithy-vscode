@@ -224,7 +224,7 @@ Configuration is saved on the server side:
 - **macOS**: `~/Library/Application Support/AgentSmithy/config.json`
 - **Windows**: `%APPDATA%\AgentSmithy\config.json`
 
-**Per-project overrides:** `<workdir>/.agentsmithy/config.json` (read-only, merged on top)
+**Per-project overrides:** `<workspace>/.agentsmithy/config.json` (read-only, merged on top)
 
 Changes apply immediately via hot reload - no server restart required.
 
