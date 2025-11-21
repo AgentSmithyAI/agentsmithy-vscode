@@ -138,4 +138,73 @@ describe('ConfigWebviewProvider - validation refresh', () => {
     )?.[0];
     expect(validationPayload).toEqual({type: 'validationErrors', errors: ['original']});
   });
+
+  it('gates validation posting until webview is ready', () => {
+    const panel = {
+      webview: {postMessage: vi.fn()},
+    };
+    (provider as any).panel = panel;
+    (provider as any).webviewReady = false;
+    (provider as any).pendingValidationErrors = ['Missing API key'];
+
+    (provider as any).postValidationErrors();
+    expect(panel.webview.postMessage).not.toHaveBeenCalled();
+
+    (provider as any).webviewReady = true;
+    (provider as any).postValidationErrors();
+    expect(panel.webview.postMessage).toHaveBeenCalledWith({
+      type: 'validationErrors',
+      errors: ['Missing API key'],
+    });
+  });
+
+  it('marks webview ready on READY message and loads config', async () => {
+    const loadSpy = vi.spyOn(provider as any, 'loadConfig').mockResolvedValue(undefined);
+    (provider as any).webviewReady = false;
+    expect((provider as any).webviewReady).toBe(false);
+
+    await (provider as any).handleMessage({type: 'ready'});
+
+    expect(loadSpy).toHaveBeenCalled();
+    expect((provider as any).webviewReady).toBe(true);
+  });
+
+  it('handles saveConfig message payloads', async () => {
+    const saveSpy = vi.spyOn(provider as any, 'saveConfig').mockResolvedValue(undefined);
+    const payload = {providers: {openai: {api_key: 'sk'}}};
+
+    await (provider as any).handleMessage({type: 'saveConfig', config: payload});
+
+    expect(saveSpy).toHaveBeenCalledWith(payload);
+  });
+
+  it('resets state when panel is disposed', async () => {
+    const disposeHandlers: Array<() => void> = [];
+    apiService.getHealth.mockResolvedValue({config_valid: true, config_errors: []});
+    const panel = {
+      webview: {
+        html: '',
+        postMessage: vi.fn(),
+        asWebviewUri: vi.fn((value) => value),
+        onDidReceiveMessage: vi.fn(() => ({dispose: vi.fn()})),
+      },
+      iconPath: undefined,
+      reveal: vi.fn(),
+      onDidDispose: vi.fn((cb: () => void) => {
+        disposeHandlers.push(cb);
+        return {dispose: vi.fn()};
+      }),
+    };
+    (provider as any).panel = undefined;
+    (provider as any).webviewReady = false;
+    (vscode.window.createWebviewPanel as unknown as ReturnType<typeof vi.fn>).mockReturnValueOnce(panel as any);
+
+    await provider.show(['initial']);
+    expect(disposeHandlers).toHaveLength(1);
+
+    disposeHandlers[0]!();
+    expect((provider as any).panel).toBeUndefined();
+    expect((provider as any).webviewReady).toBe(false);
+    expect((provider as any).pendingValidationErrors).toEqual([]);
+  });
 });

@@ -2,22 +2,34 @@ import {describe, it, expect, beforeEach, vi} from 'vitest';
 import {ServerManager} from '../ServerManager';
 import * as vscode from 'vscode';
 
-vi.mock('../server/DownloadManager', () => {
-  const DownloadManager = vi.fn().mockImplementation(function () {});
-  return {DownloadManager};
-});
+const downloadManagerMock = {
+  fetchLatestRelease: vi.fn(),
+  getLatestInstalled: vi.fn(),
+  compareVersions: vi.fn(),
+  verifyIntegrity: vi.fn(),
+  verifySHA256: vi.fn(),
+  downloadBinary: vi.fn(),
+  cleanupOldVersions: vi.fn(),
+  acquireLock: vi.fn(),
+  releaseLock: vi.fn(),
+};
+vi.mock('../server/DownloadManager', () => ({
+  DownloadManager: vi.fn().mockImplementation(function () {
+    return downloadManagerMock;
+  }),
+}));
 
-vi.mock('../server/ProcessManager', () => {
-  const ProcessManager = vi.fn().mockImplementation(function () {
-    return {
-      isAlive: vi.fn().mockReturnValue(false),
-      start: vi.fn(),
-      stop: vi.fn(),
-      getStatus: vi.fn().mockResolvedValue({running: false, port: null, pid: null}),
-    };
-  });
-  return {ProcessManager};
-});
+const processManagerMock = {
+  isAlive: vi.fn().mockReturnValue(false),
+  start: vi.fn(),
+  stop: vi.fn(),
+  getStatus: vi.fn().mockResolvedValue({running: false, port: null, pid: null}),
+};
+vi.mock('../server/ProcessManager', () => ({
+  ProcessManager: vi.fn().mockImplementation(function () {
+    return processManagerMock;
+  }),
+}));
 
 describe('ServerManager checkHealthStatus', () => {
   let manager: ServerManager;
@@ -37,6 +49,8 @@ describe('ServerManager checkHealthStatus', () => {
   };
 
   beforeEach(() => {
+    Object.values(downloadManagerMock).forEach((fn) => fn.mock?.reset?.());
+    Object.values(processManagerMock).forEach((fn) => fn.mock?.reset?.());
     configInvalidEvents = [];
     manager = createManager();
     manager.onConfigInvalid((payload) => configInvalidEvents.push(payload));
@@ -122,5 +136,39 @@ describe('ServerManager checkHealthStatus', () => {
 
     expect(outputChannel.appendLine).toHaveBeenCalledWith('Config errors:\n  - (no details provided)');
     expect(configInvalidEvents).toEqual([{errors: []}]);
+  });
+
+  describe('startServer', () => {
+    it('returns existing promise when already starting', async () => {
+      const existingPromise = Promise.resolve();
+      (manager as any).isStarting = true;
+      (manager as any).startPromise = existingPromise;
+
+      const returned = manager.startServer();
+
+      expect(processManagerMock.start).not.toHaveBeenCalled();
+      expect(outputChannel.appendLine).toHaveBeenCalledWith(
+        'Server is already starting, waiting on existing operation...',
+      );
+      await returned;
+    });
+  });
+
+  describe('ensureServer', () => {
+    it('skips download when installed version is valid', async () => {
+      downloadManagerMock.fetchLatestRelease.mockResolvedValue({
+        version: 'v1.0.0',
+        size: 10,
+        sha256: 'abc',
+      });
+      downloadManagerMock.getLatestInstalled.mockReturnValue('1.0.0');
+      downloadManagerMock.compareVersions.mockReturnValue(0);
+      downloadManagerMock.verifyIntegrity.mockResolvedValue(true);
+      downloadManagerMock.verifySHA256.mockResolvedValue(true);
+
+      await (manager as any).ensureServer();
+
+      expect(downloadManagerMock.downloadBinary).not.toHaveBeenCalled();
+    });
   });
 });
