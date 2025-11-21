@@ -1,3 +1,10 @@
+## [1.7.3](https://github.com/AgentSmithyAI/agentsmithy-vscode/compare/v1.7.2...v1.7.3) (2025-11-21)
+
+
+### Bug Fixes
+
+* Fix Open-VSX assets ([#38](https://github.com/AgentSmithyAI/agentsmithy-vscode/issues/38)) ([624ccda](https://github.com/AgentSmithyAI/agentsmithy-vscode/commit/624ccda361d3ae5e448ff3c74aa9a0d848df23e4))
+
 ## [1.7.2](https://github.com/AgentSmithyAI/agentsmithy-vscode/compare/v1.7.1...v1.7.2) (2025-11-21)
 
 

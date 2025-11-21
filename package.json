@@ -3,7 +3,7 @@
   "publisher": "agentsmithy",
   "displayName": "AgentSmithy VSCode",
   "description": "VSCode extension for AgentSmithy coding assistant",
-  "version": "1.7.2",
+  "version": "1.7.3",
   "license": "Apache-2.0",
   "author": {
     "name": "Alexander Morozov",
