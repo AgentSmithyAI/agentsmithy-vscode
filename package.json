@@ -135,7 +135,7 @@
           "type": "boolean",
           "default": true,
           "description": "Automatically start AgentSmithy server when extension activates",
-          "markdownDescription": "Automatically start AgentSmithy server when the extension activates.\n\nAll other server settings are managed inside the [AgentSmithy configuration panel](command:agentsmithy.openConfig)."
+          "markdownDescription": "Automatically start AgentSmithy server when the extension activates.\n\nUse “AgentSmithy: Open Configuration” to edit providers, credentials, and model settings."
         }
       }
     }

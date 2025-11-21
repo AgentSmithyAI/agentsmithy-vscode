@@ -354,15 +354,15 @@ function renderProvider(name: string, config: Record<string, unknown>, hasApiKey
   html.push('</div>');
 
   html.push(`<div class="provider-content" id="${providerId}">`);
-  // Render provider fields (skip 'model' - it's in workloads now)
   for (const [key, value] of Object.entries(config)) {
     if (key === 'type') {
       html.push(renderProviderTypeDropdown(value, ['config', 'providers', name, key]));
-    } else if (key === 'model') {
-      // Skip - model is deprecated in providers, use workloads instead
-    } else {
-      html.push(renderSettingItem(key, value, ['config', 'providers', name, key]));
+      continue;
     }
+    if (key === 'model') {
+      continue;
+    }
+    html.push(renderSettingItem(key, value, ['config', 'providers', name, key]));
   }
   html.push('</div>');
   html.push('</div>');
