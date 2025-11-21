@@ -112,4 +112,30 @@ describe('ConfigWebviewProvider - validation refresh', () => {
     expect(errorPayload).toBeDefined();
     expect(errorPayload.message).toContain('Failed to save configuration');
   });
+
+  it('loadConfig posts error message when getConfig fails', async () => {
+    apiService.getConfig.mockRejectedValue(new Error('load failed'));
+
+    await (provider as any).loadConfig();
+
+    expect(mockPanel.webview.postMessage).toHaveBeenCalledWith({type: 'loading'});
+    const errorPayload = mockPanel.webview.postMessage.mock.calls.find(([msg]) => msg.type === 'error')?.[0];
+    expect(errorPayload).toBeDefined();
+    expect(errorPayload.message).toContain('Failed to load configuration');
+  });
+
+  it('refreshValidationErrors keeps existing errors when health check fails', async () => {
+    (provider as any).panel = mockPanel;
+    (provider as any).webviewReady = true;
+    (provider as any).pendingValidationErrors = ['original'];
+    apiService.getHealth.mockRejectedValue(new Error('boom'));
+
+    await (provider as any).refreshValidationErrors();
+
+    expect((provider as any).pendingValidationErrors).toEqual(['original']);
+    const validationPayload = mockPanel.webview.postMessage.mock.calls.find(
+      ([msg]) => msg.type === 'validationErrors',
+    )?.[0];
+    expect(validationPayload).toEqual({type: 'validationErrors', errors: ['original']});
+  });
 });

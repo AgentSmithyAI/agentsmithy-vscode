@@ -108,4 +108,19 @@ describe('ServerManager checkHealthStatus', () => {
 
     expect(outputChannel.appendLine).toHaveBeenCalledWith('Failed to check health status: network down');
   });
+
+  it('logs placeholder when config errors is not an array', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        config_valid: false,
+        config_errors: 'oops',
+      }),
+    }) as unknown as typeof fetch;
+
+    await (manager as any).checkHealthStatus();
+
+    expect(outputChannel.appendLine).toHaveBeenCalledWith('Config errors:\n  - (no details provided)');
+    expect(configInvalidEvents).toEqual([{errors: []}]);
+  });
 });
