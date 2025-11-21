@@ -33,6 +33,7 @@ For deeper technical details (architecture, API, RAG, checkpoints, etc.), see th
 
 - **VS Code / Code‑OSS / VSCodium** (1.100.0+)
 - **OpenAI API key** – required for all AI features
+- **OpenAI streaming enabled** – your OpenAI account must allow streaming responses for the models you configure
 
 ## Quick start
 
