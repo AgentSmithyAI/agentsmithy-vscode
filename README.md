@@ -39,11 +39,21 @@ Supports Code-OSS, VSCodium, and any VSCode fork.
    ```json
    {
      "providers": {
-       "gpt5": {
+       "openai": {
          "type": "openai",
-         "model": "gpt-4o",
-         "api_key": "your_key_here"
+         "api_key": "your_key_here",
+         "base_url": "https://api.openai.com/v1"
        }
+     },
+     "workloads": {
+       "reasoning": {"provider": "openai", "model": "gpt-4o"},
+       "embeddings": {"provider": "openai", "model": "text-embedding-3-large"}
+     },
+     "models": {
+       "agents": {
+         "universal": {"workload": "reasoning"}
+       },
+       "embeddings": {"workload": "embeddings"}
      }
    }
    ```
@@ -116,14 +126,13 @@ Access settings via `File → Preferences → Settings` → search for "AgentSmi
 
 ### Server Settings
 
-- `agentsmithy.autoStartServer`: Automatically start server on extension activation (default: `true`)
-- `agentsmithy.serverUrl`: Server URL override (default: auto-detected from server status)
+- `agentsmithy.autoStartServer`: Automatically start the managed server on extension activation (default: `true`)
 
-### UI Settings
+### Server configuration panel
 
-- `agentsmithy.showReasoning`: Show AI reasoning/thinking process in chat (default: `false`)
+Server credentials, models, and other runtime options now live entirely inside the AgentSmithy configuration panel. Open it via Command Palette → `AgentSmithy: Open Configuration` from inside VS Code.
 
-For detailed server configuration, see [server management documentation](docs/server-management.md).
+For additional details, see [server management documentation](docs/server-management.md).
 
 ## License
 

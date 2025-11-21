@@ -6,6 +6,7 @@ export const COMMANDS = {
   STOP_SERVER: 'agentsmithy.stopServer',
   RESTART_SERVER: 'agentsmithy.restartServer',
   SERVER_STATUS: 'agentsmithy.serverStatus',
+  OPEN_CONFIG: 'agentsmithy.openConfig',
 } as const;
 
 export const VIEWS = {
@@ -14,8 +15,6 @@ export const VIEWS = {
 } as const;
 
 export const CONFIG_KEYS = {
-  SERVER_URL: 'agentsmithy.serverUrl',
-  SHOW_REASONING: 'agentsmithy.showReasoning',
   AUTO_START_SERVER: 'agentsmithy.autoStartServer',
 } as const;
 

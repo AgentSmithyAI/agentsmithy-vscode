@@ -104,6 +104,16 @@ export class ProcessManager {
   waitForStatusFile = async (workspaceRoot: string, timeoutMs = 30000): Promise<boolean> => {
     const statusPath = this.getStatusPath(workspaceRoot);
     const oldPid = this.getOldPid(statusPath);
+    const statusDir = path.dirname(statusPath);
+
+    try {
+      fs.mkdirSync(statusDir, {recursive: true});
+    } catch (error) {
+      this.outputChannel.appendLine(
+        `Failed to ensure status directory "${statusDir}": ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return false;
+    }
 
     return withResources(async (rm) => {
       try {

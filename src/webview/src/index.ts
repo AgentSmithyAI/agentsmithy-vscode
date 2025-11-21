@@ -30,7 +30,7 @@ declare const marked: {
 /**
  * Main webview coordinator - delegates responsibilities to specialized managers
  */
-class ChatWebview {
+export class ChatWebview {
   private vscode: VSCodeAPI;
   private renderer: MessageRenderer;
   private scrollManager: ScrollManager;
@@ -112,7 +112,7 @@ class ChatWebview {
   }
 
   private setupModelSelector(): void {
-    // Settings button - opens VSCode settings
+    // Settings button - opens AgentSmithy configuration panel
     const settingsBtn = document.getElementById(DOM_IDS.SETTINGS_BTN);
     // If needed, settingsBtn id should be kept centralized in constants.ts
     if (settingsBtn) {
@@ -230,11 +230,8 @@ class ChatWebview {
         // Guard the call and log in dev if something goes wrong instead of swallowing silently.
         try {
           e.stopImmediatePropagation();
-        } catch (err) {
-          // Safe to ignore: failure to stop immediate propagation only affects other listeners,
-          // not our own send flow. Log for debugging without spamming the user.
-          // eslint-disable-next-line no-console
-          console.debug('[chat] stopImmediatePropagation failed', err);
+        } catch {
+          // Safe to ignore: failure to stop immediate propagation only affects other listeners.
         }
         this.sendMessage();
       }
@@ -413,20 +410,32 @@ class ChatWebview {
       `;
 
       if (status === 'launching') {
+        const safeMessage = escapeHtml(message || 'Launching server...');
         overlay.innerHTML = `
-          <div class="codicon codicon-loading codicon-modifier-spin" style="font-size: 48px; margin-bottom: 16px;"></div>
-          <div style="font-size: 14px; color: var(--vscode-foreground);">${escapeHtml(message || 'Launching server...')}</div>
+          <div class="codicon codicon-loading codicon-modifier-spin server-status-icon"></div>
+          <div class="server-status-message launching">${safeMessage}</div>
         `;
       } else {
         // error
+        const safeMessage = escapeHtml(message || 'Failed to start server');
         overlay.innerHTML = `
-          <div class="codicon codicon-error" style="font-size: 48px; margin-bottom: 16px; color: var(--vscode-errorForeground);"></div>
-          <div style="font-size: 14px; color: var(--vscode-foreground); text-align: center; max-width: 400px;">${escapeHtml(message || 'Failed to start server')}</div>
+          <div class="codicon codicon-error server-status-icon"></div>
+          <div class="server-status-message error">${safeMessage}</div>
+          <div class="server-status-actions">
+            <button class="server-status-btn primary" data-action="open-settings">Open Settings</button>
+          </div>
         `;
       }
 
       container?.appendChild(overlay);
       this.serverStatusOverlay = overlay;
+
+      if (status === 'error') {
+        const settingsBtn = overlay.querySelector('[data-action="open-settings"]');
+        settingsBtn?.addEventListener('click', () => {
+          this.vscode.postMessage({type: WEBVIEW_IN_MSG.OPEN_SETTINGS});
+        });
+      }
     }
     // For 'ready' status, overlay is already removed above
   }
@@ -595,5 +604,15 @@ class ChatWebview {
 }
 
 // Initialize when DOM is ready
-const workspaceRoot = (window as unknown as {WORKSPACE_ROOT: string}).WORKSPACE_ROOT || '';
-new ChatWebview(workspaceRoot);
+declare global {
+  interface Window {
+    WORKSPACE_ROOT?: string;
+    __AGENTSMITHY_TEST__?: boolean;
+  }
+}
+
+const globalWindow = window as Window & {__AGENTSMITHY_TEST__?: boolean};
+if (!globalWindow.__AGENTSMITHY_TEST__) {
+  const workspaceRoot = globalWindow.WORKSPACE_ROOT || '';
+  new ChatWebview(workspaceRoot);
+}

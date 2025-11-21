@@ -37,31 +37,17 @@ Available in VSCode settings (`Preferences: Open Settings`):
 
 - **Type**: `boolean`
 - **Default**: `true`
-- **Description**: Automatically start AgentSmithy server when extension activates
+- **Description**: Automatically start the managed AgentSmithy server when the extension activates
 
-#### `agentsmithy.serverUrl`
+#### AgentSmithy configuration panel
 
-- **Type**: `string`
-- **Default**: auto-detected from server status file
-- **Description**: AgentSmithy server URL override (optional, only needed for external servers)
-
-**Note**: The managed server automatically selects an available port and writes it to `.agentsmithy/status.json`. The extension reads this file to determine the server URL, so manual port configuration is no longer needed.
+All other server options (providers, credentials, workloads, ports, etc.) are managed inside the dedicated AgentSmithy configuration panel. Launch it via Command Palette → `AgentSmithy: Open Configuration`. The panel communicates directly with the running server, so there is no need to edit VS Code settings manually.
 
 ### Example Configuration
 
 ```json
 {
   "agentsmithy.autoStartServer": true
-  // serverUrl is auto-detected, no need to configure
-}
-```
-
-For using an external server:
-
-```json
-{
-  "agentsmithy.autoStartServer": false,
-  "agentsmithy.serverUrl": "http://localhost:8765"
 }
 ```
 
@@ -124,8 +110,8 @@ chmod +x ~/.config/Code/User/globalStorage/agentsmithy.agentsmithy-vscode/server
 If you prefer to run your own server instance:
 
 1. Set `agentsmithy.autoStartServer` to `false`
-2. Start your server manually
-3. Configure `agentsmithy.serverUrl` to point to your server
+2. Start your server manually and ensure it writes a valid `.agentsmithy/status.json` file in the workspace (or exports the same API as the managed server)
+3. Open the AgentSmithy configuration panel to verify connectivity and credentials
 
 ## Architecture
 

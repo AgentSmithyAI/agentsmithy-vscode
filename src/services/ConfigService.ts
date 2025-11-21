@@ -8,25 +8,8 @@ import {safeJsonParse} from '../utils/typeGuards';
  * Service for managing extension configuration
  */
 export class ConfigService {
-  private readonly _onDidChangeServerUrl = new vscode.EventEmitter<string>();
-  readonly onDidChangeServerUrl = this._onDidChangeServerUrl.event;
-
-  constructor() {
-    // Watch for configuration changes
-    vscode.workspace.onDidChangeConfiguration((e) => {
-      if (e.affectsConfiguration(CONFIG_KEYS.SERVER_URL)) {
-        this._onDidChangeServerUrl.fire(this.getServerUrl());
-      }
-    });
-
-    // Watch for status.json changes
-    const watcher = vscode.workspace.createFileSystemWatcher(`**/${STATUS_FILE_PATH}`);
-    watcher.onDidChange(() => this._onDidChangeServerUrl.fire(this.getServerUrl()));
-    watcher.onDidCreate(() => this._onDidChangeServerUrl.fire(this.getServerUrl()));
-  }
-
   /**
-   * Get server URL from status.json or config
+   * Get server URL from status.json or default fallback
    */
   getServerUrl(): string {
     const statusUrl = this.getServerUrlFromStatusFile();
@@ -34,7 +17,7 @@ export class ConfigService {
       return statusUrl;
     }
 
-    return this.getServerUrlFromConfig();
+    return DEFAULT_SERVER_URL;
   }
 
   /**
@@ -63,15 +46,10 @@ export class ConfigService {
         }
       }
     } catch {
-      // Ignore ENOENT and parse errors, fallback to config
+      // Ignore ENOENT and parse errors, fallback to default URL
     }
 
     return null;
-  };
-
-  private getServerUrlFromConfig = (): string => {
-    const config = vscode.workspace.getConfiguration('agentsmithy');
-    return config.get<string>(CONFIG_KEYS.SERVER_URL, DEFAULT_SERVER_URL);
   };
 
   /**

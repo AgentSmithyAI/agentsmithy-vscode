@@ -37,6 +37,11 @@ export class MockEventEmitter<T = void> {
  */
 export const createVSCodeMock = () => ({
   EventEmitter: MockEventEmitter,
+  ViewColumn: {
+    One: 1,
+    Two: 2,
+    Three: 3,
+  },
   Uri: {
     parse: (value: string) => ({
       scheme: 'file',
@@ -65,6 +70,23 @@ export const createVSCodeMock = () => ({
     showErrorMessage: vi.fn(),
     showWarningMessage: vi.fn(),
     onDidChangeActiveTextEditor: vi.fn(() => ({dispose: vi.fn()})),
+    createOutputChannel: vi.fn(() => ({
+      append: vi.fn(),
+      appendLine: vi.fn(),
+      clear: vi.fn(),
+      show: vi.fn(),
+      dispose: vi.fn(),
+    })),
+    createWebviewPanel: vi.fn(() => ({
+      webview: {
+        html: '',
+        postMessage: vi.fn(),
+        onDidReceiveMessage: vi.fn(),
+      },
+      reveal: vi.fn(),
+      onDidDispose: vi.fn(),
+      dispose: vi.fn(),
+    })),
     // Will be set by tests when needed
     activeTextEditor: undefined as any,
   },
