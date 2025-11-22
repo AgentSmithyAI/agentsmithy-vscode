@@ -28,7 +28,6 @@ describe('File Opening Integration', () => {
       const file = '/home/user/project/src/file.ts';
 
       const result = validateFilePath(file, workspace);
-      console.log('Result:', result);
 
       // This should pass but might fail with current logic
       expect(result.allowed).toBe(true);

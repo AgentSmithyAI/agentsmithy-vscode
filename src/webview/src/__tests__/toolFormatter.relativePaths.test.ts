@@ -8,10 +8,6 @@ describe('toolFormatter with relative paths', () => {
     const args = {target_file: 'agentsmithy/llm/providers/openai/models.py'};
     const result = formatToolCallWithPath('read_file', args, workspaceRoot);
 
-    // Currently returns relative path
-    console.log('Current path:', result.path);
-    console.log('Display path:', result.displayPath);
-
     // Path should be absolute for data-file attribute
     expect(result.path).toBe('/home/user/project/agentsmithy/llm/providers/openai/models.py');
     expect(result.displayPath).toBe('agentsmithy/llm/providers/openai/models.py');

@@ -49,9 +49,6 @@ describe('File opening validation', () => {
 
     // When resolving relative path, it uses current working directory
     // This test shows the issue - if CWD != workspace, it fails
-    console.log('resolvedFile:', resolvedFile);
-    console.log('resolvedRoot:', resolvedRoot);
-
     const isAllowed = resolvedFile.startsWith(resolvedRoot + path.sep) || resolvedFile === resolvedRoot;
 
     // This might fail depending on CWD
