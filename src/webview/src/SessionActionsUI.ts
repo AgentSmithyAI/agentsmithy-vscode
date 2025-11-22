@@ -204,16 +204,12 @@ export class SessionActionsUI {
    */
   private ensureReady(action: 'approve' | 'reset'): boolean {
     if (!this.currentDialogId) {
-      console.warn(`[SessionActionsUI] ${action} ignored: no currentDialogId`);
       return false;
     }
     if (this.isProcessing) {
-      // Buttons should already be disabled; log defensively in case of race.
-      console.warn(`[SessionActionsUI] ${action} ignored: already processing`);
       return false;
     }
     if (!this.canAct) {
-      console.warn(`[SessionActionsUI] ${action} ignored: action not allowed (no unapproved changes)`);
       return false;
     }
     return true;
