@@ -133,7 +133,7 @@ describe('ApiService - Configuration', () => {
         config_valid: false,
         config_errors: ['ok', {unexpected: true}],
       };
-      
+
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
       (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
@@ -147,7 +147,7 @@ describe('ApiService - Configuration', () => {
       expect(result.config_errors).toEqual(['ok']);
       // Should warn about malformed data
       expect(warnSpy).toHaveBeenCalledWith('[ApiService] health response contained non-string config_errors entries');
-      
+
       warnSpy.mockRestore();
     });
   });
