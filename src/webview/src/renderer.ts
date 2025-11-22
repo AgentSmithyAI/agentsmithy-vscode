@@ -141,7 +141,7 @@ export class MessageRenderer {
       } else {
         const textDiv = document.createElement('div');
         textDiv.className = 'user-message-text';
-        textDiv.innerHTML = linkifyUrls(escapeHtml(content));
+        textDiv.innerHTML = this.renderMarkdown(content);
         messageDiv.appendChild(textDiv);
 
         // Add restore checkpoint button for user messages if checkpoint is present
