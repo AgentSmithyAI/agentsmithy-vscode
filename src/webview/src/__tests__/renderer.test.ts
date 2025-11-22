@@ -1,7 +1,18 @@
 /**
  * @vitest-environment jsdom
  */
-import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
+// Mock markdown-it BEFORE imports
+import {vi} from 'vitest';
+vi.mock('markdown-it', () => ({
+  default: class {
+    constructor(options?: any) {}
+    render(text: string) {
+      return text ? `<p>${text}</p>` : '';
+    }
+  },
+}));
+
+import {afterEach, beforeEach, describe, expect, it} from 'vitest';
 import {MessageRenderer} from '../renderer';
 
 // Mock marked library

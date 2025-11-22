@@ -313,18 +313,22 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider, vscode.D
       }
 
       // Security: only allow opening files within the current workspace (if any)
-      // Note: This is defense-in-depth and not critical for local VS Code since the user
-      // already has full filesystem access. However, it provides some protection in edge cases:
-      // 1. Remote scenarios (SSH, Codespaces) where filesystem access is more sensitive
-      // 2. Malicious git repos with crafted filenames like "../../sensitive-file"
-      // 3. Backend bugs that could generate invalid paths
-      // File paths come from backend tool call results, which are typically safe.
       const workspaceRoot = this._configService.getWorkspaceRoot();
       if (typeof workspaceRoot === 'string' && workspaceRoot.length > 0) {
         const resolvedFile = path.resolve(file);
         const resolvedRoot = path.resolve(workspaceRoot);
-        if (!resolvedFile.startsWith(resolvedRoot + path.sep) && resolvedFile !== resolvedRoot) {
-          throw new Error('Opening files outside the workspace is not allowed');
+
+        // Normalize root to always end with separator for consistent comparison
+        const normalizedRoot = resolvedRoot.endsWith(path.sep) ? resolvedRoot : resolvedRoot + path.sep;
+
+        // Allow if file is exactly the workspace root or starts with workspace path
+        const isInWorkspace = resolvedFile === resolvedRoot || resolvedFile.startsWith(normalizedRoot);
+
+        if (!isInWorkspace) {
+          this._outputChannel.appendLine(`[SECURITY] File rejected: ${resolvedFile}`);
+          this._outputChannel.appendLine(`[SECURITY] Workspace root: ${resolvedRoot}`);
+          this._outputChannel.appendLine(`[SECURITY] Normalized root: ${normalizedRoot}`);
+          throw new Error(`Opening files outside the workspace is not allowed (file: ${file})`);
         }
       }
 
@@ -335,6 +339,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider, vscode.D
       const context = typeof file === 'string' ? `Failed to open file: ${file}` : 'Failed to open file';
       const msg = getErrorMessage(err, context);
       void vscode.window.showErrorMessage(msg);
+      this._outputChannel.appendLine(`[ERROR] ${msg}`);
     }
   };
 

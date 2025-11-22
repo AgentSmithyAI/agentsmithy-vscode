@@ -1,4 +1,40 @@
-import {describe, it, expect, beforeEach, vi} from 'vitest';
+// Mock markdown-it BEFORE imports - vitest hoists this automatically
+import {vi} from 'vitest';
+vi.mock('markdown-it', () => ({
+  default: class {
+    constructor(options?: any) {}
+    render(text: string) {
+      // Minimal markdown rendering for tests
+      let html = text;
+
+      // Headers
+      html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+      html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+
+      // Bold and italic
+      html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+      html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+
+      // Code blocks
+      html = html.replace(/```[\w]*\n([\s\S]+?)```/g, '<pre><code>$1</code></pre>');
+
+      // Inline code
+      html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+
+      // Links
+      html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
+
+      // Wrap in paragraph if needed
+      if (!html.match(/<(h\d|pre|ul|ol)/)) {
+        html = '<p>' + html + '</p>';
+      }
+
+      return html;
+    }
+  },
+}));
+
+import {describe, it, expect, beforeEach} from 'vitest';
 import {MessageRenderer} from '../renderer';
 import {escapeHtml} from '../utils';
 
@@ -10,30 +46,6 @@ const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>', {
 global.document = dom.window.document as any;
 global.window = dom.window as any;
 global.DOMParser = dom.window.DOMParser as any;
-
-// Mock marked library with minimal markdown parsing
-global.marked = {
-  parse: (text: string) => {
-    // Minimal markdown-to-HTML conversion for testing
-    let html = text;
-
-    // Headers
-    html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
-    html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
-
-    // Bold and italic
-    html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-    html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
-
-    // Code blocks
-    html = html.replace(/```(\w+)?\n([\s\S]+?)\n```/g, '<pre><code>$2</code></pre>');
-
-    // Links
-    html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
-
-    return html;
-  },
-} as any;
 
 // Mock DOMPurify for security testing
 // DOMPurify is a browser library, so we need to mock it for Node.js tests

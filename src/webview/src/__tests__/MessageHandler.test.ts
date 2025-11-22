@@ -1,7 +1,18 @@
 /**
  * @vitest-environment jsdom
  */
-import {beforeEach, describe, expect, it, vi} from 'vitest';
+// Mock markdown-it BEFORE imports
+import {vi} from 'vitest';
+vi.mock('markdown-it', () => ({
+  default: class {
+    constructor(options?: any) {}
+    render(text: string) {
+      return text ? `<p>${text}</p>` : '';
+    }
+  },
+}));
+
+import {beforeEach, describe, expect, it} from 'vitest';
 import {WEBVIEW_OUT_MSG} from '../../../shared/messages';
 import {DialogViewManager} from '../DialogViewManager';
 import {MessageHandler} from '../MessageHandler';
