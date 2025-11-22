@@ -12,20 +12,6 @@ import {escapeHtml} from './utils';
 import {DOM_IDS, CSS_CLASSES, WEBVIEW_DEFAULTS} from '../../constants';
 
 declare const acquireVsCodeApi: () => VSCodeAPI;
-declare const marked: {
-  Renderer: new () => {
-    code: (code: string, infostring?: string) => string;
-    codespan: (code: string) => string;
-  };
-  setOptions: (options: {
-    breaks: boolean;
-    gfm: boolean;
-    pedantic: boolean;
-    smartLists: boolean;
-    smartypants: boolean;
-    renderer: unknown;
-  }) => void;
-};
 
 /**
  * Main webview coordinator - delegates responsibilities to specialized managers
@@ -104,7 +90,6 @@ export class ChatWebview {
 
     this.setupEventListeners();
     this.setupFocusPersistence();
-    this.initializeMarked();
     this.setupModelSelector();
 
     // Notify extension
@@ -568,37 +553,6 @@ export class ChatWebview {
         if (!this.shouldRestoreInputFocus) return;
         requestAnimationFrame(() => restoreIfNeeded());
       }
-    });
-  }
-
-  private initializeMarked(): void {
-    if (typeof marked === 'undefined') {
-      return;
-    }
-
-    const renderer = new marked.Renderer();
-    renderer.code = (code: string, infostring?: string): string => {
-      const lang =
-        String(infostring || '')
-          .trim()
-          .split(/\s+/)[0] || '';
-      const escapedCode = escapeHtml(code);
-      if (lang) {
-        return '<pre><code class="language-' + escapeHtml(lang) + '">' + escapedCode + '</code></pre>';
-      }
-      return '<pre><code>' + escapedCode + '</code></pre>';
-    };
-    renderer.codespan = (code: string): string => {
-      return '<code>' + escapeHtml(code) + '</code>';
-    };
-
-    marked.setOptions({
-      breaks: true,
-      gfm: true,
-      pedantic: false,
-      smartLists: true,
-      smartypants: false,
-      renderer,
     });
   }
 }

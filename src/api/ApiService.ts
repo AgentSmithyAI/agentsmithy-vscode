@@ -540,8 +540,9 @@ export class ApiService {
       const rawErrors = data.config_errors as unknown[];
       config_errors = rawErrors.filter((x): x is string => typeof x === 'string');
       if (config_errors.length !== rawErrors.length) {
+        // Important diagnostic: API returned malformed data
         // eslint-disable-next-line no-console
-        console.warn('[api] health response contained non-string config_errors entries');
+        console.warn('[ApiService] health response contained non-string config_errors entries');
       }
     }
 

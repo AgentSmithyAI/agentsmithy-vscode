@@ -313,18 +313,24 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider, vscode.D
       }
 
       // Security: only allow opening files within the current workspace (if any)
-      // Note: This is defense-in-depth and not critical for local VS Code since the user
-      // already has full filesystem access. However, it provides some protection in edge cases:
-      // 1. Remote scenarios (SSH, Codespaces) where filesystem access is more sensitive
-      // 2. Malicious git repos with crafted filenames like "../../sensitive-file"
-      // 3. Backend bugs that could generate invalid paths
-      // File paths come from backend tool call results, which are typically safe.
       const workspaceRoot = this._configService.getWorkspaceRoot();
       if (typeof workspaceRoot === 'string' && workspaceRoot.length > 0) {
-        const resolvedFile = path.resolve(file);
+        // FIX: Resolve relative paths from workspace root, not CWD
+        const resolvedFile = path.isAbsolute(file) ? path.resolve(file) : path.resolve(workspaceRoot, file);
         const resolvedRoot = path.resolve(workspaceRoot);
-        if (!resolvedFile.startsWith(resolvedRoot + path.sep) && resolvedFile !== resolvedRoot) {
-          throw new Error('Opening files outside the workspace is not allowed');
+
+        // Normalize root to always end with separator for consistent comparison
+        const normalizedRoot = resolvedRoot.endsWith(path.sep) ? resolvedRoot : resolvedRoot + path.sep;
+
+        // Allow if file is exactly the workspace root or starts with workspace path
+        const isInWorkspace = resolvedFile === resolvedRoot || resolvedFile.startsWith(normalizedRoot);
+
+        if (!isInWorkspace) {
+          this._outputChannel.appendLine(`[SECURITY] File rejected: ${resolvedFile}`);
+          this._outputChannel.appendLine(`[SECURITY] Workspace root: ${resolvedRoot}`);
+          this._outputChannel.appendLine(`[SECURITY] Normalized root: ${normalizedRoot}`);
+          this._outputChannel.appendLine(`[SECURITY] Original file path: ${file}`);
+          throw new Error(`Opening files outside the workspace is not allowed (file: ${file})`);
         }
       }
 
@@ -335,6 +341,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider, vscode.D
       const context = typeof file === 'string' ? `Failed to open file: ${file}` : 'Failed to open file';
       const msg = getErrorMessage(err, context);
       void vscode.window.showErrorMessage(msg);
+      this._outputChannel.appendLine(`[ERROR] ${msg}`);
     }
   };
 
@@ -1008,9 +1015,6 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider, vscode.D
   private _getHtmlForWebview = (webview: vscode.Webview): string => {
     const nonce: string = getNonce();
 
-    const markedPath = vscode.Uri.joinPath(this._extensionUri, 'node_modules', 'marked', 'lib', 'marked.umd.js');
-    const markedUri = webview.asWebviewUri(markedPath);
-
     const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'dist', 'webview.js'));
     const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'media', 'chat.css'));
     const codiconCssUri = webview.asWebviewUri(
@@ -1028,7 +1032,6 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider, vscode.D
     <title>AgentSmithy Chat</title>
     <link rel="stylesheet" href="${codiconCssUri.toString()}">
     <link rel="stylesheet" href="${styleUri.toString()}">
-    <script nonce="${nonce}" src="${markedUri.toString()}"></script>
 </head>
 <body>
     <div class="${CSS_CLASSES.CHAT_CONTAINER}">
