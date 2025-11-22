@@ -9,6 +9,35 @@ interface ToolFormattedInfo {
   text: string;
 }
 
+const safeStringify = (val: unknown): string => {
+  if (typeof val === 'string') {
+    return val;
+  }
+  if (typeof val === 'object' && val !== null) {
+    try {
+      return JSON.stringify(val);
+    } catch {
+      return String(val);
+    }
+  }
+  return String(val);
+};
+
+// Simple check if path is absolute (without Node.js 'path' module for browser compatibility)
+const isAbsolutePath = (p: string): boolean => {
+  // Unix: starts with /
+  // Windows: starts with drive letter like C:\ or \\
+  return p.startsWith('/') || /^[a-zA-Z]:[\\\/]/.test(p) || p.startsWith('\\\\');
+};
+
+// Join workspace root with relative path (simple browser-compatible version)
+const joinPaths = (root: string, relative: string): string => {
+  // Normalize slashes
+  const normalizedRoot = root.replace(/\\/g, '/').replace(/\/$/, '');
+  const normalizedRelative = relative.replace(/\\/g, '/').replace(/^\//, '');
+  return `${normalizedRoot}/${normalizedRelative}`;
+};
+
 export const formatToolCallWithPath = (
   toolName: string | undefined,
   args: Record<string, unknown> | undefined,
@@ -29,7 +58,14 @@ export const formatToolCallWithPath = (
     );
   };
 
-  const path = extractPath();
+  let path = extractPath();
+
+  // Normalize relative paths to absolute (relative to workspace root)
+  // This ensures data-file attributes contain absolute paths for correct opening
+  if (path && !isAbsolutePath(path)) {
+    path = joinPaths(workspaceRoot, path);
+  }
+
   const displayPath = path ? stripProjectPrefix(path, workspaceRoot) : null;
 
   switch (name) {

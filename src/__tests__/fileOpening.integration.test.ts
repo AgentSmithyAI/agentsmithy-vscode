@@ -6,13 +6,13 @@ import * as path from 'path';
  * Reproduces the "Opening files outside the workspace is not allowed" issue
  */
 describe('File Opening Integration', () => {
-  describe('Path validation logic', () => {
+  describe('Path validation logic (OLD BUGGY)', () => {
     const validateFilePath = (file: string, workspaceRoot: string): {allowed: boolean; reason?: string} => {
       if (!file || !workspaceRoot) {
         return {allowed: false, reason: 'Empty path or workspace'};
       }
 
-      const resolvedFile = path.resolve(file);
+      const resolvedFile = path.resolve(file); // BUG: relative paths resolve from CWD!
       const resolvedRoot = path.resolve(workspaceRoot);
 
       // Current buggy logic
@@ -79,7 +79,8 @@ describe('File Opening Integration', () => {
         return {allowed: false, reason: 'Empty path or workspace'};
       }
 
-      const resolvedFile = path.resolve(file);
+      // FIX: Resolve relative paths from workspace root, not CWD
+      const resolvedFile = path.isAbsolute(file) ? path.resolve(file) : path.resolve(workspaceRoot, file);
       const resolvedRoot = path.resolve(workspaceRoot);
 
       // Normalize: ensure root ends with separator for consistent comparison
@@ -93,9 +94,18 @@ describe('File Opening Integration', () => {
       return {allowed: false, reason: `${resolvedFile} not in ${normalizedRoot}`};
     };
 
-    it('allows files inside workspace', () => {
+    it('allows absolute files inside workspace', () => {
       const workspace = '/home/user/project';
       const file = '/home/user/project/src/file.ts';
+
+      const result = validateFilePathFixed(file, workspace);
+
+      expect(result.allowed).toBe(true);
+    });
+
+    it('allows relative files inside workspace', () => {
+      const workspace = '/home/user/project';
+      const file = 'agentsmithy/llm/providers/openai/models.py';
 
       const result = validateFilePathFixed(file, workspace);
 

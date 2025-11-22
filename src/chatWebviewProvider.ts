@@ -315,7 +315,8 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider, vscode.D
       // Security: only allow opening files within the current workspace (if any)
       const workspaceRoot = this._configService.getWorkspaceRoot();
       if (typeof workspaceRoot === 'string' && workspaceRoot.length > 0) {
-        const resolvedFile = path.resolve(file);
+        // FIX: Resolve relative paths from workspace root, not CWD
+        const resolvedFile = path.isAbsolute(file) ? path.resolve(file) : path.resolve(workspaceRoot, file);
         const resolvedRoot = path.resolve(workspaceRoot);
 
         // Normalize root to always end with separator for consistent comparison
@@ -328,6 +329,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider, vscode.D
           this._outputChannel.appendLine(`[SECURITY] File rejected: ${resolvedFile}`);
           this._outputChannel.appendLine(`[SECURITY] Workspace root: ${resolvedRoot}`);
           this._outputChannel.appendLine(`[SECURITY] Normalized root: ${normalizedRoot}`);
+          this._outputChannel.appendLine(`[SECURITY] Original file path: ${file}`);
           throw new Error(`Opening files outside the workspace is not allowed (file: ${file})`);
         }
       }
