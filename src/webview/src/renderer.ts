@@ -1,7 +1,6 @@
 import {formatToolCallWithPath} from './toolFormatter';
 import {HistoryEvent, ReasoningBlock} from './types';
 import {escapeHtml, formatDiff, linkifyUrls, stripProjectPrefix} from './utils';
-import DOMPurify from 'dompurify';
 import MarkdownIt from 'markdown-it';
 
 export interface ScrollManagerLike {
@@ -101,32 +100,7 @@ export class MessageRenderer {
   renderMarkdown(text: string): string {
     const t = text ?? '';
     const md = new MarkdownIt({breaks: true, linkify: true, html: false});
-    const parsed = md.render(t);
-
-    return DOMPurify.sanitize(parsed, {
-      ALLOWED_TAGS: [
-        'p',
-        'br',
-        'code',
-        'pre',
-        'strong',
-        'em',
-        'b',
-        'i',
-        'ul',
-        'ol',
-        'li',
-        'a',
-        'h1',
-        'h2',
-        'h3',
-        'h4',
-        'h5',
-        'h6',
-      ],
-      ALLOWED_ATTR: ['href', 'class'],
-      ALLOW_DATA_ATTR: false,
-    });
+    return md.render(t);
   }
 
   addMessage(role: 'user' | 'assistant', content: string, checkpoint?: string): HTMLElement {
