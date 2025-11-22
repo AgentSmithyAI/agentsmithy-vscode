@@ -1015,9 +1015,6 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider, vscode.D
   private _getHtmlForWebview = (webview: vscode.Webview): string => {
     const nonce: string = getNonce();
 
-    const markedPath = vscode.Uri.joinPath(this._extensionUri, 'node_modules', 'marked', 'lib', 'marked.umd.js');
-    const markedUri = webview.asWebviewUri(markedPath);
-
     const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'dist', 'webview.js'));
     const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'media', 'chat.css'));
     const codiconCssUri = webview.asWebviewUri(
@@ -1035,7 +1032,6 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider, vscode.D
     <title>AgentSmithy Chat</title>
     <link rel="stylesheet" href="${codiconCssUri.toString()}">
     <link rel="stylesheet" href="${styleUri.toString()}">
-    <script nonce="${nonce}" src="${markedUri.toString()}"></script>
 </head>
 <body>
     <div class="${CSS_CLASSES.CHAT_CONTAINER}">

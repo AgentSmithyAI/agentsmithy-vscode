@@ -9,20 +9,6 @@ interface ToolFormattedInfo {
   text: string;
 }
 
-const safeStringify = (val: unknown): string => {
-  if (typeof val === 'string') {
-    return val;
-  }
-  if (typeof val === 'object' && val !== null) {
-    try {
-      return JSON.stringify(val);
-    } catch {
-      return String(val);
-    }
-  }
-  return String(val);
-};
-
 // Simple check if path is absolute (without Node.js 'path' module for browser compatibility)
 const isAbsolutePath = (p: string): boolean => {
   // Unix: starts with /
