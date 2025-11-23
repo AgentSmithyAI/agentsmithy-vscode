@@ -8,16 +8,19 @@ import type {IncomingMessage, ClientRequest} from 'http';
 // Mock modules
 vi.mock('fs');
 vi.mock('https');
-vi.mock('../../../utils/platform', () => ({
-  getAssetName: vi.fn((version: string) => `agentsmithy-linux-amd64-${version}`),
-  getVersionedBinaryName: vi.fn((version: string) => `agentsmithy-agent-${version}`),
-  createFileLink: vi.fn(),
+vi.mock('../../../platform', () => ({
+  getPlatformUtils: vi.fn(() => ({
+    getAssetName: vi.fn((version: string) => `agentsmithy-linux-amd64-${version}`),
+    getBinaryName: vi.fn(() => 'agentsmithy-agent'),
+    createFileLink: vi.fn(),
+    makeExecutable: vi.fn(),
+  })),
+  getPlatformInfo: vi.fn(() => ({platform: 'linux', arch: 'x64'})),
   getLatestInstalledVersion: vi.fn(),
   compareVersions: vi.fn(),
   getInstalledVersions: vi.fn(() => []),
-  makeExecutable: vi.fn(),
-  getPlatformInfo: vi.fn(() => ({platform: 'linux', arch: 'x64'})),
 }));
+
 vi.mock('../../../utils/crypto', () => ({
   calculateFileSHA256: vi.fn().mockResolvedValue('abc123def456'),
 }));
@@ -156,7 +159,7 @@ describe('DownloadManager', () => {
       await downloadManager.downloadBinary('v1.0.0', '1.0.0', '/test/link', expectedSize, expectedSHA);
 
       // Assert - SHA256 should be calculated from temp file (before making executable)
-      expect(calculateFileSHA256).toHaveBeenCalledWith('/test/server/dir/agentsmithy-agent-1.0.0.part');
+      expect(calculateFileSHA256).toHaveBeenCalledWith('/test/server/dir/agentsmithy-linux-amd64-1.0.0.part');
       expect(mockOutputChannel.appendLine).toHaveBeenCalledWith('Verifying SHA256...');
       expect(mockOutputChannel.appendLine).toHaveBeenCalledWith('SHA256 verified successfully');
     });
@@ -185,7 +188,7 @@ describe('DownloadManager', () => {
       ).rejects.toThrow('SHA256 verification failed');
 
       // Compromised file should be deleted
-      expect(fs.unlinkSync).toHaveBeenCalledWith('/test/server/dir/agentsmithy-agent-1.0.0.part');
+      expect(fs.unlinkSync).toHaveBeenCalledWith('/test/server/dir/agentsmithy-linux-amd64-1.0.0.part');
     });
 
     it('should download file successfully from scratch', async () => {
@@ -220,7 +223,9 @@ describe('DownloadManager', () => {
 
       // Assert
       expect(https.request).toHaveBeenCalled();
-      expect(fs.createWriteStream).toHaveBeenCalledWith('/test/server/dir/agentsmithy-agent-1.0.0.part', {flags: 'w'});
+      expect(fs.createWriteStream).toHaveBeenCalledWith('/test/server/dir/agentsmithy-linux-amd64-1.0.0.part', {
+        flags: 'w',
+      });
       expect(onProgress).toHaveBeenCalled();
       expect(mockOutputChannel.appendLine).toHaveBeenCalledWith(expect.stringContaining('Downloading server from:'));
       expect(mockOutputChannel.appendLine).toHaveBeenCalledWith('Server downloaded successfully');
@@ -268,7 +273,7 @@ describe('DownloadManager', () => {
       expect(requestOptions.headers?.Range).toBe(`bytes=${partialSize}-`);
       expect(mockResponse.statusCode).toBe(206);
       expect(fs.createWriteStream).toHaveBeenCalledWith(
-        '/test/server/dir/agentsmithy-agent-1.0.0.part',
+        '/test/server/dir/agentsmithy-linux-amd64-1.0.0.part',
         {flags: 'a'}, // Append mode
       );
       expect(mockOutputChannel.appendLine).toHaveBeenCalledWith(expect.stringContaining('Resuming download from byte'));
@@ -313,7 +318,7 @@ describe('DownloadManager', () => {
       );
       expect(fs.unlinkSync).toHaveBeenCalled();
       expect(fs.createWriteStream).toHaveBeenCalledWith(
-        '/test/server/dir/agentsmithy-agent-1.0.0.part',
+        '/test/server/dir/agentsmithy-linux-amd64-1.0.0.part',
         {flags: 'w'}, // Write mode, not append
       );
     });
@@ -680,7 +685,7 @@ describe('DownloadManager', () => {
   describe('cleanupOldVersions', () => {
     it('should remove old versions and their partial files', async () => {
       // Arrange
-      const {getInstalledVersions} = await import('../../../utils/platform');
+      const {getInstalledVersions} = await import('../../../platform');
       vi.mocked(getInstalledVersions).mockReturnValue(['1.0.0', '0.9.0', '0.8.0']);
       vi.mocked(fs.existsSync).mockReturnValue(true);
 
@@ -688,16 +693,16 @@ describe('DownloadManager', () => {
       await downloadManager.cleanupOldVersions('1.0.0');
 
       // Assert
-      expect(fs.unlinkSync).toHaveBeenCalledWith('/test/server/dir/agentsmithy-agent-0.9.0');
-      expect(fs.unlinkSync).toHaveBeenCalledWith('/test/server/dir/agentsmithy-agent-0.9.0.part');
-      expect(fs.unlinkSync).toHaveBeenCalledWith('/test/server/dir/agentsmithy-agent-0.8.0');
-      expect(fs.unlinkSync).toHaveBeenCalledWith('/test/server/dir/agentsmithy-agent-0.8.0.part');
-      expect(fs.unlinkSync).not.toHaveBeenCalledWith('/test/server/dir/agentsmithy-agent-1.0.0');
+      expect(fs.unlinkSync).toHaveBeenCalledWith('/test/server/dir/agentsmithy-linux-amd64-0.9.0');
+      expect(fs.unlinkSync).toHaveBeenCalledWith('/test/server/dir/agentsmithy-linux-amd64-0.9.0.part');
+      expect(fs.unlinkSync).toHaveBeenCalledWith('/test/server/dir/agentsmithy-linux-amd64-0.8.0');
+      expect(fs.unlinkSync).toHaveBeenCalledWith('/test/server/dir/agentsmithy-linux-amd64-0.8.0.part');
+      expect(fs.unlinkSync).not.toHaveBeenCalledWith('/test/server/dir/agentsmithy-linux-amd64-1.0.0');
     });
 
     it('should handle errors when removing old versions', async () => {
       // Arrange
-      const {getInstalledVersions} = await import('../../../utils/platform');
+      const {getInstalledVersions} = await import('../../../platform');
       vi.mocked(getInstalledVersions).mockReturnValue(['1.0.0', '0.9.0']);
       vi.mocked(fs.existsSync).mockReturnValue(true);
       vi.mocked(fs.unlinkSync).mockImplementation((path: unknown) => {
@@ -1023,7 +1028,7 @@ describe('DownloadManager', () => {
   describe('getLatestInstalled', () => {
     it('should return latest installed version', async () => {
       // Arrange
-      const {getLatestInstalledVersion} = await import('../../../utils/platform');
+      const {getLatestInstalledVersion} = await import('../../../platform');
       vi.mocked(getLatestInstalledVersion).mockReturnValue('1.0.0');
 
       // Act
@@ -1037,7 +1042,7 @@ describe('DownloadManager', () => {
   describe('compareVersions', () => {
     it('should compare versions', async () => {
       // Arrange
-      const {compareVersions: platformCompareVersions} = await import('../../../utils/platform');
+      const {compareVersions: platformCompareVersions} = await import('../../../platform');
       vi.mocked(platformCompareVersions).mockReturnValue(1);
 
       // Act

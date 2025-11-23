@@ -1,4 +1,3 @@
-/* eslint-disable no-undef */
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -6,24 +5,24 @@ import * as https from 'https';
 import * as http from 'http';
 import semver from 'semver';
 import {
-  getAssetName,
-  getVersionedBinaryName,
-  createFileLink,
+  getPlatformUtils,
+  getPlatformInfo,
   getLatestInstalledVersion,
   compareVersions,
   getInstalledVersions,
-  makeExecutable,
-  getPlatformInfo,
-} from '../../utils/platform';
+  IPlatformUtils,
+} from '../../platform';
 import {calculateFileSHA256} from '../../utils/crypto';
 
 export class DownloadManager {
   private readonly serverDir: string;
   private readonly outputChannel: vscode.OutputChannel;
+  private readonly platformUtils: IPlatformUtils;
 
   constructor(serverDir: string, outputChannel: vscode.OutputChannel) {
     this.serverDir = serverDir;
     this.outputChannel = outputChannel;
+    this.platformUtils = getPlatformUtils();
   }
 
   /**
@@ -157,7 +156,7 @@ export class DownloadManager {
 
               const assets = release.assets as unknown[];
 
-              const assetName = getAssetName(version);
+              const assetName = this.platformUtils.getAssetName(version, getPlatformInfo());
 
               const asset = assets.find((a: unknown) => {
                 return (a as {name: string}).name === assetName;
@@ -283,8 +282,8 @@ export class DownloadManager {
       }
     }
     fs.renameSync(tempPath, versionedPath);
-    makeExecutable(versionedPath);
-    createFileLink(versionedPath, linkPath);
+    this.platformUtils.makeExecutable(versionedPath);
+    this.platformUtils.createFileLink(versionedPath, linkPath);
     this.outputChannel.appendLine('Server downloaded successfully');
   };
 
@@ -480,8 +479,8 @@ export class DownloadManager {
     this.validateVersionTag(versionTag);
     this.validateCleanVersion(versionClean);
 
-    const assetName = getAssetName(versionClean);
-    const versionedPath = path.join(this.serverDir, getVersionedBinaryName(versionClean));
+    const assetName = this.platformUtils.getAssetName(versionClean, getPlatformInfo());
+    const versionedPath = path.join(this.serverDir, assetName);
     const tempPath = `${versionedPath}.part`; // Temporary file for downloading
     const downloadUrl = `https://github.com/AgentSmithyAI/agentsmithy-agent/releases/download/${versionTag}/${assetName}`;
 
@@ -580,7 +579,7 @@ export class DownloadManager {
    * Verify binary integrity by size
    */
   verifyIntegrity = (version: string, expectedSize: number): boolean => {
-    const filePath = path.join(this.serverDir, getVersionedBinaryName(version));
+    const filePath = path.join(this.serverDir, this.platformUtils.getAssetName(version, getPlatformInfo()));
 
     try {
       const stats = fs.statSync(filePath);
@@ -600,7 +599,7 @@ export class DownloadManager {
       return true;
     }
 
-    const filePath = path.join(this.serverDir, getVersionedBinaryName(version));
+    const filePath = path.join(this.serverDir, this.platformUtils.getAssetName(version, getPlatformInfo()));
 
     try {
       const actualSHA256 = await calculateFileSHA256(filePath);
@@ -643,7 +642,7 @@ export class DownloadManager {
 
     for (const version of allVersions) {
       if (version !== currentVersion) {
-        const oldPath = path.join(this.serverDir, getVersionedBinaryName(version));
+        const oldPath = path.join(this.serverDir, this.platformUtils.getAssetName(version, getPlatformInfo()));
         const oldPartPath = `${oldPath}.part`;
 
         this.removeFileIfExists(oldPath, `old version: ${version}`);
