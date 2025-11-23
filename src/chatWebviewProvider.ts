@@ -312,10 +312,10 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider, vscode.D
         throw new Error(ERROR_MESSAGES.INVALID_FILE_PATH);
       }
 
-      // Security: only allow opening files within the current workspace (if any)
+      // Validate file is within workspace (prevents bugs with invalid paths)
       const workspaceRoot = this._configService.getWorkspaceRoot();
       if (typeof workspaceRoot === 'string' && workspaceRoot.length > 0) {
-        // FIX: Resolve relative paths from workspace root, not CWD
+        // Resolve relative paths from workspace root, not CWD
         const resolvedFile = path.isAbsolute(file) ? path.resolve(file) : path.resolve(workspaceRoot, file);
         const resolvedRoot = path.resolve(workspaceRoot);
 
@@ -326,11 +326,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider, vscode.D
         const isInWorkspace = resolvedFile === resolvedRoot || resolvedFile.startsWith(normalizedRoot);
 
         if (!isInWorkspace) {
-          this._outputChannel.appendLine(`[SECURITY] File rejected: ${resolvedFile}`);
-          this._outputChannel.appendLine(`[SECURITY] Workspace root: ${resolvedRoot}`);
-          this._outputChannel.appendLine(`[SECURITY] Normalized root: ${normalizedRoot}`);
-          this._outputChannel.appendLine(`[SECURITY] Original file path: ${file}`);
-          throw new Error(`Opening files outside the workspace is not allowed (file: ${file})`);
+          throw new Error(`File outside workspace: ${file}`);
         }
       }
 
@@ -341,7 +337,6 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider, vscode.D
       const context = typeof file === 'string' ? `Failed to open file: ${file}` : 'Failed to open file';
       const msg = getErrorMessage(err, context);
       void vscode.window.showErrorMessage(msg);
-      this._outputChannel.appendLine(`[ERROR] ${msg}`);
     }
   };
 

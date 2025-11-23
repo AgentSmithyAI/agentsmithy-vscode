@@ -20,8 +20,13 @@ const isAbsolutePath = (p: string): boolean => {
 const joinPaths = (root: string, relative: string): string => {
   // Normalize slashes
   const normalizedRoot = root.replace(/\\/g, '/').replace(/\/$/, '');
-  const normalizedRelative = relative.replace(/\\/g, '/').replace(/^\//, '');
-  return `${normalizedRoot}/${normalizedRelative}`;
+  const normalizedRelative = relative.replace(/\\/g, '/');
+
+  // Remove leading slash only if it's a relative path (defense in depth)
+  // In practice, isAbsolutePath check happens before this, but let's be safe
+  const cleanRelative = normalizedRelative.replace(/^\/+/, '');
+
+  return `${normalizedRoot}/${cleanRelative}`;
 };
 
 export const formatToolCallWithPath = (
