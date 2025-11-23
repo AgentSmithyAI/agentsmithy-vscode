@@ -54,7 +54,7 @@ describe('ChatWebviewProvider - Workload and Diff', () => {
   let provider: ChatWebviewProvider;
   let apiService: ApiService;
   let configService: ConfigService;
-  let context: vscode.ExtensionContext;
+  let _context: vscode.ExtensionContext;
   let diffConfigUpdateSpy: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
@@ -76,7 +76,7 @@ describe('ChatWebviewProvider - Workload and Diff', () => {
       getWorkspaceRoot: vi.fn().mockReturnValue('/home/user/project'),
     } as unknown as ConfigService;
 
-    context = {
+    _context = {
       extensionUri: vscode.Uri.file('/'),
       globalState: {
         get: vi.fn(),

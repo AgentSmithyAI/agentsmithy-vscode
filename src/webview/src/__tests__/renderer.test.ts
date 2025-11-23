@@ -406,7 +406,7 @@ describe('MessageRenderer with smart auto-scroll', () => {
       `;
 
       const codeElement = messagesContainer.querySelector('code') as HTMLElement;
-      
+
       // Reset mock
       (navigator.clipboard.writeText as any).mockClear();
 
@@ -419,7 +419,7 @@ describe('MessageRenderer with smart auto-scroll', () => {
 
     it('should handle copy failure gracefully', async () => {
       const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-      
+
       // Mock clipboard to fail
       (navigator.clipboard.writeText as any).mockRejectedValueOnce(new Error('Clipboard error'));
 
@@ -435,15 +435,15 @@ describe('MessageRenderer with smart auto-scroll', () => {
       `;
 
       const copyBtn = messagesContainer.querySelector('.copy-code-btn') as HTMLElement;
-      
+
       // Should not throw
       expect(() => copyBtn.click()).not.toThrow();
-      
+
       await new Promise((resolve) => setTimeout(resolve, 10));
 
       // Should log error
       expect(consoleErrorSpy).toHaveBeenCalled();
-      
+
       consoleErrorSpy.mockRestore();
     });
   });

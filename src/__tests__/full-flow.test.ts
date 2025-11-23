@@ -41,7 +41,6 @@ describe('ChatWebviewProvider Full Flow', () => {
   let dialogService: DialogService;
   let configService: ConfigService;
   let serverManager: ServerManager;
-  let context: vscode.ExtensionContext;
   let webviewPostMessage: any;
 
   beforeEach(() => {
@@ -98,15 +97,6 @@ describe('ChatWebviewProvider Full Flow', () => {
       waitForReady: vi.fn().mockResolvedValue(undefined),
     } as unknown as ServerManager;
 
-    context = {
-      extensionUri: vscode.Uri.file('/'),
-      globalState: {
-        get: vi.fn(),
-        update: vi.fn(),
-      },
-      subscriptions: [],
-    } as unknown as vscode.ExtensionContext;
-
     provider = new ChatWebviewProvider(
       vscode.Uri.file('/'),
       streamService,
@@ -115,7 +105,6 @@ describe('ChatWebviewProvider Full Flow', () => {
       configService,
       apiService,
       serverManager,
-      context,
     );
 
     // Initialize view

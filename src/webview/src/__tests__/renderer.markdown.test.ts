@@ -44,14 +44,14 @@ describe('MessageRenderer - Markdown', () => {
     it('renders code block with language label', () => {
       const input = '```python\nprint("hello")\n```';
       const output = renderer.renderMarkdown(input);
-      
+
       // Should contain wrapper
       expect(output).toContain('code-block-wrapper');
-      
+
       // Should contain language label
       expect(output).toContain('code-language');
       expect(output).toContain('python');
-      
+
       // Should contain copy button
       expect(output).toContain('copy-code-btn');
       expect(output).toContain('codicon-copy');
@@ -60,11 +60,11 @@ describe('MessageRenderer - Markdown', () => {
     it('renders code block without language', () => {
       const input = '```\nplain code\n```';
       const output = renderer.renderMarkdown(input);
-      
+
       // Should still have wrapper and copy button
       expect(output).toContain('code-block-wrapper');
       expect(output).toContain('copy-code-btn');
-      
+
       // Should have code content
       expect(output).toContain('plain code');
     });
@@ -72,10 +72,10 @@ describe('MessageRenderer - Markdown', () => {
     it('applies syntax highlighting for supported languages', () => {
       const input = '```javascript\nconst x = 42;\n```';
       const output = renderer.renderMarkdown(input);
-      
+
       // Should have language class
       expect(output).toContain('language-javascript');
-      
+
       // Should have hljs class
       expect(output).toContain('hljs');
     });
@@ -83,11 +83,11 @@ describe('MessageRenderer - Markdown', () => {
     it('renders inline code without copy button', () => {
       const input = 'Use `npm install` command';
       const output = renderer.renderMarkdown(input);
-      
+
       // Should contain code tag
       expect(output).toContain('<code>');
       expect(output).toContain('npm install');
-      
+
       // Should NOT contain copy button (only for code blocks)
       expect(output).not.toContain('copy-code-btn');
     });
@@ -95,12 +95,12 @@ describe('MessageRenderer - Markdown', () => {
     it('escapes HTML in code blocks', () => {
       const input = '```html\n<script>alert("xss")</script>\n```';
       const output = renderer.renderMarkdown(input);
-      
+
       // highlight.js wraps HTML tags in spans, but they should still be escaped
       // Check that the actual script tag is not executable
       expect(output).toContain('&lt;');
       expect(output).toContain('&gt;');
-      
+
       // Most importantly: raw <script> should not appear unescaped
       // (highlight.js may wrap it in spans, but the angle brackets should be entities)
       const hasRawScriptTag = output.includes('<script>alert');
@@ -110,11 +110,11 @@ describe('MessageRenderer - Markdown', () => {
     it('handles multiple code blocks in same message', () => {
       const input = 'First:\n```python\nprint(1)\n```\n\nSecond:\n```js\nconsole.log(2)\n```';
       const output = renderer.renderMarkdown(input);
-      
+
       // Should have two wrappers
       const wrapperCount = (output.match(/code-block-wrapper/g) || []).length;
       expect(wrapperCount).toBe(2);
-      
+
       // Should have both languages
       expect(output).toContain('python');
       expect(output).toContain('js');
