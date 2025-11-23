@@ -2,6 +2,7 @@ import {formatToolCallWithPath} from './toolFormatter';
 import {HistoryEvent, ReasoningBlock} from './types';
 import {escapeHtml, formatDiff, linkifyUrls, stripProjectPrefix} from './utils';
 import MarkdownIt from 'markdown-it';
+import hljs from 'highlight.js';
 
 export interface ScrollManagerLike {
   isAtBottom: () => boolean;
@@ -10,7 +11,20 @@ export interface ScrollManagerLike {
 
 export class MessageRenderer {
   private scrollManager?: ScrollManagerLike;
-  private md = new MarkdownIt({breaks: true, linkify: true, html: false});
+  private md = new MarkdownIt({
+    breaks: true,
+    linkify: true,
+    html: false,
+    highlight: function (str, lang) {
+      if (lang && hljs.getLanguage(lang)) {
+        try {
+          return hljs.highlight(str, {language: lang}).value;
+        } catch (__) {}
+      }
+
+      return ''; // use external default escaping
+    },
+  });
 
   constructor(
     private messagesContainer: HTMLElement,
