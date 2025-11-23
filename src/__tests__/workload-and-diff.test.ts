@@ -103,7 +103,6 @@ describe('ChatWebviewProvider - Workload and Diff', () => {
       configService,
       apiService,
       {waitForReady: vi.fn().mockResolvedValue(undefined)},
-      context,
     );
 
     // Trigger resolve to attach listeners

@@ -165,7 +165,6 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         type: CONFIG_OUT_MSG.CONFIG_SAVED,
         data: result,
       });
-      void vscode.window.showInformationMessage('Configuration saved successfully!');
     } catch (error) {
       const errorMsg = getErrorMessage(error, 'Unknown error');
       this.postMessage({
