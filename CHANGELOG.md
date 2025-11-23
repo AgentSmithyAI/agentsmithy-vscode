@@ -1,3 +1,10 @@
+# [1.8.0](https://github.com/AgentSmithyAI/agentsmithy-vscode/compare/v1.7.3...v1.8.0) (2025-11-23)
+
+
+### Features
+
+* Enhance markdown rendering ([#39](https://github.com/AgentSmithyAI/agentsmithy-vscode/issues/39)) ([71d12e1](https://github.com/AgentSmithyAI/agentsmithy-vscode/commit/71d12e1de04e5f4b2993264785b3f90a860acb6e))
+
 ## [1.7.3](https://github.com/AgentSmithyAI/agentsmithy-vscode/compare/v1.7.2...v1.7.3) (2025-11-21)
 
 
