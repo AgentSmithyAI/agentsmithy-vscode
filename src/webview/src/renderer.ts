@@ -10,6 +10,7 @@ export interface ScrollManagerLike {
 
 export class MessageRenderer {
   private scrollManager?: ScrollManagerLike;
+  private md = new MarkdownIt({breaks: true, linkify: true, html: false});
 
   constructor(
     private messagesContainer: HTMLElement,
@@ -99,8 +100,7 @@ export class MessageRenderer {
 
   renderMarkdown(text: string): string {
     const t = text ?? '';
-    const md = new MarkdownIt({breaks: true, linkify: true, html: false});
-    return md.render(t);
+    return this.md.render(t);
   }
 
   addMessage(role: 'user' | 'assistant', content: string, checkpoint?: string): HTMLElement {
