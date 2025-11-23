@@ -1,23 +1,24 @@
 /**
  * @vitest-environment jsdom
  */
-import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
-import {MessageRenderer} from '../renderer';
-
-// Mock marked library
-interface MarkedMock {
-  parse: (text: string, options?: {breaks?: boolean; gfm?: boolean}) => string;
-  Renderer: new () => unknown;
-  setOptions: (options: unknown) => void;
-}
-
-global.marked = {
-  parse: (text: string) => `<p>${text}</p>`,
-  Renderer: function () {
-    return {};
+// Mock markdown-it BEFORE imports
+import {vi} from 'vitest';
+vi.mock('markdown-it', () => ({
+  default: class {
+    renderer = {
+      rules: {
+        fence: null,
+      },
+    };
+    constructor(options?: any) {}
+    render(text: string) {
+      return text ? `<p>${text}</p>` : '';
+    }
   },
-  setOptions: vi.fn(),
-} as unknown as MarkedMock;
+}));
+
+import {afterEach, beforeEach, describe, expect, it} from 'vitest';
+import {MessageRenderer} from '../renderer';
 
 describe('MessageRenderer with smart auto-scroll', () => {
   let messagesContainer: HTMLElement;
@@ -316,6 +317,134 @@ describe('MessageRenderer with smart auto-scroll', () => {
       expect(() => {
         rendererWithoutScroll.addMessage('assistant', 'Test');
       }).not.toThrow();
+    });
+  });
+
+  describe('code block copy functionality', () => {
+    beforeEach(() => {
+      // Mock clipboard API
+      Object.assign(navigator, {
+        clipboard: {
+          writeText: vi.fn(() => Promise.resolve()),
+        },
+      });
+    });
+
+    it('should copy code when copy button is clicked', async () => {
+      // Render a message with a code block
+      messagesContainer.innerHTML = `
+        <div class="code-block-wrapper">
+          <div class="code-block-header">
+            <span class="code-language">python</span>
+            <button class="copy-code-btn">
+              <i class="codicon codicon-copy"></i>
+            </button>
+          </div>
+          <pre><code class="hljs">print("Hello, World!")</code></pre>
+        </div>
+      `;
+
+      const copyBtn = messagesContainer.querySelector('.copy-code-btn') as HTMLElement;
+      expect(copyBtn).toBeTruthy();
+
+      // Simulate click
+      copyBtn.click();
+
+      // Wait for async operation
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      // Verify clipboard was called with correct text
+      expect(navigator.clipboard.writeText).toHaveBeenCalledWith('print("Hello, World!")');
+    });
+
+    it('should change icon to check mark after successful copy', async () => {
+      messagesContainer.innerHTML = `
+        <div class="code-block-wrapper">
+          <div class="code-block-header">
+            <button class="copy-code-btn">
+              <i class="codicon codicon-copy"></i>
+            </button>
+          </div>
+          <pre><code class="hljs">test code</code></pre>
+        </div>
+      `;
+
+      const copyBtn = messagesContainer.querySelector('.copy-code-btn') as HTMLElement;
+      const icon = copyBtn.querySelector('.codicon') as HTMLElement;
+
+      expect(icon.classList.contains('codicon-copy')).toBe(true);
+
+      copyBtn.click();
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      // Icon should change to check
+      expect(icon.classList.contains('codicon-check')).toBe(true);
+      expect(icon.classList.contains('codicon-copy')).toBe(false);
+    });
+
+    it('should copy inline code when clicked', async () => {
+      messagesContainer.innerHTML = `
+        <div class="assistant-message">
+          <p>Use <code>npm install</code> to install packages.</p>
+        </div>
+      `;
+
+      const inlineCode = messagesContainer.querySelector('code') as HTMLElement;
+      expect(inlineCode).toBeTruthy();
+
+      inlineCode.click();
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      expect(navigator.clipboard.writeText).toHaveBeenCalledWith('npm install');
+    });
+
+    it('should not copy code inside code-block-wrapper when clicked directly', async () => {
+      messagesContainer.innerHTML = `
+        <div class="code-block-wrapper">
+          <pre><code class="hljs">block code</code></pre>
+        </div>
+      `;
+
+      const codeElement = messagesContainer.querySelector('code') as HTMLElement;
+
+      // Reset mock
+      (navigator.clipboard.writeText as any).mockClear();
+
+      codeElement.click();
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      // Should NOT copy when clicking code inside code-block-wrapper
+      expect(navigator.clipboard.writeText).not.toHaveBeenCalled();
+    });
+
+    it('should handle copy failure gracefully', async () => {
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      // Mock clipboard to fail
+      (navigator.clipboard.writeText as any).mockRejectedValueOnce(new Error('Clipboard error'));
+
+      messagesContainer.innerHTML = `
+        <div class="code-block-wrapper">
+          <div class="code-block-header">
+            <button class="copy-code-btn">
+              <i class="codicon codicon-copy"></i>
+            </button>
+          </div>
+          <pre><code class="hljs">test</code></pre>
+        </div>
+      `;
+
+      const copyBtn = messagesContainer.querySelector('.copy-code-btn') as HTMLElement;
+
+      // Should not throw
+      expect(() => copyBtn.click()).not.toThrow();
+
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      // Should log error
+      expect(consoleErrorSpy).toHaveBeenCalled();
+
+      consoleErrorSpy.mockRestore();
     });
   });
 });

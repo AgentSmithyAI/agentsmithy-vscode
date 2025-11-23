@@ -12,20 +12,6 @@ import {escapeHtml} from './utils';
 import {DOM_IDS, CSS_CLASSES, WEBVIEW_DEFAULTS} from '../../constants';
 
 declare const acquireVsCodeApi: () => VSCodeAPI;
-declare const marked: {
-  Renderer: new () => {
-    code: (code: string, infostring?: string) => string;
-    codespan: (code: string) => string;
-  };
-  setOptions: (options: {
-    breaks: boolean;
-    gfm: boolean;
-    pedantic: boolean;
-    smartLists: boolean;
-    smartypants: boolean;
-    renderer: unknown;
-  }) => void;
-};
 
 /**
  * Main webview coordinator - delegates responsibilities to specialized managers
@@ -104,7 +90,6 @@ export class ChatWebview {
 
     this.setupEventListeners();
     this.setupFocusPersistence();
-    this.initializeMarked();
     this.setupModelSelector();
 
     // Notify extension
@@ -169,19 +154,14 @@ export class ChatWebview {
           isModelDropdownOpen = false;
           modelDropdown.style.display = 'none';
 
-          // TODO: Send model selection to extension when backend support is ready
+          // Send workload selection to backend
+          this.vscode.postMessage({
+            type: WEBVIEW_IN_MSG.SELECT_WORKLOAD,
+            workload: modelName,
+          });
         }
       }
     });
-
-    // Set default active model (gpt5)
-    const defaultModel = modelDropdown.querySelector(
-      '.' + CSS_CLASSES.MODEL_ITEM + '[data-model="' + WEBVIEW_DEFAULTS.MODEL_ID + '"]',
-    );
-    // Default model id is in WEBVIEW_DEFAULTS.MODEL_ID
-    if (defaultModel) {
-      defaultModel.classList.add('active');
-    }
 
     // Unified click handler for document - handles dropdown closing, file links, and checkpoint restores
     document.addEventListener('click', (e) => {
@@ -216,6 +196,43 @@ export class ChatWebview {
         }
       }
     });
+  }
+
+  private updateWorkloads(workloads: Array<{name: string; displayName: string}>, selected: string): void {
+    const modelDropdown = document.getElementById(DOM_IDS.MODEL_DROPDOWN);
+    const modelSelectorText = document.getElementById(DOM_IDS.MODEL_SELECTOR_TEXT);
+
+    if (!modelDropdown || !modelSelectorText) {
+      return;
+    }
+
+    // Clear existing items
+    modelDropdown.innerHTML = '';
+
+    // Render workload items
+    for (const workload of workloads) {
+      const item = document.createElement('div');
+      item.className = CSS_CLASSES.MODEL_ITEM;
+      item.setAttribute('data-model', workload.name);
+      if (workload.name === selected) {
+        item.classList.add('active');
+      }
+
+      const nameSpan = document.createElement('span');
+      nameSpan.className = CSS_CLASSES.MODEL_NAME;
+      nameSpan.textContent = workload.displayName;
+      item.appendChild(nameSpan);
+
+      modelDropdown.appendChild(item);
+    }
+
+    // Update selector button text
+    const selectedWorkload = workloads.find((w) => w.name === selected);
+    if (selectedWorkload) {
+      modelSelectorText.textContent = selectedWorkload.displayName;
+    } else if (workloads.length > 0) {
+      modelSelectorText.textContent = workloads[0].displayName;
+    }
   }
 
   private setupEventListeners(): void {
@@ -357,6 +374,10 @@ export class ChatWebview {
       case WEBVIEW_OUT_MSG.SESSION_STATUS_UPDATE:
         // Forward to SessionActionsUI for buttons and changes panel
         this.sessionActionsUI.updateSessionStatus(message.hasUnapproved, message.changedFiles);
+        break;
+
+      case WEBVIEW_OUT_MSG.WORKLOADS_UPDATE:
+        this.updateWorkloads(message.workloads, message.selected);
         break;
 
       case WEBVIEW_OUT_MSG.GET_VISIBLE_FIRST_IDX: {
@@ -568,37 +589,6 @@ export class ChatWebview {
         if (!this.shouldRestoreInputFocus) return;
         requestAnimationFrame(() => restoreIfNeeded());
       }
-    });
-  }
-
-  private initializeMarked(): void {
-    if (typeof marked === 'undefined') {
-      return;
-    }
-
-    const renderer = new marked.Renderer();
-    renderer.code = (code: string, infostring?: string): string => {
-      const lang =
-        String(infostring || '')
-          .trim()
-          .split(/\s+/)[0] || '';
-      const escapedCode = escapeHtml(code);
-      if (lang) {
-        return '<pre><code class="language-' + escapeHtml(lang) + '">' + escapedCode + '</code></pre>';
-      }
-      return '<pre><code>' + escapedCode + '</code></pre>';
-    };
-    renderer.codespan = (code: string): string => {
-      return '<code>' + escapeHtml(code) + '</code>';
-    };
-
-    marked.setOptions({
-      breaks: true,
-      gfm: true,
-      pedantic: false,
-      smartLists: true,
-      smartypants: false,
-      renderer,
     });
   }
 }

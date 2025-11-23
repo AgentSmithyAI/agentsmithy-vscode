@@ -8,6 +8,7 @@ import {ConfigService} from './services/ConfigService';
 import {DialogService} from './services/DialogService';
 import {StreamEventHandlers} from './services/EventHandlers';
 import {HistoryService} from './services/HistoryService';
+import {AppConfig, ConfigMetadata} from './api/ConfigTypes';
 import {WEBVIEW_IN_MSG, WEBVIEW_OUT_MSG} from './shared/messages';
 import {getErrorMessage} from './utils/typeGuards';
 
@@ -35,7 +36,8 @@ type WebviewInMessage =
   | {type: typeof WEBVIEW_IN_MSG.APPROVE_SESSION; dialogId: string}
   | {type: typeof WEBVIEW_IN_MSG.RESET_TO_APPROVED; dialogId: string}
   | {type: typeof WEBVIEW_IN_MSG.OPEN_SETTINGS}
-  | {type: typeof WEBVIEW_IN_MSG.TOGGLE_DIFF_VIEW};
+  | {type: typeof WEBVIEW_IN_MSG.TOGGLE_DIFF_VIEW}
+  | {type: typeof WEBVIEW_IN_MSG.SELECT_WORKLOAD; workload: string};
 // Messages sent from the extension to the webview
 type WebviewOutMessage =
   | {
@@ -71,7 +73,12 @@ type WebviewOutMessage =
   | {type: typeof WEBVIEW_OUT_MSG.SESSION_STATUS_UPDATE; hasUnapproved: boolean; changedFiles?: ChangedFile[]}
   | {type: typeof WEBVIEW_OUT_MSG.SESSION_OPERATION_CANCELLED}
   | {type: typeof WEBVIEW_OUT_MSG.FOCUS_INPUT}
-  | {type: typeof WEBVIEW_OUT_MSG.SERVER_STATUS; status: 'launching' | 'ready' | 'error'; message?: string};
+  | {type: typeof WEBVIEW_OUT_MSG.SERVER_STATUS; status: 'launching' | 'ready' | 'error'; message?: string}
+  | {
+      type: typeof WEBVIEW_OUT_MSG.WORKLOADS_UPDATE;
+      workloads: Array<{name: string; displayName: string}>;
+      selected: string;
+    };
 export class ChatWebviewProvider implements vscode.WebviewViewProvider, vscode.Disposable {
   public static readonly viewType = VIEWS.CHAT;
 
@@ -79,6 +86,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider, vscode.D
   private readonly _outputChannel: vscode.OutputChannel;
   private _isInitializing = false;
   private readonly _serverManager: {waitForReady: () => Promise<void>};
+  private _selectedWorkload: string = '';
 
   constructor(
     private readonly _extensionUri: vscode.Uri,
@@ -292,6 +300,9 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider, vscode.D
         case WEBVIEW_IN_MSG.TOGGLE_DIFF_VIEW:
           await this._handleToggleDiffView();
           break;
+        case WEBVIEW_IN_MSG.SELECT_WORKLOAD:
+          await this._handleSelectWorkload(message.workload);
+          break;
       }
     });
   }
@@ -306,29 +317,67 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider, vscode.D
     }
   };
 
+  private _handleSelectWorkload = async (modelName: string): Promise<void> => {
+    this._selectedWorkload = modelName;
+
+    try {
+      const configResp = await this._apiService.getConfig();
+      const config = configResp.config as unknown as AppConfig;
+
+      // 1. Determine which workload is used for reasoning
+      let reasoningWorkloadName = 'reasoning';
+      if (config.models?.agents?.reasoning?.workload && typeof config.models.agents.reasoning.workload === 'string') {
+        reasoningWorkloadName = config.models.agents.reasoning.workload;
+      }
+
+      // 2. Update the model in that workload safely
+      const updatedWorkloads = {
+        ...config.workloads,
+        [reasoningWorkloadName]: {
+          ...config.workloads?.[reasoningWorkloadName],
+          provider: config.workloads?.[reasoningWorkloadName]?.provider || 'openai',
+          model: modelName,
+        },
+      };
+
+      await this._apiService.updateConfig({
+        ...config,
+        workloads: updatedWorkloads,
+      } as Record<string, unknown>);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      void vscode.window.showErrorMessage(`Failed to update model: ${msg}`);
+    }
+  };
+
   private _handleOpenFile = async (file?: string): Promise<void> => {
     try {
       if (typeof file !== 'string' || file.length === 0) {
         throw new Error(ERROR_MESSAGES.INVALID_FILE_PATH);
       }
 
-      // Security: only allow opening files within the current workspace (if any)
-      // Note: This is defense-in-depth and not critical for local VS Code since the user
-      // already has full filesystem access. However, it provides some protection in edge cases:
-      // 1. Remote scenarios (SSH, Codespaces) where filesystem access is more sensitive
-      // 2. Malicious git repos with crafted filenames like "../../sensitive-file"
-      // 3. Backend bugs that could generate invalid paths
-      // File paths come from backend tool call results, which are typically safe.
+      let fileToOpen = file;
+
+      // Validate file is within workspace (prevents bugs with invalid paths)
       const workspaceRoot = this._configService.getWorkspaceRoot();
       if (typeof workspaceRoot === 'string' && workspaceRoot.length > 0) {
-        const resolvedFile = path.resolve(file);
+        // Resolve relative paths from workspace root, not CWD
+        const resolvedFile = path.isAbsolute(file) ? path.resolve(file) : path.resolve(workspaceRoot, file);
         const resolvedRoot = path.resolve(workspaceRoot);
-        if (!resolvedFile.startsWith(resolvedRoot + path.sep) && resolvedFile !== resolvedRoot) {
-          throw new Error('Opening files outside the workspace is not allowed');
+
+        // Normalize root to always end with separator for consistent comparison
+        const normalizedRoot = resolvedRoot.endsWith(path.sep) ? resolvedRoot : resolvedRoot + path.sep;
+
+        // Allow if file is exactly the workspace root or starts with workspace path
+        const isInWorkspace = resolvedFile === resolvedRoot || resolvedFile.startsWith(normalizedRoot);
+
+        if (!isInWorkspace) {
+          throw new Error(`File outside workspace: ${file}`);
         }
+        fileToOpen = resolvedFile;
       }
 
-      const uri = vscode.Uri.file(file);
+      const uri = vscode.Uri.file(fileToOpen);
       const doc = await vscode.workspace.openTextDocument(uri);
       await vscode.window.showTextDocument(doc, {preview: false});
     } catch (err: unknown) {
@@ -513,6 +562,9 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider, vscode.D
         await this._dialogService.loadDialogs();
         this._outputChannel.appendLine(`[_handleWebviewReady] Loaded ${this._dialogService.dialogs.length} dialogs`);
 
+        // Load and send workloads
+        await this._loadAndSendWorkloads();
+
         const currentDialog = this._dialogService.currentDialog;
         const title = this._dialogService.getDialogDisplayTitle(currentDialog);
         this._postMessage({
@@ -595,6 +647,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider, vscode.D
       context,
       stream: true,
       dialog_id: this._historyService.currentDialogId,
+      workload: this._selectedWorkload || undefined,
     };
 
     const eventHandlers = new StreamEventHandlers(
@@ -1008,11 +1061,9 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider, vscode.D
   private _getHtmlForWebview = (webview: vscode.Webview): string => {
     const nonce: string = getNonce();
 
-    const markedPath = vscode.Uri.joinPath(this._extensionUri, 'node_modules', 'marked', 'lib', 'marked.umd.js');
-    const markedUri = webview.asWebviewUri(markedPath);
-
     const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'dist', 'webview.js'));
     const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'media', 'chat.css'));
+    const highlightCssUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'media', 'highlight.css'));
     const codiconCssUri = webview.asWebviewUri(
       vscode.Uri.joinPath(this._extensionUri, 'node_modules', '@vscode', 'codicons', 'dist', 'codicon.css'),
     );
@@ -1027,8 +1078,8 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider, vscode.D
     <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource}; font-src ${webview.cspSource}; script-src ${webview.cspSource} 'nonce-${nonce}';">
     <title>AgentSmithy Chat</title>
     <link rel="stylesheet" href="${codiconCssUri.toString()}">
+    <link rel="stylesheet" href="${highlightCssUri.toString()}">
     <link rel="stylesheet" href="${styleUri.toString()}">
-    <script nonce="${nonce}" src="${markedUri.toString()}"></script>
 </head>
 <body>
     <div class="${CSS_CLASSES.CHAT_CONTAINER}">
@@ -1130,6 +1181,89 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider, vscode.D
         selection: !selection.isEmpty ? document.getText(selection) : undefined,
       },
     };
+  };
+
+  private _loadAndSendWorkloads = async (): Promise<void> => {
+    try {
+      const configResp = await this._apiService.getConfig();
+      const config = configResp.config as unknown as AppConfig;
+      const metadata = configResp.metadata as unknown as ConfigMetadata;
+
+      const reasoningWorkloadName = this._extractReasoningWorkloadName(config);
+      const {providerType, currentModel} = this._findProviderInfo(config, metadata, reasoningWorkloadName);
+      const modelsList = this._getModelsFromCatalog(metadata, providerType);
+
+      // If no models found (or no provider selected), try to show at least current one
+      if (modelsList.length === 0 && currentModel) {
+        modelsList.push({name: currentModel, displayName: currentModel});
+      }
+
+      // Use current model as selected
+      this._selectedWorkload = currentModel;
+
+      this._postMessage({
+        type: WEBVIEW_OUT_MSG.WORKLOADS_UPDATE,
+        workloads: modelsList,
+        selected: currentModel,
+      });
+    } catch (e: unknown) {
+      // Silently fail
+      const msg = e instanceof Error ? e.message : String(e);
+      this._outputChannel.appendLine(`Error loading models: ${msg}`);
+    }
+  };
+
+  private _extractReasoningWorkloadName = (config: AppConfig): string => {
+    if (config.models?.agents?.reasoning?.workload && typeof config.models.agents.reasoning.workload === 'string') {
+      return config.models.agents.reasoning.workload;
+    }
+    return 'reasoning';
+  };
+
+  private _findProviderInfo = (
+    config: AppConfig,
+    metadata: ConfigMetadata,
+    workloadName: string,
+  ): {providerType: string; currentModel: string} => {
+    let providerType = '';
+    let currentModel = '';
+
+    if (config.workloads?.[workloadName]) {
+      const workloadConfig = config.workloads[workloadName];
+      const providerName = workloadConfig.provider;
+      currentModel = workloadConfig.model || '';
+
+      // Find provider type from available providers
+      if (metadata.providers && Array.isArray(metadata.providers)) {
+        const provider = metadata.providers.find((p) => p.name === providerName);
+        if (provider) {
+          providerType = provider.type;
+        }
+      }
+    }
+    return {providerType, currentModel};
+  };
+
+  private _getModelsFromCatalog = (
+    metadata: ConfigMetadata,
+    providerType: string,
+  ): Array<{name: string; displayName: string}> => {
+    const modelsList: Array<{name: string; displayName: string}> = [];
+
+    if (providerType && metadata.model_catalog?.[providerType]) {
+      const catalog = metadata.model_catalog[providerType];
+      const chatModels = catalog.chat || [];
+
+      for (const model of chatModels) {
+        if (typeof model === 'string') {
+          modelsList.push({
+            name: model,
+            displayName: model,
+          });
+        }
+      }
+    }
+    return modelsList;
   };
 
   /**

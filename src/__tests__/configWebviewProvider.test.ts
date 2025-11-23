@@ -202,7 +202,7 @@ describe('ConfigWebviewProvider - validation refresh', () => {
     await provider.show(['initial']);
     expect(disposeHandlers).toHaveLength(1);
 
-    disposeHandlers[0]!();
+    disposeHandlers[0]();
     expect((provider as any).panel).toBeUndefined();
     expect((provider as any).webviewReady).toBe(false);
     expect((provider as any).pendingValidationErrors).toEqual([]);

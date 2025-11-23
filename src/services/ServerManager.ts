@@ -7,7 +7,6 @@ import {DownloadManager} from './server/DownloadManager';
 import {ProcessManager} from './server/ProcessManager';
 
 export class ServerManager {
-  private readonly context: vscode.ExtensionContext;
   private readonly outputChannel: vscode.OutputChannel;
   private readonly serverDir: string;
   private readonly configService: {getServerUrl: () => string; getWorkspaceRoot: () => string | null};
@@ -24,7 +23,6 @@ export class ServerManager {
     context: vscode.ExtensionContext,
     configService: {getServerUrl: () => string; getWorkspaceRoot: () => string | null},
   ) {
-    this.context = context;
     this.configService = configService;
     this.outputChannel = vscode.window.createOutputChannel('AgentSmithy Server');
     this.serverDir = path.join(context.globalStorageUri.fsPath, 'server');

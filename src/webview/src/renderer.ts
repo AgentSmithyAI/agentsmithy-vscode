@@ -1,13 +1,8 @@
 import {formatToolCallWithPath} from './toolFormatter';
 import {HistoryEvent, ReasoningBlock} from './types';
 import {escapeHtml, formatDiff, linkifyUrls, stripProjectPrefix} from './utils';
-import DOMPurify from 'dompurify';
-
-declare const marked: {
-  parse: (text: string, options?: {breaks?: boolean; gfm?: boolean}) => string;
-  Renderer: new () => unknown;
-  setOptions: (options: unknown) => void;
-};
+import MarkdownIt from 'markdown-it';
+import hljs from 'highlight.js';
 
 export interface ScrollManagerLike {
   isAtBottom: () => boolean;
@@ -16,12 +11,123 @@ export interface ScrollManagerLike {
 
 export class MessageRenderer {
   private scrollManager?: ScrollManagerLike;
+  private md = new MarkdownIt({
+    breaks: true,
+    linkify: true,
+    html: false,
+    highlight: function (str, lang) {
+      if (lang && hljs.getLanguage(lang)) {
+        try {
+          return hljs.highlight(str, {language: lang}).value;
+        } catch (__) {}
+      }
+
+      return ''; // use external default escaping
+    },
+  });
 
   constructor(
     private messagesContainer: HTMLElement,
     private welcomePlaceholder: HTMLElement | null,
     private workspaceRoot: string,
-  ) {}
+  ) {
+    // Override fence rule to add language label
+    this.md.renderer.rules.fence = (tokens, idx, options, _env, _self) => {
+      const token = tokens[idx];
+      const info = token.info ? token.info.trim() : '';
+      let langName = '';
+      let highlighted = '';
+
+      if (info) {
+        langName = info.split(/\s+/)[0];
+      }
+
+      if (options.highlight) {
+        highlighted = options.highlight(token.content, langName, '') || escapeHtml(token.content);
+      } else {
+        highlighted = escapeHtml(token.content);
+      }
+
+      // If language is present, wrap in a container with a header
+      const langDisplay = langName || '';
+      return `<div class="code-block-wrapper">
+             <div class="code-block-header">
+               <span class="code-language">${escapeHtml(langDisplay)}</span>
+               <button class="copy-code-btn" title="Copy code">
+                  <i class="codicon codicon-copy"></i>
+               </button>
+             </div>
+             <pre><code class="hljs ${langName ? 'language-' + escapeHtml(langName) : ''}">${highlighted}</code></pre>
+           </div>`;
+    };
+
+    this.messagesContainer.addEventListener('click', (e) => {
+      const target = e.target as HTMLElement;
+
+      // Handle copy button clicks
+      const button = target.closest('.copy-code-btn');
+      if (button) {
+        e.stopPropagation();
+        void this.copyCodeToClipboard(button as HTMLElement);
+        return;
+      }
+
+      // Handle inline code clicks (not in code blocks)
+      if (target.tagName === 'CODE' && !target.closest('.code-block-wrapper')) {
+        void this.copyInlineCode(target);
+      }
+    });
+  }
+
+  private async copyInlineCode(codeElement: HTMLElement): Promise<void> {
+    const text = codeElement.textContent || '';
+
+    try {
+      await navigator.clipboard.writeText(text);
+
+      // Visual feedback
+      const originalBg = codeElement.style.backgroundColor;
+      codeElement.style.backgroundColor = 'var(--vscode-editor-selectionBackground)';
+
+      setTimeout(() => {
+        codeElement.style.backgroundColor = originalBg;
+      }, 200);
+    } catch (err) {
+      console.error('Failed to copy inline code:', err);
+    }
+  }
+
+  private async copyCodeToClipboard(button: HTMLElement): Promise<void> {
+    const wrapper = button.closest('.code-block-wrapper');
+    if (!wrapper) {
+      return;
+    }
+
+    const codeElement = wrapper.querySelector('code');
+    if (!codeElement) {
+      return;
+    }
+
+    const text = codeElement.textContent || '';
+
+    try {
+      await navigator.clipboard.writeText(text);
+
+      // Feedback - change icon
+      const icon = button.querySelector('.codicon');
+      if (icon) {
+        icon.classList.remove('codicon-copy');
+        icon.classList.add('codicon-check');
+
+        setTimeout(() => {
+          icon.classList.remove('codicon-check');
+          icon.classList.add('codicon-copy');
+        }, 2000);
+      }
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
+  }
 
   private isPrepending = false;
   private suppressAutoScroll = false;
@@ -104,48 +210,8 @@ export class MessageRenderer {
   }
 
   renderMarkdown(text: string): string {
-    const t = text === undefined || text === null ? '' : String(text);
-    if (typeof marked !== 'undefined') {
-      const parsed = marked.parse(t, {breaks: true, gfm: true});
-      // Security: Use DOMPurify to sanitize HTML and prevent XSS attacks
-      return DOMPurify.sanitize(parsed, {
-        ALLOWED_TAGS: [
-          'p',
-          'br',
-          'code',
-          'pre',
-          'strong',
-          'em',
-          'b',
-          'i',
-          'ul',
-          'ol',
-          'li',
-          'a',
-          'blockquote',
-          'h1',
-          'h2',
-          'h3',
-          'h4',
-          'h5',
-          'h6',
-          'hr',
-          'img',
-          'table',
-          'thead',
-          'tbody',
-          'tr',
-          'th',
-          'td',
-          'span',
-          'div',
-          'del',
-        ],
-        ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'class', 'id'],
-        ALLOW_DATA_ATTR: false,
-      });
-    }
-    return escapeHtml(t).replace(/\n/g, '<br>');
+    const t = text ?? '';
+    return this.md.render(t);
   }
 
   addMessage(role: 'user' | 'assistant', content: string, checkpoint?: string): HTMLElement {
@@ -160,7 +226,7 @@ export class MessageRenderer {
       } else {
         const textDiv = document.createElement('div');
         textDiv.className = 'user-message-text';
-        textDiv.innerHTML = linkifyUrls(escapeHtml(content));
+        textDiv.innerHTML = this.renderMarkdown(content);
         messageDiv.appendChild(textDiv);
 
         // Add restore checkpoint button for user messages if checkpoint is present

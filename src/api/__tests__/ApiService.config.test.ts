@@ -126,14 +126,17 @@ describe('ApiService - Configuration', () => {
       expect(result.config_errors).toEqual(['API key not configured']);
     });
 
-    it('filters non-string errors and warns', async () => {
+    it('filters non-string errors and logs warning', async () => {
       const mockResponse = {
         server_status: 'ready',
         port: 8000,
         config_valid: false,
         config_errors: ['ok', {unexpected: true}],
       };
-      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {
+        // No-op for tests
+      });
 
       (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
         ok: true,
@@ -142,8 +145,11 @@ describe('ApiService - Configuration', () => {
 
       const result = await apiService.getHealth();
 
+      // Non-string errors should be filtered out
       expect(result.config_errors).toEqual(['ok']);
-      expect(warnSpy).toHaveBeenCalledWith('[api] health response contained non-string config_errors entries');
+      // Should warn about malformed data
+      expect(warnSpy).toHaveBeenCalledWith('[ApiService] health response contained non-string config_errors entries');
+
       warnSpy.mockRestore();
     });
   });
