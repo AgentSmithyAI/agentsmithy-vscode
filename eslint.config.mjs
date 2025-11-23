@@ -53,6 +53,9 @@ export default [
         // Node/VSCode runtime globals
         console: 'readonly',
         setTimeout: 'readonly',
+        process: 'readonly',
+        Buffer: 'readonly',
+        NodeJS: 'readonly',
         // Web APIs available in Node 18+ and VSCode runtime
         fetch: 'readonly',
         AbortController: 'readonly',

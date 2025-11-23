@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import semver from 'semver';
-import {getBinaryName, getPlatformInfo, getVersionedBinaryName, createFileLink} from '../utils/platform';
+import {getPlatformUtils, getPlatformInfo, IPlatformUtils} from '../platform';
 import {DownloadManager} from './server/DownloadManager';
 import {ProcessManager} from './server/ProcessManager';
 
@@ -12,6 +12,7 @@ export class ServerManager {
   private readonly configService: {getServerUrl: () => string; getWorkspaceRoot: () => string | null};
   private readonly downloadManager: DownloadManager;
   private readonly processManager: ProcessManager;
+  private readonly platformUtils: IPlatformUtils;
   private isStarting = false;
   private startPromise: Promise<void> | null = null;
   private readonly _onServerReady = new vscode.EventEmitter<void>();
@@ -26,6 +27,7 @@ export class ServerManager {
     this.configService = configService;
     this.outputChannel = vscode.window.createOutputChannel('AgentSmithy Server');
     this.serverDir = path.join(context.globalStorageUri.fsPath, 'server');
+    this.platformUtils = getPlatformUtils();
 
     // Ensure server directory exists (recursive: true handles existing directories)
     fs.mkdirSync(this.serverDir, {recursive: true});
@@ -38,7 +40,7 @@ export class ServerManager {
    * Get path to server binary (symlink)
    */
   private getServerPath = (): string => {
-    return path.join(this.serverDir, getBinaryName());
+    return path.join(this.serverDir, this.platformUtils.getBinaryName());
   };
 
   /**
@@ -126,9 +128,10 @@ export class ServerManager {
       // Ensure symlink exists (might have been deleted)
       if (!this.serverExists()) {
         this.outputChannel.appendLine('Symlink missing, recreating...');
-        const versionedPath = path.join(this.serverDir, getVersionedBinaryName(latestVersion));
+        const assetName = this.platformUtils.getAssetName(latestVersion, getPlatformInfo());
+        const versionedPath = path.join(this.serverDir, assetName);
         const linkPath = this.getServerPath();
-        createFileLink(versionedPath, linkPath);
+        this.platformUtils.createFileLink(versionedPath, linkPath);
         this.outputChannel.appendLine('Symlink recreated');
       }
 

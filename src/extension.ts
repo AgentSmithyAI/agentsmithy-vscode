@@ -28,12 +28,15 @@ export const activate = async (context: vscode.ExtensionContext) => {
 
   // Auto-start server if configured
   if (configService.getAutoStartServer()) {
-    // Start server in background, don't block activation
-    void serverManager.startServer().catch(() => {
-      void vscode.window.showWarningMessage(
-        'Failed to start AgentSmithy server automatically. You can start it manually from the Command Palette.',
-      );
-    });
+    // Check if workspace is open before attempting to start server
+    if (configService.getWorkspaceRoot()) {
+      // Start server in background, don't block activation
+      void serverManager.startServer().catch(() => {
+        void vscode.window.showWarningMessage(
+          'Failed to start AgentSmithy server automatically. You can start it manually from the Command Palette.',
+        );
+      });
+    }
   }
 
   // Note: When server URL changes, we recreate service instances,
