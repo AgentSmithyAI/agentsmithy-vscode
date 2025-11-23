@@ -1,3 +1,10 @@
+## [1.8.1](https://github.com/AgentSmithyAI/agentsmithy-vscode/compare/v1.8.0...v1.8.1) (2025-11-23)
+
+
+### Bug Fixes
+
+* Fix Windows-specific paths ([#40](https://github.com/AgentSmithyAI/agentsmithy-vscode/issues/40)) ([e015c76](https://github.com/AgentSmithyAI/agentsmithy-vscode/commit/e015c768146222b15f10cc809ead3d778b817bfa))
+
 # [1.8.0](https://github.com/AgentSmithyAI/agentsmithy-vscode/compare/v1.7.3...v1.8.0) (2025-11-23)
 
 
