@@ -21,7 +21,7 @@ export default [
       '.vscode-test',
       'dist',
       'src/webview',
-      // Ignore all test files and special test folders from Type-aware linting
+      // Ignore test files from type-aware linting (not in tsconfig.json)
       'src/**/__tests__',
       'src/**/*.test.*',
       'src/**/*.spec.*',

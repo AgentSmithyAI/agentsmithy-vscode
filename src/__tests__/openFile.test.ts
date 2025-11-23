@@ -1,5 +1,4 @@
-import {describe, it, expect, vi, beforeEach} from 'vitest';
-import * as vscode from 'vscode';
+import {describe, it, expect} from 'vitest';
 import * as path from 'path';
 
 describe('File opening validation', () => {
