@@ -330,24 +330,20 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider, vscode.D
         reasoningWorkloadName = config.models.agents.reasoning.workload;
       }
 
-      // 2. Update the model in that workload
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      const rawConfig = config as any;
+      // 2. Update the model in that workload safely
+      const updatedWorkloads = {
+        ...config.workloads,
+        [reasoningWorkloadName]: {
+          ...config.workloads?.[reasoningWorkloadName],
+          provider: config.workloads?.[reasoningWorkloadName]?.provider || 'openai',
+          model: modelName,
+        },
+      };
 
-      // eslint-disable-next-line @typescript-eslint/strict-boolean-expressions
-      if (!rawConfig.workloads) {
-        rawConfig.workloads = {};
-      }
-
-      // eslint-disable-next-line @typescript-eslint/strict-boolean-expressions
-      if (!rawConfig.workloads[reasoningWorkloadName]) {
-        rawConfig.workloads[reasoningWorkloadName] = {provider: 'openai'};
-      }
-
-      // Update the model
-      rawConfig.workloads[reasoningWorkloadName].model = modelName;
-
-      await this._apiService.updateConfig(config as Record<string, unknown>);
+      await this._apiService.updateConfig({
+        ...config,
+        workloads: updatedWorkloads,
+      } as Record<string, unknown>);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       void vscode.window.showErrorMessage(`Failed to update model: ${msg}`);

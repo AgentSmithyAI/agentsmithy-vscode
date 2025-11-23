@@ -1,7 +1,7 @@
 import {describe, it, expect, vi, beforeEach} from 'vitest';
 import * as vscode from 'vscode';
 import {ChatWebviewProvider} from '../chatWebviewProvider';
-import {WEBVIEW_OUT_MSG} from '../shared/messages';
+import {WEBVIEW_IN_MSG, WEBVIEW_OUT_MSG} from '../shared/messages';
 import {ConfigService} from '../services/ConfigService';
 import {ApiService} from '../api/ApiService';
 
@@ -157,5 +157,52 @@ describe('ChatWebviewProvider - Workloads Loading', () => {
         workloads: [{name: 'custom-model', displayName: 'custom-model'}],
       }),
     );
+  });
+
+  it('updates workload safely without mutating original config', async () => {
+    const initialConfig = {
+      models: {agents: {reasoning: {workload: 'my-reasoning'}}},
+      workloads: {
+        'my-reasoning': {provider: 'openai', model: 'old-model'},
+      },
+    };
+
+    // Deep freeze simulation (simple level)
+    const frozenConfig = Object.freeze({
+      ...initialConfig,
+      workloads: Object.freeze({
+        ...initialConfig.workloads,
+        'my-reasoning': Object.freeze({...initialConfig.workloads['my-reasoning']}),
+      }),
+    });
+
+    (apiService.getConfig as any).mockResolvedValue({
+      config: frozenConfig,
+      metadata: {},
+    });
+
+    // We need to trigger the message handler
+    // Since we can't access private _handleSelectWorkload directly, we use the message listener
+    // The listener is attached in resolveWebviewView which is called in beforeEach
+    const handler = mockWebview.onDidReceiveMessage.mock.calls[0][0];
+
+    await handler({
+      type: WEBVIEW_IN_MSG.SELECT_WORKLOAD,
+      workload: 'new-model',
+    });
+
+    // Verify updateConfig called with NEW model
+    expect(apiService.updateConfig).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workloads: expect.objectContaining({
+          'my-reasoning': expect.objectContaining({
+            model: 'new-model',
+          }),
+        }),
+      }),
+    );
+
+    // Verify original object is UNTOUCHED (redundant with Object.freeze but explicit)
+    expect(frozenConfig.workloads['my-reasoning'].model).toBe('old-model');
   });
 });
