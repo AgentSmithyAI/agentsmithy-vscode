@@ -2,14 +2,12 @@ import {describe, it, expect, vi, beforeEach, afterEach} from 'vitest';
 import {DownloadManager} from '../DownloadManager';
 import * as fs from 'fs';
 import * as https from 'https';
-import * as http from 'http';
 import {EventEmitter} from 'events';
 import type {IncomingMessage, ClientRequest} from 'http';
 
 // Mock modules
 vi.mock('fs');
 vi.mock('https');
-vi.mock('http');
 vi.mock('../../../utils/platform', () => ({
   getAssetName: vi.fn((version: string) => `agentsmithy-linux-amd64-${version}`),
   getVersionedBinaryName: vi.fn((version: string) => `agentsmithy-agent-${version}`),
@@ -629,11 +627,11 @@ describe('DownloadManager', () => {
 
       vi.mocked(https.get).mockImplementation((options: unknown, callback?: (res: any) => void) => {
         if (callback) {
-          const mockResponse = new EventEmitter();
+          const mockResp = new EventEmitter();
           setTimeout(() => {
-            callback(mockResponse);
-            mockResponse.emit('data', JSON.stringify(mockReleaseData));
-            mockResponse.emit('end');
+            callback(mockResp);
+            mockResp.emit('data', JSON.stringify(mockReleaseData));
+            mockResp.emit('end');
           }, 0);
         }
         return new EventEmitter() as any;
@@ -656,11 +654,11 @@ describe('DownloadManager', () => {
 
       vi.mocked(https.get).mockImplementation((options: unknown, callback?: (res: any) => void) => {
         if (callback) {
-          const mockResponse = new EventEmitter();
+          const mockResp = new EventEmitter();
           setTimeout(() => {
-            callback(mockResponse);
-            mockResponse.emit('data', JSON.stringify(mockReleaseData));
-            mockResponse.emit('end');
+            callback(mockResp);
+            mockResp.emit('data', JSON.stringify(mockReleaseData));
+            mockResp.emit('end');
           }, 0);
         }
         return new EventEmitter() as any;

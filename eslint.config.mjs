@@ -16,20 +16,7 @@ const tsconfigRootDir = new URL('.', import.meta.url).pathname;
 export default [
   // Ignore build/test artifacts
   {
-    ignores: [
-      'out',
-      '.vscode-test',
-      'dist',
-      'src/webview',
-      // Ignore test files from type-aware linting (not in tsconfig.json)
-      'src/**/__tests__',
-      'src/**/*.test.*',
-      'src/**/*.spec.*',
-      'src/chatWebviewProvider.__tests__/**',
-      'node_modules',
-      'esbuild.webview.mjs',
-      'vitest.config.*',
-    ],
+    ignores: ['out', '.vscode-test', 'dist', 'src/webview', 'node_modules', 'esbuild.webview.mjs', 'vitest.config.*'],
   },
 
   // Lint this config file under Node, allow URL global
@@ -57,7 +44,7 @@ export default [
     languageOptions: {
       parser: tseslint.parser,
       parserOptions: {
-        project: ['./tsconfig.json'],
+        project: ['./tsconfig.eslint.json'],
         tsconfigRootDir,
         sourceType: 'module',
         ecmaVersion: 2022,
@@ -151,6 +138,47 @@ export default [
       'sonarjs/no-identical-functions': 'warn',
       'sonarjs/no-nested-template-literals': 'warn',
       'prefer-template': 'warn',
+    },
+  },
+  // Rules for test files - less strict on types, but check unused vars
+  {
+    files: ['src/**/__tests__/**/*.ts', 'src/**/*.test.ts', 'src/**/*.spec.ts'],
+    languageOptions: {
+      globals: {
+        describe: 'readonly',
+        it: 'readonly',
+        expect: 'readonly',
+        vi: 'readonly',
+        beforeEach: 'readonly',
+        afterEach: 'readonly',
+        beforeAll: 'readonly',
+        afterAll: 'readonly',
+        global: 'writable',
+        NodeJS: 'readonly',
+        Buffer: 'readonly',
+        process: 'readonly',
+        setImmediate: 'readonly',
+        clearTimeout: 'readonly',
+      },
+    },
+    rules: {
+      'no-undef': 'off', // Let TS handle this
+      '@typescript-eslint/no-explicit-any': 'off',
+      '@typescript-eslint/no-unsafe-assignment': 'off',
+      '@typescript-eslint/no-unsafe-member-access': 'off',
+      '@typescript-eslint/no-unsafe-call': 'off',
+      '@typescript-eslint/no-unsafe-return': 'off',
+      '@typescript-eslint/no-unsafe-argument': 'off',
+      '@typescript-eslint/unbound-method': 'off',
+      '@typescript-eslint/no-non-null-assertion': 'off',
+      'sonarjs/no-duplicate-string': 'off',
+      'sonarjs/cognitive-complexity': 'off',
+      // Relax strict checks for legacy tests
+      '@typescript-eslint/strict-boolean-expressions': 'off',
+      '@typescript-eslint/no-unnecessary-condition': 'off',
+      'prefer-arrow-functions/prefer-arrow-functions': 'off',
+      'unicorn/no-array-for-each': 'off',
+      '@typescript-eslint/no-unused-vars': ['warn', {argsIgnorePattern: '^_', varsIgnorePattern: '^_', args: 'none'}],
     },
   },
 ];

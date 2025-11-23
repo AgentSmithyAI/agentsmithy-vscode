@@ -14,9 +14,11 @@ const downloadManagerMock = {
   releaseLock: vi.fn(),
 };
 vi.mock('../server/DownloadManager', () => ({
-  DownloadManager: vi.fn().mockImplementation(function () {
-    return downloadManagerMock;
-  }),
+  DownloadManager: class {
+    constructor() {
+      return downloadManagerMock;
+    }
+  },
 }));
 
 const processManagerMock = {
@@ -26,9 +28,11 @@ const processManagerMock = {
   getStatus: vi.fn().mockResolvedValue({running: false, port: null, pid: null}),
 };
 vi.mock('../server/ProcessManager', () => ({
-  ProcessManager: vi.fn().mockImplementation(function () {
-    return processManagerMock;
-  }),
+  ProcessManager: class {
+    constructor() {
+      return processManagerMock;
+    }
+  },
 }));
 
 describe('ServerManager checkHealthStatus', () => {
@@ -49,8 +53,12 @@ describe('ServerManager checkHealthStatus', () => {
   };
 
   beforeEach(() => {
-    Object.values(downloadManagerMock).forEach((fn) => fn.mock?.reset?.());
-    Object.values(processManagerMock).forEach((fn) => fn.mock?.reset?.());
+    for (const fn of Object.values(downloadManagerMock)) {
+      fn.mock?.reset?.();
+    }
+    for (const fn of Object.values(processManagerMock)) {
+      fn.mock?.reset?.();
+    }
     configInvalidEvents = [];
     manager = createManager();
     manager.onConfigInvalid((payload) => configInvalidEvents.push(payload));

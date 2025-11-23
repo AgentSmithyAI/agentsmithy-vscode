@@ -134,7 +134,9 @@ describe('ApiService - Configuration', () => {
         config_errors: ['ok', {unexpected: true}],
       };
 
-      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {
+        // No-op for tests
+      });
 
       (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
         ok: true,

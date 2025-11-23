@@ -50,8 +50,6 @@ const mockWebviewView = {
   onDidDispose: vi.fn(),
 };
 
-import * as path from 'path';
-
 describe('ChatWebviewProvider - Workload and Diff', () => {
   let provider: ChatWebviewProvider;
   let apiService: ApiService;

@@ -27,6 +27,7 @@ export const bootWebview = (provider: ChatWebviewProvider) => {
   const postMessage = vi.fn(async () => true);
   const webview: WebviewLike = {
     postMessage,
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-return
     asWebviewUri: vi.fn((uri: any) => uri),
   };
 
@@ -40,11 +41,20 @@ export const bootWebview = (provider: ChatWebviewProvider) => {
   const webviewView: WebviewViewLike = {
     webview,
     onDidChangeVisibility: () => ({dispose: vi.fn()}),
-    onDidDispose: (cb: () => void) => cb(),
+    onDidDispose: (cb: () => void) => {
+      cb();
+    },
   };
 
   provider.resolveWebviewView(webviewView as unknown as any, {} as any, {} as any);
-  return {postMessage, send: (msg: unknown) => handler?.(msg)};
+  return {
+    postMessage,
+    send: (msg: unknown) => {
+      if (handler) {
+        handler(msg);
+      }
+    },
+  };
 };
 
 /**
@@ -67,7 +77,9 @@ export const mockWorkspaceMethods = () => {
   (vscode.workspace as any).onDidChangeConfiguration = vi.fn(() => ({dispose: vi.fn()}));
   (vscode.workspace as any).getConfiguration = vi.fn(() => ({
     get: vi.fn((key: string) => {
-      if (key === 'autoStartServer') return true;
+      if (key === 'autoStartServer') {
+        return true;
+      }
       return undefined;
     }),
   }));

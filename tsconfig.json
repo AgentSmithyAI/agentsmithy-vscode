@@ -11,6 +11,7 @@
   "include": ["src"],
   "exclude": [
     "src/webview/**",
+    "src/__tests__/**",
     "src/**/__tests__/**",
     "src/chatWebviewProvider.__tests__/**",
     "src/**/*.test.ts",
