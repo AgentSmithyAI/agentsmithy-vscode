@@ -1,4 +1,4 @@
-import {describe, it, expect, vi, beforeEach, afterEach} from 'vitest';
+import {describe, it, expect, vi, beforeEach} from 'vitest';
 import {UnixUtils} from '../UnixUtils';
 import * as fs from 'fs';
 import * as path from 'path';

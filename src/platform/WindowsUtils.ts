@@ -1,5 +1,5 @@
 import * as fs from 'fs';
-import * as semver from 'semver';
+import semver from 'semver';
 import {IPlatformUtils, PlatformInfo} from './IPlatformUtils';
 
 export class WindowsUtils implements IPlatformUtils {
@@ -25,8 +25,11 @@ export class WindowsUtils implements IPlatformUtils {
       if (fs.existsSync(linkPath)) {
         fs.unlinkSync(linkPath);
       }
-    } catch {
-      // Ignore error removing existing file
+    } catch (error) {
+      // Ignore ENOENT if file disappeared between existsSync and unlinkSync
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+        throw error;
+      }
     }
 
     try {

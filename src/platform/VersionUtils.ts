@@ -1,5 +1,5 @@
 import * as fs from 'fs';
-import * as semver from 'semver';
+import semver from 'semver';
 
 /**
  * Parse version from versioned binary filename

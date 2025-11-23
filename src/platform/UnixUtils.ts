@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import * as semver from 'semver';
+import semver from 'semver';
 import {IPlatformUtils, PlatformInfo} from './IPlatformUtils';
 
 export class UnixUtils implements IPlatformUtils {
@@ -26,19 +26,15 @@ export class UnixUtils implements IPlatformUtils {
     return `agentsmithy-${os}-${binaryArch}-${cleanVersion}`;
   };
 
-  createFileLink(targetPath: string, linkPath: string): void {
+  createFileLink = (targetPath: string, linkPath: string): void => {
+    // Check if exists (handling broken symlinks too with lstat)
     try {
-      // Check if exists (handling broken symlinks too with lstat)
-      try {
-        fs.lstatSync(linkPath);
-        fs.unlinkSync(linkPath);
-      } catch (e) {
-        if ((e as NodeJS.ErrnoException).code !== 'ENOENT') {
-          throw e;
-        }
+      fs.lstatSync(linkPath);
+      fs.unlinkSync(linkPath);
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code !== 'ENOENT') {
+        throw e;
       }
-    } catch {
-      // Ignore error
     }
 
     // Use relative path for symlink
@@ -46,7 +42,7 @@ export class UnixUtils implements IPlatformUtils {
     fs.symlinkSync(targetName, linkPath);
 
     this.makeExecutable(linkPath);
-  }
+  };
 
   makeExecutable = (filePath: string): void => {
     try {

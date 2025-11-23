@@ -11,6 +11,7 @@ import {
   compareVersions,
   getInstalledVersions,
   IPlatformUtils,
+  PlatformInfo,
 } from '../../platform';
 import {calculateFileSHA256} from '../../utils/crypto';
 
@@ -18,11 +19,13 @@ export class DownloadManager {
   private readonly serverDir: string;
   private readonly outputChannel: vscode.OutputChannel;
   private readonly platformUtils: IPlatformUtils;
+  private readonly platformInfo: PlatformInfo;
 
   constructor(serverDir: string, outputChannel: vscode.OutputChannel) {
     this.serverDir = serverDir;
     this.outputChannel = outputChannel;
     this.platformUtils = getPlatformUtils();
+    this.platformInfo = getPlatformInfo();
   }
 
   /**
@@ -156,14 +159,14 @@ export class DownloadManager {
 
               const assets = release.assets as unknown[];
 
-              const assetName = this.platformUtils.getAssetName(version, getPlatformInfo());
+              const assetName = this.platformUtils.getAssetName(version, this.platformInfo);
 
               const asset = assets.find((a: unknown) => {
                 return (a as {name: string}).name === assetName;
               });
 
               if (asset === undefined) {
-                const {platform, arch} = getPlatformInfo();
+                const {platform, arch} = this.platformInfo;
                 const availableAssets = assets.map((a: unknown) => (a as {name: string}).name).join(', ');
                 reject(
                   new Error(
@@ -479,7 +482,7 @@ export class DownloadManager {
     this.validateVersionTag(versionTag);
     this.validateCleanVersion(versionClean);
 
-    const assetName = this.platformUtils.getAssetName(versionClean, getPlatformInfo());
+    const assetName = this.platformUtils.getAssetName(versionClean, this.platformInfo);
     const versionedPath = path.join(this.serverDir, assetName);
     const tempPath = `${versionedPath}.part`; // Temporary file for downloading
     const downloadUrl = `https://github.com/AgentSmithyAI/agentsmithy-agent/releases/download/${versionTag}/${assetName}`;
@@ -579,7 +582,7 @@ export class DownloadManager {
    * Verify binary integrity by size
    */
   verifyIntegrity = (version: string, expectedSize: number): boolean => {
-    const filePath = path.join(this.serverDir, this.platformUtils.getAssetName(version, getPlatformInfo()));
+    const filePath = path.join(this.serverDir, this.platformUtils.getAssetName(version, this.platformInfo));
 
     try {
       const stats = fs.statSync(filePath);
@@ -599,7 +602,7 @@ export class DownloadManager {
       return true;
     }
 
-    const filePath = path.join(this.serverDir, this.platformUtils.getAssetName(version, getPlatformInfo()));
+    const filePath = path.join(this.serverDir, this.platformUtils.getAssetName(version, this.platformInfo));
 
     try {
       const actualSHA256 = await calculateFileSHA256(filePath);
@@ -642,7 +645,7 @@ export class DownloadManager {
 
     for (const version of allVersions) {
       if (version !== currentVersion) {
-        const oldPath = path.join(this.serverDir, this.platformUtils.getAssetName(version, getPlatformInfo()));
+        const oldPath = path.join(this.serverDir, this.platformUtils.getAssetName(version, this.platformInfo));
         const oldPartPath = `${oldPath}.part`;
 
         this.removeFileIfExists(oldPath, `old version: ${version}`);
