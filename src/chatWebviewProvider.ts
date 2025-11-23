@@ -360,6 +360,8 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider, vscode.D
         throw new Error(ERROR_MESSAGES.INVALID_FILE_PATH);
       }
 
+      let fileToOpen = file;
+
       // Validate file is within workspace (prevents bugs with invalid paths)
       const workspaceRoot = this._configService.getWorkspaceRoot();
       if (typeof workspaceRoot === 'string' && workspaceRoot.length > 0) {
@@ -376,9 +378,10 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider, vscode.D
         if (!isInWorkspace) {
           throw new Error(`File outside workspace: ${file}`);
         }
+        fileToOpen = resolvedFile;
       }
 
-      const uri = vscode.Uri.file(file);
+      const uri = vscode.Uri.file(fileToOpen);
       const doc = await vscode.workspace.openTextDocument(uri);
       await vscode.window.showTextDocument(doc, {preview: false});
     } catch (err: unknown) {

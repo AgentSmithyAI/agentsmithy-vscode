@@ -50,6 +50,8 @@ const mockWebviewView = {
   onDidDispose: vi.fn(),
 };
 
+import * as path from 'path';
+
 describe('ChatWebviewProvider - Workload and Diff', () => {
   let provider: ChatWebviewProvider;
   let apiService: ApiService;
@@ -73,7 +75,7 @@ describe('ChatWebviewProvider - Workload and Diff', () => {
     } as unknown as ApiService;
 
     configService = {
-      getWorkspaceRoot: vi.fn(),
+      getWorkspaceRoot: vi.fn().mockReturnValue('/home/user/project'),
     } as unknown as ConfigService;
 
     context = {
@@ -91,8 +93,15 @@ describe('ChatWebviewProvider - Workload and Diff', () => {
       {
         onDidChangeState: vi.fn(),
         currentDialogId: 'dialog-1',
+        resolveCurrentDialogId: vi.fn().mockResolvedValue('dialog-1'),
+        loadLatest: vi.fn().mockResolvedValue({events: [], hasMore: false}),
       } as unknown as HistoryService,
-      {} as DialogService,
+      {
+        loadDialogs: vi.fn().mockResolvedValue(undefined),
+        dialogs: [],
+        getDialogDisplayTitle: vi.fn(),
+        currentDialog: null,
+      } as unknown as DialogService,
       configService,
       apiService,
       {waitForReady: vi.fn().mockResolvedValue(undefined)},
@@ -105,6 +114,65 @@ describe('ChatWebviewProvider - Workload and Diff', () => {
       {} as vscode.WebviewViewResolveContext,
       {} as vscode.CancellationToken,
     );
+  });
+
+  describe('OPEN_FILE', () => {
+    it('opens file inside workspace', async () => {
+      const handler = mockWebview.onDidReceiveMessage.mock.calls[0][0];
+      const file = '/home/user/project/src/file.ts';
+
+      // Mock vscode.workspace.openTextDocument
+      (vscode.workspace.openTextDocument as any) = vi.fn().mockResolvedValue({});
+      (vscode.window.showTextDocument as any) = vi.fn();
+
+      await handler({
+        type: WEBVIEW_IN_MSG.OPEN_FILE,
+        file,
+      });
+
+      expect(vscode.workspace.openTextDocument).toHaveBeenCalledWith(expect.objectContaining({fsPath: file}));
+      expect(vscode.window.showTextDocument).toHaveBeenCalled();
+    });
+
+    it('blocks file outside workspace', async () => {
+      const handler = mockWebview.onDidReceiveMessage.mock.calls[0][0];
+      const file = '/etc/passwd';
+
+      // Reset mocks
+      (vscode.workspace.openTextDocument as any) = vi.fn();
+      (vscode.window.showTextDocument as any) = vi.fn();
+
+      await handler({
+        type: WEBVIEW_IN_MSG.OPEN_FILE,
+        file,
+      });
+
+      // Should NOT open
+      expect(vscode.workspace.openTextDocument).not.toHaveBeenCalled();
+      // Should show error message
+      expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(expect.stringContaining('File outside workspace'));
+    });
+
+    it('resolves relative paths from workspace root', async () => {
+      const handler = mockWebview.onDidReceiveMessage.mock.calls[0][0];
+      const file = 'src/file.ts'; // Relative path
+      const expectedAbsPath = '/home/user/project/src/file.ts'; // Since mock workspace is /home/user/project
+
+      // Mock path.resolve to work in test environment same as real execution
+      // Note: in real execution path is node's path module
+
+      (vscode.workspace.openTextDocument as any) = vi.fn().mockResolvedValue({});
+
+      await handler({
+        type: WEBVIEW_IN_MSG.OPEN_FILE,
+        file,
+      });
+
+      // Should resolve to absolute path
+      expect(vscode.workspace.openTextDocument).toHaveBeenCalledWith(
+        expect.objectContaining({fsPath: expectedAbsPath}),
+      );
+    });
   });
 
   describe('TOGGLE_DIFF_VIEW', () => {
@@ -186,6 +254,83 @@ describe('ChatWebviewProvider - Workload and Diff', () => {
               model: 'gpt-5',
             },
           },
+        }),
+      );
+    });
+  });
+
+  describe('WORKLOADS_UPDATE', () => {
+    it('sends workloads list to webview on ready', async () => {
+      // Mock config with reasoning workload
+      const mockConfig = {
+        models: {
+          agents: {
+            reasoning: {workload: 'my-reasoning'},
+          },
+        },
+        workloads: {
+          'my-reasoning': {provider: 'openai', model: 'gpt-4'},
+        },
+      };
+
+      const mockMetadata = {
+        providers: [{name: 'openai', type: 'openai'}],
+        workloads: [
+          {name: 'reasoning-gpt4', purpose: 'reasoning', model: 'gpt-4'},
+          {name: 'reasoning-gpt5', purpose: 'reasoning', model: 'gpt-5'},
+          {name: 'reasoning-3.5', purpose: 'reasoning', model: 'gpt-3.5-turbo'},
+        ],
+        model_catalog: {
+          openai: {
+            chat: ['gpt-4', 'gpt-5', 'gpt-3.5-turbo'],
+          },
+        },
+      };
+
+      (apiService.getConfig as any).mockResolvedValue({
+        config: mockConfig,
+        metadata: mockMetadata,
+      });
+
+      // Trigger webview ready handler
+      const handler = mockWebview.onDidReceiveMessage.mock.calls[0][0];
+      await handler({type: WEBVIEW_IN_MSG.READY});
+
+      // Verify postMessage with workloads
+      // It might be called multiple times, so we check if ONE of them matches
+      expect(mockWebview.postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: WEBVIEW_OUT_MSG.WORKLOADS_UPDATE,
+          selected: 'gpt-4',
+          workloads: [
+            {name: 'gpt-4', displayName: 'gpt-4'},
+            {name: 'gpt-5', displayName: 'gpt-5'},
+            {name: 'gpt-3.5-turbo', displayName: 'gpt-3.5-turbo'},
+          ],
+        }),
+      );
+    });
+
+    it('handles missing reasoning workload by defaulting to "reasoning"', async () => {
+      // Mock empty config
+      const mockConfig = {};
+      const mockMetadata = {};
+
+      (apiService.getConfig as any).mockResolvedValue({
+        config: mockConfig,
+        metadata: mockMetadata,
+      });
+
+      const handler = mockWebview.onDidReceiveMessage.mock.calls[0][0];
+      await handler({type: WEBVIEW_IN_MSG.READY});
+      await new Promise(process.nextTick);
+
+      // Should try to load but find nothing, still send update with empty list
+      expect(mockWebview.postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: WEBVIEW_OUT_MSG.WORKLOADS_UPDATE,
+          selected: '',
+          workloads: [],
         }),
       );
     });
