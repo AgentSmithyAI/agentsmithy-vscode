@@ -154,19 +154,14 @@ export class ChatWebview {
           isModelDropdownOpen = false;
           modelDropdown.style.display = 'none';
 
-          // TODO: Send model selection to extension when backend support is ready
+          // Send workload selection to backend
+          this.vscode.postMessage({
+            type: WEBVIEW_IN_MSG.SELECT_WORKLOAD,
+            workload: modelName,
+          });
         }
       }
     });
-
-    // Set default active model (gpt5)
-    const defaultModel = modelDropdown.querySelector(
-      '.' + CSS_CLASSES.MODEL_ITEM + '[data-model="' + WEBVIEW_DEFAULTS.MODEL_ID + '"]',
-    );
-    // Default model id is in WEBVIEW_DEFAULTS.MODEL_ID
-    if (defaultModel) {
-      defaultModel.classList.add('active');
-    }
 
     // Unified click handler for document - handles dropdown closing, file links, and checkpoint restores
     document.addEventListener('click', (e) => {
@@ -201,6 +196,43 @@ export class ChatWebview {
         }
       }
     });
+  }
+
+  private updateWorkloads(workloads: Array<{name: string; displayName: string}>, selected: string): void {
+    const modelDropdown = document.getElementById(DOM_IDS.MODEL_DROPDOWN);
+    const modelSelectorText = document.getElementById(DOM_IDS.MODEL_SELECTOR_TEXT);
+
+    if (!modelDropdown || !modelSelectorText) {
+      return;
+    }
+
+    // Clear existing items
+    modelDropdown.innerHTML = '';
+
+    // Render workload items
+    for (const workload of workloads) {
+      const item = document.createElement('div');
+      item.className = CSS_CLASSES.MODEL_ITEM;
+      item.setAttribute('data-model', workload.name);
+      if (workload.name === selected) {
+        item.classList.add('active');
+      }
+
+      const nameSpan = document.createElement('span');
+      nameSpan.className = CSS_CLASSES.MODEL_NAME;
+      nameSpan.textContent = workload.displayName;
+      item.appendChild(nameSpan);
+
+      modelDropdown.appendChild(item);
+    }
+
+    // Update selector button text
+    const selectedWorkload = workloads.find((w) => w.name === selected);
+    if (selectedWorkload) {
+      modelSelectorText.textContent = selectedWorkload.displayName;
+    } else if (workloads.length > 0) {
+      modelSelectorText.textContent = workloads[0].displayName;
+    }
   }
 
   private setupEventListeners(): void {
@@ -342,6 +374,10 @@ export class ChatWebview {
       case WEBVIEW_OUT_MSG.SESSION_STATUS_UPDATE:
         // Forward to SessionActionsUI for buttons and changes panel
         this.sessionActionsUI.updateSessionStatus(message.hasUnapproved, message.changedFiles);
+        break;
+
+      case WEBVIEW_OUT_MSG.WORKLOADS_UPDATE:
+        this.updateWorkloads(message.workloads, message.selected);
         break;
 
       case WEBVIEW_OUT_MSG.GET_VISIBLE_FIRST_IDX: {

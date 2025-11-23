@@ -8,6 +8,7 @@ import {ConfigService} from './services/ConfigService';
 import {DialogService} from './services/DialogService';
 import {StreamEventHandlers} from './services/EventHandlers';
 import {HistoryService} from './services/HistoryService';
+import {AppConfig, ConfigMetadata} from './api/ConfigTypes';
 import {WEBVIEW_IN_MSG, WEBVIEW_OUT_MSG} from './shared/messages';
 import {getErrorMessage} from './utils/typeGuards';
 
@@ -35,7 +36,8 @@ type WebviewInMessage =
   | {type: typeof WEBVIEW_IN_MSG.APPROVE_SESSION; dialogId: string}
   | {type: typeof WEBVIEW_IN_MSG.RESET_TO_APPROVED; dialogId: string}
   | {type: typeof WEBVIEW_IN_MSG.OPEN_SETTINGS}
-  | {type: typeof WEBVIEW_IN_MSG.TOGGLE_DIFF_VIEW};
+  | {type: typeof WEBVIEW_IN_MSG.TOGGLE_DIFF_VIEW}
+  | {type: typeof WEBVIEW_IN_MSG.SELECT_WORKLOAD; workload: string};
 // Messages sent from the extension to the webview
 type WebviewOutMessage =
   | {
@@ -71,7 +73,12 @@ type WebviewOutMessage =
   | {type: typeof WEBVIEW_OUT_MSG.SESSION_STATUS_UPDATE; hasUnapproved: boolean; changedFiles?: ChangedFile[]}
   | {type: typeof WEBVIEW_OUT_MSG.SESSION_OPERATION_CANCELLED}
   | {type: typeof WEBVIEW_OUT_MSG.FOCUS_INPUT}
-  | {type: typeof WEBVIEW_OUT_MSG.SERVER_STATUS; status: 'launching' | 'ready' | 'error'; message?: string};
+  | {type: typeof WEBVIEW_OUT_MSG.SERVER_STATUS; status: 'launching' | 'ready' | 'error'; message?: string}
+  | {
+      type: typeof WEBVIEW_OUT_MSG.WORKLOADS_UPDATE;
+      workloads: Array<{name: string; displayName: string}>;
+      selected: string;
+    };
 export class ChatWebviewProvider implements vscode.WebviewViewProvider, vscode.Disposable {
   public static readonly viewType = VIEWS.CHAT;
 
@@ -79,6 +86,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider, vscode.D
   private readonly _outputChannel: vscode.OutputChannel;
   private _isInitializing = false;
   private readonly _serverManager: {waitForReady: () => Promise<void>};
+  private _selectedWorkload: string = '';
 
   constructor(
     private readonly _extensionUri: vscode.Uri,
@@ -292,6 +300,9 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider, vscode.D
         case WEBVIEW_IN_MSG.TOGGLE_DIFF_VIEW:
           await this._handleToggleDiffView();
           break;
+        case WEBVIEW_IN_MSG.SELECT_WORKLOAD:
+          await this._handleSelectWorkload(message.workload);
+          break;
       }
     });
   }
@@ -303,6 +314,43 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider, vscode.D
       await config.update('renderSideBySide', !current, vscode.ConfigurationTarget.Global);
     } catch {
       // swallow
+    }
+  };
+
+  private _handleSelectWorkload = async (modelName: string): Promise<void> => {
+    this._selectedWorkload = modelName;
+
+    try {
+      const configResp = await this._apiService.getConfig();
+      const config = configResp.config as unknown as AppConfig;
+
+      // 1. Determine which workload is used for reasoning
+      let reasoningWorkloadName = 'reasoning';
+      if (config.models?.agents?.reasoning?.workload && typeof config.models.agents.reasoning.workload === 'string') {
+        reasoningWorkloadName = config.models.agents.reasoning.workload;
+      }
+
+      // 2. Update the model in that workload
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      const rawConfig = config as any;
+
+      // eslint-disable-next-line @typescript-eslint/strict-boolean-expressions
+      if (!rawConfig.workloads) {
+        rawConfig.workloads = {};
+      }
+
+      // eslint-disable-next-line @typescript-eslint/strict-boolean-expressions
+      if (!rawConfig.workloads[reasoningWorkloadName]) {
+        rawConfig.workloads[reasoningWorkloadName] = {provider: 'openai'};
+      }
+
+      // Update the model
+      rawConfig.workloads[reasoningWorkloadName].model = modelName;
+
+      await this._apiService.updateConfig(config as Record<string, unknown>);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      void vscode.window.showErrorMessage(`Failed to update model: ${msg}`);
     }
   };
 
@@ -515,6 +563,9 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider, vscode.D
         await this._dialogService.loadDialogs();
         this._outputChannel.appendLine(`[_handleWebviewReady] Loaded ${this._dialogService.dialogs.length} dialogs`);
 
+        // Load and send workloads
+        await this._loadAndSendWorkloads();
+
         const currentDialog = this._dialogService.currentDialog;
         const title = this._dialogService.getDialogDisplayTitle(currentDialog);
         this._postMessage({
@@ -597,6 +648,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider, vscode.D
       context,
       stream: true,
       dialog_id: this._historyService.currentDialogId,
+      workload: this._selectedWorkload || undefined,
     };
 
     const eventHandlers = new StreamEventHandlers(
@@ -1128,6 +1180,89 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider, vscode.D
         selection: !selection.isEmpty ? document.getText(selection) : undefined,
       },
     };
+  };
+
+  private _loadAndSendWorkloads = async (): Promise<void> => {
+    try {
+      const configResp = await this._apiService.getConfig();
+      const config = configResp.config as unknown as AppConfig;
+      const metadata = configResp.metadata as unknown as ConfigMetadata;
+
+      const reasoningWorkloadName = this._extractReasoningWorkloadName(config);
+      const {providerType, currentModel} = this._findProviderInfo(config, metadata, reasoningWorkloadName);
+      const modelsList = this._getModelsFromCatalog(metadata, providerType);
+
+      // If no models found (or no provider selected), try to show at least current one
+      if (modelsList.length === 0 && currentModel) {
+        modelsList.push({name: currentModel, displayName: currentModel});
+      }
+
+      // Use current model as selected
+      this._selectedWorkload = currentModel;
+
+      this._postMessage({
+        type: WEBVIEW_OUT_MSG.WORKLOADS_UPDATE,
+        workloads: modelsList,
+        selected: currentModel,
+      });
+    } catch (e: unknown) {
+      // Silently fail
+      const msg = e instanceof Error ? e.message : String(e);
+      this._outputChannel.appendLine(`Error loading models: ${msg}`);
+    }
+  };
+
+  private _extractReasoningWorkloadName = (config: AppConfig): string => {
+    if (config.models?.agents?.reasoning?.workload && typeof config.models.agents.reasoning.workload === 'string') {
+      return config.models.agents.reasoning.workload;
+    }
+    return 'reasoning';
+  };
+
+  private _findProviderInfo = (
+    config: AppConfig,
+    metadata: ConfigMetadata,
+    workloadName: string,
+  ): {providerType: string; currentModel: string} => {
+    let providerType = '';
+    let currentModel = '';
+
+    if (config.workloads?.[workloadName]) {
+      const workloadConfig = config.workloads[workloadName];
+      const providerName = workloadConfig.provider;
+      currentModel = workloadConfig.model || '';
+
+      // Find provider type from available providers
+      if (metadata.providers && Array.isArray(metadata.providers)) {
+        const provider = metadata.providers.find((p) => p.name === providerName);
+        if (provider) {
+          providerType = provider.type;
+        }
+      }
+    }
+    return {providerType, currentModel};
+  };
+
+  private _getModelsFromCatalog = (
+    metadata: ConfigMetadata,
+    providerType: string,
+  ): Array<{name: string; displayName: string}> => {
+    const modelsList: Array<{name: string; displayName: string}> = [];
+
+    if (providerType && metadata.model_catalog?.[providerType]) {
+      const catalog = metadata.model_catalog[providerType];
+      const chatModels = catalog.chat || [];
+
+      for (const model of chatModels) {
+        if (typeof model === 'string') {
+          modelsList.push({
+            name: model,
+            displayName: model,
+          });
+        }
+      }
+    }
+    return modelsList;
   };
 
   /**

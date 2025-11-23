@@ -17,6 +17,7 @@ export const WEBVIEW_IN_MSG = {
   RESET_TO_APPROVED: 'resetToApproved',
   OPEN_SETTINGS: 'openSettings',
   TOGGLE_DIFF_VIEW: 'toggleDiffView',
+  SELECT_WORKLOAD: 'selectWorkload',
 } as const;
 
 export type WebviewInMessageType = (typeof WEBVIEW_IN_MSG)[keyof typeof WEBVIEW_IN_MSG];
@@ -47,6 +48,7 @@ export const WEBVIEW_OUT_MSG = {
   SESSION_OPERATION_CANCELLED: 'sessionOperationCancelled',
   FOCUS_INPUT: 'focusInput',
   SERVER_STATUS: 'serverStatus',
+  WORKLOADS_UPDATE: 'workloadsUpdate',
 } as const;
 
 export type WebviewOutMessageType = (typeof WEBVIEW_OUT_MSG)[keyof typeof WEBVIEW_OUT_MSG];

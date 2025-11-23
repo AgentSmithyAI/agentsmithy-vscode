@@ -20,6 +20,7 @@ export interface ChatRequest {
   context?: ChatContext;
   stream: boolean;
   dialog_id?: string;
+  workload?: string;
 }
 
 export interface SSEEvent {

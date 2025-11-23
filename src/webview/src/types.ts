@@ -34,7 +34,9 @@ export type WebviewInMessage =
   | {type: typeof WEBVIEW_IN_MSG.RESTORE_CHECKPOINT; dialogId: string; checkpointId: string}
   | {type: typeof WEBVIEW_IN_MSG.APPROVE_SESSION; dialogId: string}
   | {type: typeof WEBVIEW_IN_MSG.RESET_TO_APPROVED; dialogId: string}
-  | {type: typeof WEBVIEW_IN_MSG.OPEN_SETTINGS};
+  | {type: typeof WEBVIEW_IN_MSG.OPEN_SETTINGS}
+  | {type: typeof WEBVIEW_IN_MSG.TOGGLE_DIFF_VIEW}
+  | {type: typeof WEBVIEW_IN_MSG.SELECT_WORKLOAD; workload: string};
 
 /**
  * Messages sent from extension to webview
