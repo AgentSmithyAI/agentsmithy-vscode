@@ -5,6 +5,11 @@
 import {vi} from 'vitest';
 vi.mock('markdown-it', () => ({
   default: class {
+    renderer = {
+      rules: {
+        fence: null,
+      },
+    };
     constructor(options?: any) {}
     render(text: string) {
       return text ? `<p>${text}</p>` : '';

@@ -30,7 +30,37 @@ export class MessageRenderer {
     private messagesContainer: HTMLElement,
     private welcomePlaceholder: HTMLElement | null,
     private workspaceRoot: string,
-  ) {}
+  ) {
+    // Override fence rule to add language label
+    this.md.renderer.rules.fence = (tokens, idx, options, _env, _self) => {
+      const token = tokens[idx];
+      const info = token.info ? token.info.trim() : '';
+      let langName = '';
+      let highlighted = '';
+
+      if (info) {
+        langName = info.split(/\s+/)[0];
+      }
+
+      if (options.highlight) {
+        highlighted = options.highlight(token.content, langName, '') || escapeHtml(token.content);
+      } else {
+        highlighted = escapeHtml(token.content);
+      }
+
+      // If language is present, wrap in a container with a header
+      if (langName) {
+        return `<div class="code-block-wrapper">
+               <div class="code-block-header">
+                 <span class="code-language">${escapeHtml(langName)}</span>
+               </div>
+               <pre><code class="hljs language-${escapeHtml(langName)}">${highlighted}</code></pre>
+             </div>`;
+      }
+
+      return `<pre><code class="hljs">${highlighted}</code></pre>`;
+    };
+  }
 
   private isPrepending = false;
   private suppressAutoScroll = false;

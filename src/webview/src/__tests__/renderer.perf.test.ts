@@ -9,6 +9,11 @@ const markdownItConstructorSpy = vi.fn();
 vi.mock('markdown-it', () => {
   return {
     default: class {
+      renderer = {
+        rules: {
+          fence: null,
+        },
+      };
       constructor(options?: any) {
         markdownItConstructorSpy(options);
       }

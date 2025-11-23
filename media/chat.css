@@ -116,14 +116,7 @@ body {
   color: var(--vscode-editor-foreground);
 }
 
-.assistant-message pre {
-  margin: 8px 0;
-  padding: 8px;
-  background-color: var(--vscode-textBlockQuote-background);
-  border-radius: 4px;
-  overflow-x: auto;
-}
-
+/* Removed conflicting rule for .assistant-message pre */
 .assistant-message code {
   font-family: var(--vscode-editor-font-family);
   font-size: var(--vscode-editor-font-size);
@@ -249,10 +242,12 @@ body {
   padding: 0 3px;
   border-radius: 3px;
 }
-.assistant-message pre code {
+/* Replaced by specific wrapper rule below */
+/* .assistant-message pre code {
   display: block;
   padding: 8px;
-}
+} */
+
 /* Preserve newlines while streaming */
 .assistant-message.streaming {
   white-space: pre-wrap;
@@ -1068,4 +1063,47 @@ body {
 
 .model-item.active .model-name {
   color: var(--vscode-list-activeSelectionForeground);
+}
+
+/* Code blocks with language label */
+.code-block-wrapper {
+  margin: 8px 0;
+  border-radius: 4px;
+  overflow: hidden;
+  border: 1px solid var(--vscode-widget-border);
+  background-color: var(--vscode-textBlockQuote-background);
+}
+
+.code-block-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 12px;
+  background-color: var(--vscode-editor-background);
+  border-bottom: 1px solid var(--vscode-widget-border);
+  font-family: var(--vscode-font-family);
+  font-size: 0.85em;
+  color: var(--vscode-descriptionForeground);
+}
+
+.code-language {
+  font-weight: 500;
+  text-transform: uppercase;
+  font-size: 0.75em;
+}
+
+.assistant-message .code-block-wrapper pre {
+  margin: 0;
+  padding: 12px;
+  border-radius: 0;
+  border: none;
+  overflow-x: auto;
+  background-color: transparent; /* highlight.js theme handles background or inherits */
+}
+
+/* Override previous rule for pre inside wrapper */
+.assistant-message .code-block-wrapper pre code {
+  padding: 0;
+  background: transparent;
+  border-radius: 0;
 }
