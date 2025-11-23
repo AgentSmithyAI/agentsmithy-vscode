@@ -63,12 +63,38 @@ export class MessageRenderer {
 
     this.messagesContainer.addEventListener('click', (e) => {
       const target = e.target as HTMLElement;
+
+      // Handle copy button clicks
       const button = target.closest('.copy-code-btn');
       if (button) {
         e.stopPropagation();
         void this.copyCodeToClipboard(button as HTMLElement);
+        return;
+      }
+
+      // Handle inline code clicks (not in code blocks)
+      if (target.tagName === 'CODE' && !target.closest('.code-block-wrapper')) {
+        void this.copyInlineCode(target);
       }
     });
+  }
+
+  private async copyInlineCode(codeElement: HTMLElement): Promise<void> {
+    const text = codeElement.textContent || '';
+
+    try {
+      await navigator.clipboard.writeText(text);
+
+      // Visual feedback
+      const originalBg = codeElement.style.backgroundColor;
+      codeElement.style.backgroundColor = 'var(--vscode-editor-selectionBackground)';
+
+      setTimeout(() => {
+        codeElement.style.backgroundColor = originalBg;
+      }, 200);
+    } catch (err) {
+      console.error('Failed to copy inline code:', err);
+    }
   }
 
   private async copyCodeToClipboard(button: HTMLElement): Promise<void> {

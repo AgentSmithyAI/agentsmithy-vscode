@@ -241,6 +241,20 @@ body {
   background: var(--vscode-textBlockQuote-background);
   padding: 0 3px;
   border-radius: 3px;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.assistant-message code:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+
+.assistant-message .code-block-wrapper code {
+  cursor: text;
+}
+
+.assistant-message .code-block-wrapper code:hover {
+  background: transparent;
 }
 /* Replaced by specific wrapper rule below */
 /* .assistant-message pre code {
