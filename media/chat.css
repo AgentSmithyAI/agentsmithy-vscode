@@ -592,7 +592,7 @@ body {
   background-color: var(--vscode-button-hoverBackground);
 }
 
-#serverStatusOverlay .server-status-btn:focus {
+#serverStatusOverlay .server-status-btn.primary:focus {
   outline: 1px solid var(--vscode-focusBorder);
   outline-offset: 2px;
 }
@@ -1106,4 +1106,28 @@ body {
   padding: 0;
   background: transparent;
   border-radius: 0;
+}
+
+.copy-code-btn {
+  background: transparent;
+  border: none;
+  color: var(--vscode-descriptionForeground);
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    background-color 0.1s,
+    color 0.1s;
+}
+
+.copy-code-btn:hover {
+  background-color: var(--vscode-toolbar-hoverBackground);
+  color: var(--vscode-foreground);
+}
+
+.copy-code-btn .codicon {
+  font-size: 14px;
 }

@@ -4,6 +4,9 @@ import {escapeHtml, formatDiff, linkifyUrls, stripProjectPrefix} from './utils';
 import MarkdownIt from 'markdown-it';
 import hljs from 'highlight.js';
 
+const COPY_ICON = `<svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M4 4l1-1h5.414L14 6.586V14l-1 1H5l-1-1V4zm9 3l-3-3H5v10h8V7z"/><path d="M3 1L2 2v10l1 1V2h6.414l-1-1H3z"/></svg>`;
+const CHECK_ICON = `<svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M13.78 4.22a.75.75 0 010 1.06l-7.25 7.25a.75.75 0 01-1.06 0L2.22 9.28a.75.75 0 011.06-1.06L6 10.94l6.72-6.72a.75.75 0 011.06 0z"/></svg>`;
+
 export interface ScrollManagerLike {
   isAtBottom: () => boolean;
   handleContentShrink?: () => void;
@@ -49,17 +52,55 @@ export class MessageRenderer {
       }
 
       // If language is present, wrap in a container with a header
-      if (langName) {
-        return `<div class="code-block-wrapper">
-               <div class="code-block-header">
-                 <span class="code-language">${escapeHtml(langName)}</span>
-               </div>
-               <pre><code class="hljs language-${escapeHtml(langName)}">${highlighted}</code></pre>
-             </div>`;
-      }
-
-      return `<pre><code class="hljs">${highlighted}</code></pre>`;
+      const langDisplay = langName || '';
+      return `<div class="code-block-wrapper">
+             <div class="code-block-header">
+               <span class="code-language">${escapeHtml(langDisplay)}</span>
+               <button class="copy-code-btn" title="Copy code">
+                  ${COPY_ICON}
+               </button>
+             </div>
+             <pre><code class="hljs ${langName ? 'language-' + escapeHtml(langName) : ''}">${highlighted}</code></pre>
+           </div>`;
     };
+
+    this.messagesContainer.addEventListener('click', (e) => {
+      const target = e.target as HTMLElement;
+      const button = target.closest('.copy-code-btn');
+      if (button) {
+        e.stopPropagation();
+        void this.copyCodeToClipboard(button as HTMLElement);
+      }
+    });
+  }
+
+  private async copyCodeToClipboard(button: HTMLElement): Promise<void> {
+    const wrapper = button.closest('.code-block-wrapper');
+    if (!wrapper) {
+      return;
+    }
+
+    const codeElement = wrapper.querySelector('code');
+    if (!codeElement) {
+      return;
+    }
+
+    const text = codeElement.textContent || '';
+
+    try {
+      await navigator.clipboard.writeText(text);
+
+      // Feedback
+      button.innerHTML = CHECK_ICON;
+      button.classList.add('copied');
+
+      setTimeout(() => {
+        button.innerHTML = COPY_ICON;
+        button.classList.remove('copied');
+      }, 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
   }
 
   private isPrepending = false;
