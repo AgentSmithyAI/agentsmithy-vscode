@@ -13,8 +13,6 @@ export class HistoryService {
   private _historyLoading = false;
   // The server-reported first_idx of the topmost loaded page
   private _serverCursor?: number;
-  // The first visible user/chat idx currently rendered in the webview (floor)
-  private _visibleFloor?: number;
   // Snapshot of the last loadLatest page to allow reset when returning to the latest view
   private _latestFirstIdx?: number;
   private _latestHasMore?: boolean;
@@ -32,7 +30,6 @@ export class HistoryService {
   setVisibleFirstIdx(idx: number | undefined | null): void {
     const nextVisible = typeof idx === 'number' ? idx : undefined;
     const prevCursor = this._historyCursor;
-    this._visibleFloor = nextVisible;
 
     const topMovedDown =
       nextVisible !== undefined && prevCursor !== undefined && Number.isFinite(prevCursor) && nextVisible > prevCursor;
@@ -91,8 +88,6 @@ export class HistoryService {
     try {
       const resp = await this.apiService.loadHistory(dialogId, PAGINATION.DEFAULT_PAGE_SIZE);
       this._serverCursor = resp.first_idx ?? undefined;
-      // Fresh load resets visible floor; cursor comes directly from server
-      this._visibleFloor = undefined;
       this._historyCursor = resp.first_idx ?? undefined;
       this._lastExhaustedBefore = resp.has_more ? undefined : this._historyCursor;
       // Store snapshot of latest page to allow reset when returning to it
@@ -212,7 +207,6 @@ export class HistoryService {
     this._currentDialogId = undefined;
     this._historyCursor = undefined;
     this._serverCursor = undefined;
-    this._visibleFloor = undefined;
     this._latestFirstIdx = undefined;
     this._latestHasMore = undefined;
     this._lastExhaustedBefore = undefined;
