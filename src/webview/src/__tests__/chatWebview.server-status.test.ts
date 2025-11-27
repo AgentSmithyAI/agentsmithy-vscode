@@ -54,4 +54,16 @@ describe('ChatWebview handleServerStatus', () => {
     (subject as any).handleServerStatus('ready');
     expect(document.getElementById('serverStatusOverlay')).toBeNull();
   });
+
+  it('shows no-workspace overlay with folder icon', () => {
+    const subject = createSubject();
+    (subject as any).handleServerStatus('no-workspace', 'Open a folder or workspace');
+
+    const overlay = document.getElementById('serverStatusOverlay');
+    expect(overlay).not.toBeNull();
+    expect(overlay?.textContent).toContain('Open a folder or workspace');
+    expect(overlay?.querySelector('.codicon-folder-opened')).not.toBeNull();
+    // No settings button in no-workspace state
+    expect(overlay?.querySelector('[data-action="open-settings"]')).toBeNull();
+  });
 });

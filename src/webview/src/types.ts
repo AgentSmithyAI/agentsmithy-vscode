@@ -64,7 +64,11 @@ export type WebviewOutMessage =
   | {type: typeof WEBVIEW_OUT_MSG.HISTORY_REPLACE_ALL; events: HistoryEvent[]; dialogId?: string}
   | {type: typeof WEBVIEW_OUT_MSG.SCROLL_TO_BOTTOM; dialogId?: string}
   | {type: typeof WEBVIEW_OUT_MSG.GET_VISIBLE_FIRST_IDX}
-  | {type: typeof WEBVIEW_OUT_MSG.SERVER_STATUS; status: 'launching' | 'ready' | 'error'; message?: string}
+  | {
+      type: typeof WEBVIEW_OUT_MSG.SERVER_STATUS;
+      status: 'launching' | 'ready' | 'error' | 'no-workspace';
+      message?: string;
+    }
   | {type: typeof WEBVIEW_OUT_MSG.FOCUS_INPUT; force?: boolean}
   | {
       type: typeof WEBVIEW_OUT_MSG.DIALOGS_UPDATE;

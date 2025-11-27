@@ -403,7 +403,7 @@ export class ChatWebview {
     }
   }
 
-  private handleServerStatus(status: 'launching' | 'ready' | 'error', message?: string): void {
+  private handleServerStatus(status: 'launching' | 'ready' | 'error' | 'no-workspace', message?: string): void {
     const container = document.querySelector('.chat-container') as HTMLElement;
 
     // Always remove existing overlay first to prevent leaks and ensure clean state
@@ -412,8 +412,8 @@ export class ChatWebview {
       this.serverStatusOverlay = null;
     }
 
-    // Only create overlay for launching and error states
-    if (status === 'launching' || status === 'error') {
+    // Only create overlay for launching, error, and no-workspace states
+    if (status === 'launching' || status === 'error' || status === 'no-workspace') {
       const overlay = document.createElement('div');
       overlay.id = 'serverStatusOverlay';
       overlay.style.cssText = `
@@ -435,6 +435,12 @@ export class ChatWebview {
         overlay.innerHTML = `
           <div class="codicon codicon-loading codicon-modifier-spin server-status-icon"></div>
           <div class="server-status-message launching">${safeMessage}</div>
+        `;
+      } else if (status === 'no-workspace') {
+        const safeMessage = escapeHtml(message || 'Open a folder or workspace to get started');
+        overlay.innerHTML = `
+          <div class="codicon codicon-folder-opened server-status-icon"></div>
+          <div class="server-status-message no-workspace">${safeMessage}</div>
         `;
       } else {
         // error

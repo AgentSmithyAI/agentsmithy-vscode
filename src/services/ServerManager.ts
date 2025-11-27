@@ -435,6 +435,13 @@ export class ServerManager {
   };
 
   /**
+   * Check if workspace is available for server to run
+   */
+  hasWorkspace = (): boolean => {
+    return this.configService.getWorkspaceRoot() !== null;
+  };
+
+  /**
    * Get server status
    */
   getStatus = async (): Promise<{running: boolean; port: number | null; pid: number | null}> => {
