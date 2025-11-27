@@ -72,9 +72,25 @@ describe('ChatWebview handleServerStatus', () => {
     expect(overlay?.querySelector('[data-action="open-settings"]')).toBeNull();
   });
 
-  it('disables input and button when not ready', () => {
+  it('disables input and button when launching', () => {
     const subject = createSubject();
     (subject as any).handleServerStatus('launching', 'Loading...');
+
+    expect(subject.messageInput.disabled).toBe(true);
+    expect(subject.sendButton.disabled).toBe(true);
+  });
+
+  it('disables input and button when error', () => {
+    const subject = createSubject();
+    (subject as any).handleServerStatus('error', 'Server error');
+
+    expect(subject.messageInput.disabled).toBe(true);
+    expect(subject.sendButton.disabled).toBe(true);
+  });
+
+  it('disables input and button when no-workspace', () => {
+    const subject = createSubject();
+    (subject as any).handleServerStatus('no-workspace', 'Open workspace');
 
     expect(subject.messageInput.disabled).toBe(true);
     expect(subject.sendButton.disabled).toBe(true);
