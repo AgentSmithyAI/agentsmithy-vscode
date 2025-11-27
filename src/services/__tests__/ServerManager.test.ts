@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-misused-promises */
 import {describe, it, expect, beforeEach, vi} from 'vitest';
 import {ServerManager} from '../ServerManager';
 import * as vscode from 'vscode';
@@ -35,7 +36,7 @@ vi.mock('../server/ProcessManager', () => ({
   },
 }));
 
-describe('ServerManager checkHealthStatus', () => {
+describe('ServerManager', () => {
   let manager: ServerManager;
   let configInvalidEvents: Array<{errors: string[]}>;
   let outputChannel: {appendLine: ReturnType<typeof vi.fn>};
@@ -65,85 +66,89 @@ describe('ServerManager checkHealthStatus', () => {
     outputChannel = (manager as any).outputChannel;
   });
 
-  it('emits config invalid event when health reports errors', async () => {
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        config_valid: false,
-        config_errors: ['Missing API key', 'Invalid base URL'],
-      }),
-    }) as unknown as typeof fetch;
+  describe('checkHealthStatus', () => {
+    it('emits config invalid event when health reports errors', async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          config_valid: false,
+          config_errors: ['Missing API key', 'Invalid base URL'],
+        }),
+      }) as unknown as typeof fetch;
 
-    await (manager as any).checkHealthStatus();
+      await (manager as any).checkHealthStatus();
 
-    expect(configInvalidEvents).toEqual([{errors: ['Missing API key', 'Invalid base URL']}]);
-    expect(outputChannel.appendLine).toHaveBeenCalledWith('Config valid: false');
-    expect(outputChannel.appendLine).toHaveBeenCalledWith('Config errors:\n  - Missing API key\n  - Invalid base URL');
-  });
+      expect(configInvalidEvents).toEqual([{errors: ['Missing API key', 'Invalid base URL']}]);
+      expect(outputChannel.appendLine).toHaveBeenCalledWith('Config valid: false');
+      expect(outputChannel.appendLine).toHaveBeenCalledWith(
+        'Config errors:\n  - Missing API key\n  - Invalid base URL',
+      );
+    });
 
-  it('filters non-string errors before emitting', async () => {
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        config_valid: false,
-        config_errors: ['Valid string', {foo: 'bar'}, 42],
-      }),
-    }) as unknown as typeof fetch;
+    it('filters non-string errors before emitting', async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          config_valid: false,
+          config_errors: ['Valid string', {foo: 'bar'}, 42],
+        }),
+      }) as unknown as typeof fetch;
 
-    await (manager as any).checkHealthStatus();
+      await (manager as any).checkHealthStatus();
 
-    expect(configInvalidEvents).toEqual([{errors: ['Valid string']}]);
-  });
+      expect(configInvalidEvents).toEqual([{errors: ['Valid string']}]);
+    });
 
-  it('does nothing when config is valid', async () => {
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        config_valid: true,
-        config_errors: ['should be ignored'],
-      }),
-    }) as unknown as typeof fetch;
+    it('does nothing when config is valid', async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          config_valid: true,
+          config_errors: ['should be ignored'],
+        }),
+      }) as unknown as typeof fetch;
 
-    await (manager as any).checkHealthStatus();
+      await (manager as any).checkHealthStatus();
 
-    expect(configInvalidEvents).toEqual([]);
-    expect(outputChannel.appendLine).toHaveBeenCalledWith('Config valid: true');
-    expect(outputChannel.appendLine).toHaveBeenCalledTimes(1);
-  });
+      expect(configInvalidEvents).toEqual([]);
+      expect(outputChannel.appendLine).toHaveBeenCalledWith('Config valid: true');
+      expect(outputChannel.appendLine).toHaveBeenCalledTimes(1);
+    });
 
-  it('logs and aborts when health endpoint responds with non-OK status', async () => {
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: false,
-      status: 503,
-    }) as unknown as typeof fetch;
+    it('logs and aborts when health endpoint responds with non-OK status', async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 503,
+      }) as unknown as typeof fetch;
 
-    await (manager as any).checkHealthStatus();
+      await (manager as any).checkHealthStatus();
 
-    expect(outputChannel.appendLine).toHaveBeenCalledWith('Health check failed: 503');
-    expect(configInvalidEvents).toEqual([]);
-  });
+      expect(outputChannel.appendLine).toHaveBeenCalledWith('Health check failed: 503');
+      expect(configInvalidEvents).toEqual([]);
+    });
 
-  it('logs failure when fetch throws', async () => {
-    global.fetch = vi.fn().mockRejectedValue(new Error('network down')) as unknown as typeof fetch;
+    it('logs failure when fetch throws', async () => {
+      global.fetch = vi.fn().mockRejectedValue(new Error('network down')) as unknown as typeof fetch;
 
-    await (manager as any).checkHealthStatus();
+      await (manager as any).checkHealthStatus();
 
-    expect(outputChannel.appendLine).toHaveBeenCalledWith('Failed to check health status: network down');
-  });
+      expect(outputChannel.appendLine).toHaveBeenCalledWith('Failed to check health status: network down');
+    });
 
-  it('logs placeholder when config errors is not an array', async () => {
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        config_valid: false,
-        config_errors: 'oops',
-      }),
-    }) as unknown as typeof fetch;
+    it('logs placeholder when config errors is not an array', async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          config_valid: false,
+          config_errors: 'oops',
+        }),
+      }) as unknown as typeof fetch;
 
-    await (manager as any).checkHealthStatus();
+      await (manager as any).checkHealthStatus();
 
-    expect(outputChannel.appendLine).toHaveBeenCalledWith('Config errors:\n  - (no details provided)');
-    expect(configInvalidEvents).toEqual([{errors: []}]);
+      expect(outputChannel.appendLine).toHaveBeenCalledWith('Config errors:\n  - (no details provided)');
+      expect(configInvalidEvents).toEqual([{errors: []}]);
+    });
   });
 
   describe('startServer', () => {
@@ -159,6 +164,31 @@ describe('ServerManager checkHealthStatus', () => {
         'Server is already starting, waiting on existing operation...',
       );
       await returned;
+    });
+
+    it('should satisfy waitForReady while starting (race condition fix)', async () => {
+      // Mock ensureServer to simulate delay
+      vi.spyOn(manager as any, 'ensureServer').mockImplementation(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      });
+
+      // Mock successful start
+      processManagerMock.start.mockImplementation(
+        async (_path: string, _root: string, onReady: () => void, _onError: (err: Error) => void) => {
+          await new Promise((resolve) => setTimeout(resolve, 50));
+          onReady();
+        },
+      );
+
+      // Start server
+      const startPromise = manager.startServer();
+
+      // Call waitForReady immediately (while ensureServer is running)
+      const waitPromise = manager.waitForReady();
+
+      // It should NOT throw 'Server is not starting or running'
+      await expect(waitPromise).resolves.not.toThrow();
+      await startPromise;
     });
   });
 

@@ -51,6 +51,7 @@ export class ServerManager {
 
     try {
       const stats = fs.statSync(serverPath);
+
       if (stats.size === 0) {
         this.outputChannel.appendLine('Server binary is empty (0 bytes)');
         return false;
@@ -60,13 +61,19 @@ export class ServerManager {
       if (platform !== 'win32') {
         const isExecutable = (stats.mode & 0o100) !== 0;
         if (!isExecutable) {
-          this.outputChannel.appendLine('Server binary is not executable');
+          this.outputChannel.appendLine(`Server binary is not executable (mode: ${stats.mode.toString(8)})`);
           return false;
         }
       }
       return true;
-    } catch {
+    } catch (error) {
       // File doesn't exist or can't be accessed
+      // Log the reason only if it's not ENOENT (file missing is expected first time)
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+        this.outputChannel.appendLine(
+          `Server binary check failed for ${serverPath}: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
       return false;
     }
   };
@@ -324,23 +331,26 @@ export class ServerManager {
       return Promise.resolve();
     }
 
-    const workspaceRoot = this.configService.getWorkspaceRoot();
-    if (!workspaceRoot) {
-      this.outputChannel.appendLine('No workspace folder open');
-      void vscode.window.showErrorMessage('AgentSmithy: Please open a workspace folder first');
-      this.isStarting = false;
-      return Promise.resolve();
-    }
-
-    this.outputChannel.appendLine(`Workspace: ${workspaceRoot}`);
-
-    // Create new promise for this start attempt
+    // Create new promise for this start attempt IMMEDIATELY
+    // This ensures that waitForReady() will wait for this promise instead of throwing
     this.startPromise = (async () => {
       try {
+        // Ensure server binary is available (download if needed) before checking workspace
         this.outputChannel.appendLine('Checking server binary...');
         await this.ensureServer();
         this.outputChannel.appendLine('Server binary check complete');
 
+        const workspaceRoot = this.configService.getWorkspaceRoot();
+        if (!workspaceRoot) {
+          this.outputChannel.appendLine('No workspace folder open');
+          // Silently fail if no workspace is open (auto-start scenario)
+          // But we have ensured server binary is checked/downloaded.
+
+          this.isStarting = false;
+          return; // Resolve the promise successfully but do nothing
+        }
+
+        this.outputChannel.appendLine(`Workspace: ${workspaceRoot}`);
         const serverPath = this.getServerPath();
 
         await this.processManager.start(
@@ -364,7 +374,12 @@ export class ServerManager {
         );
       } catch (error) {
         this.outputChannel.appendLine('Server failed to start. Check the output for details.');
-        void vscode.window.showErrorMessage('AgentSmithy server failed to start. Check the output for details.');
+        // Only show error message if we actually tried to start the process (workspaceRoot was found)
+        // or if ensureServer failed (download failed)
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        if (!errorMsg.includes('No workspace folder open')) {
+          void vscode.window.showErrorMessage('AgentSmithy server failed to start. Check the output for details.');
+        }
 
         // Try to stop the process, but don't let stop errors mask the original error
         try {
