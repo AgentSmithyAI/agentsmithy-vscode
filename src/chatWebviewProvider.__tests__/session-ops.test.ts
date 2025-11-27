@@ -12,7 +12,7 @@ import {bootWebview, mockSessionStatus, waitForAsync} from './test-helpers';
 
 class FakeStream extends StreamService {
   constructor() {
-    super('http://localhost', normalizeSSEEvent);
+    super(() => 'http://localhost', normalizeSSEEvent);
   }
 }
 

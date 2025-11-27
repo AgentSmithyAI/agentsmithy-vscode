@@ -12,7 +12,7 @@ import {normalizeSSEEvent} from '../shared/sseNormalizer';
 // Build minimal fakes for dependencies
 class FakeStream extends StreamService {
   constructor() {
-    super('http://localhost', normalizeSSEEvent);
+    super(() => 'http://localhost', normalizeSSEEvent);
   }
 }
 

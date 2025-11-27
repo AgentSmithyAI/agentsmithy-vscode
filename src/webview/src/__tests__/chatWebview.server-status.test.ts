@@ -16,9 +16,14 @@ describe('ChatWebview handleServerStatus', () => {
     const instance = Object.create(ChatWebview.prototype) as ChatWebview & {
       serverStatusOverlay: HTMLElement | null;
       vscode: {postMessage: ReturnType<typeof vi.fn>};
+      messageInput: HTMLTextAreaElement;
+      sendButton: HTMLButtonElement;
     };
     instance.serverStatusOverlay = null;
     instance.vscode = {postMessage: vi.fn()};
+    // Create mock elements for input and button
+    instance.messageInput = document.createElement('textarea');
+    instance.sendButton = document.createElement('button');
     return instance;
   };
 
@@ -65,5 +70,25 @@ describe('ChatWebview handleServerStatus', () => {
     expect(overlay?.querySelector('.codicon-folder-opened')).not.toBeNull();
     // No settings button in no-workspace state
     expect(overlay?.querySelector('[data-action="open-settings"]')).toBeNull();
+  });
+
+  it('disables input and button when not ready', () => {
+    const subject = createSubject();
+    (subject as any).handleServerStatus('launching', 'Loading...');
+
+    expect(subject.messageInput.disabled).toBe(true);
+    expect(subject.sendButton.disabled).toBe(true);
+  });
+
+  it('enables input and button when ready', () => {
+    const subject = createSubject();
+    // First set to launching (disabled)
+    (subject as any).handleServerStatus('launching', 'Loading...');
+    expect(subject.messageInput.disabled).toBe(true);
+
+    // Then set to ready (enabled)
+    (subject as any).handleServerStatus('ready');
+    expect(subject.messageInput.disabled).toBe(false);
+    expect(subject.sendButton.disabled).toBe(false);
   });
 });
