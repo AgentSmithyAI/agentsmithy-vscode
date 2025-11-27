@@ -180,7 +180,7 @@ describe('ServerManager', () => {
       const startPromise = manager.startServer();
       const waitPromise = manager.waitForReady();
 
-      await expect(waitPromise).resolves.not.toThrow();
+      await waitPromise;
       await startPromise;
     });
 

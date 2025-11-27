@@ -374,12 +374,7 @@ export class ServerManager {
         );
       } catch (error) {
         this.outputChannel.appendLine('Server failed to start. Check the output for details.');
-        // Only show error message if we actually tried to start the process (workspaceRoot was found)
-        // or if ensureServer failed (download failed)
-        const errorMsg = error instanceof Error ? error.message : String(error);
-        if (!errorMsg.includes('No workspace folder open')) {
-          void vscode.window.showErrorMessage('AgentSmithy server failed to start. Check the output for details.');
-        }
+        void vscode.window.showErrorMessage('AgentSmithy server failed to start. Check the output for details.');
 
         // Try to stop the process, but don't let stop errors mask the original error
         try {
