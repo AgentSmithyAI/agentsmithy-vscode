@@ -1,3 +1,10 @@
+## [1.8.3](https://github.com/AgentSmithyAI/agentsmithy-vscode/compare/v1.8.2...v1.8.3) (2025-11-27)
+
+
+### Bug Fixes
+
+* Fix `fetch failed` bug ([#49](https://github.com/AgentSmithyAI/agentsmithy-vscode/issues/49)) ([bd525a8](https://github.com/AgentSmithyAI/agentsmithy-vscode/commit/bd525a8314ac3fa40bedcda1aff1271d19a05a97))
+
 ## [1.8.2](https://github.com/AgentSmithyAI/agentsmithy-vscode/compare/v1.8.1...v1.8.2) (2025-11-27)
 
 
