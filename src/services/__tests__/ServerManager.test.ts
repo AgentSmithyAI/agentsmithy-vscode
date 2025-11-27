@@ -124,6 +124,7 @@ describe('ServerManager', () => {
     downloadManagerMock.verifyIntegrity.mockReturnValue(true);
     downloadManagerMock.verifySHA256.mockResolvedValue(true);
     processManagerMock.isAlive.mockReturnValue(false);
+    platformUtilsMock.getAssetName.mockReturnValue('agentsmithy-linux-amd64-1.0.0');
 
     configInvalidEvents = [];
     manager = createManager();
@@ -229,6 +230,26 @@ describe('ServerManager', () => {
       expect(processManagerMock.stop).toHaveBeenCalled();
       expect((manager as any).isStarting).toBe(false);
     });
+
+    it('trigger health check on successful start', async () => {
+      const fetchSpy = vi.spyOn(global, 'fetch').mockResolvedValue({
+        ok: true,
+        json: async () => ({config_valid: true}),
+      } as any);
+
+      processManagerMock.start.mockImplementation(
+        async (_path: string, _root: string, onReady: () => void, _onError: (err: Error) => void) => {
+          onReady();
+        },
+      );
+
+      await manager.startServer();
+
+      // Wait for next tick to allow fire-and-forget checkHealthStatus to run
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(fetchSpy).toHaveBeenCalled();
+    });
   });
 
   describe('waitForReady', () => {
@@ -288,6 +309,14 @@ describe('ServerManager', () => {
       (vscode.window.showInformationMessage as any).mockResolvedValue('Cancel');
 
       await expect((manager as any).ensureServer()).rejects.toThrow('Server download cancelled by user');
+    });
+
+    it('logs error when ensureServer fails internally', async () => {
+      // Make fetchLatestRelease throw to trigger catch block in ensureServer
+      downloadManagerMock.fetchLatestRelease.mockRejectedValue(new Error('GitHub API error'));
+
+      await expect((manager as any).ensureServer()).rejects.toThrow('GitHub API error');
+      expect(outputChannel.appendLine).toHaveBeenCalledWith('ERROR in ensureServer: GitHub API error');
     });
   });
 
