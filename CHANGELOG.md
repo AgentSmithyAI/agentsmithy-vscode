@@ -1,3 +1,10 @@
+## [1.8.2](https://github.com/AgentSmithyAI/agentsmithy-vscode/compare/v1.8.1...v1.8.2) (2025-11-27)
+
+
+### Bug Fixes
+
+* Fix launch without project ([#48](https://github.com/AgentSmithyAI/agentsmithy-vscode/issues/48)) ([623e20f](https://github.com/AgentSmithyAI/agentsmithy-vscode/commit/623e20f68a51292c5df23690f16c8e4909ee4840))
+
 ## [1.8.1](https://github.com/AgentSmithyAI/agentsmithy-vscode/compare/v1.8.0...v1.8.1) (2025-11-23)
 
 
