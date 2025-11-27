@@ -570,6 +570,10 @@ body {
   color: var(--vscode-foreground);
 }
 
+#serverStatusOverlay .server-status-icon.codicon-folder-opened {
+  color: var(--vscode-foreground);
+}
+
 #serverStatusOverlay .server-status-message {
   font-size: 14px;
   color: var(--vscode-foreground);

@@ -95,6 +95,7 @@ describe('ChatWebviewProvider Full Flow', () => {
 
     serverManager = {
       waitForReady: vi.fn().mockResolvedValue(undefined),
+      hasWorkspace: vi.fn().mockReturnValue(true),
     } as unknown as ServerManager;
 
     provider = new ChatWebviewProvider(

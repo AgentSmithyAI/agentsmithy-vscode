@@ -66,7 +66,7 @@ describe('ChatWebviewProvider - Workloads Loading', () => {
       {} as any,
       configService,
       apiService,
-      {waitForReady: vi.fn()} as any,
+      {waitForReady: vi.fn(), hasWorkspace: vi.fn().mockReturnValue(true)} as any,
     );
 
     // Initialize view

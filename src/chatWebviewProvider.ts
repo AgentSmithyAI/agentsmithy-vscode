@@ -73,7 +73,11 @@ type WebviewOutMessage =
   | {type: typeof WEBVIEW_OUT_MSG.SESSION_STATUS_UPDATE; hasUnapproved: boolean; changedFiles?: ChangedFile[]}
   | {type: typeof WEBVIEW_OUT_MSG.SESSION_OPERATION_CANCELLED}
   | {type: typeof WEBVIEW_OUT_MSG.FOCUS_INPUT}
-  | {type: typeof WEBVIEW_OUT_MSG.SERVER_STATUS; status: 'launching' | 'ready' | 'error'; message?: string}
+  | {
+      type: typeof WEBVIEW_OUT_MSG.SERVER_STATUS;
+      status: 'launching' | 'ready' | 'error' | 'no-workspace';
+      message?: string;
+    }
   | {
       type: typeof WEBVIEW_OUT_MSG.WORKLOADS_UPDATE;
       workloads: Array<{name: string; displayName: string}>;
@@ -85,7 +89,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider, vscode.D
   private _view?: vscode.WebviewView;
   private readonly _outputChannel: vscode.OutputChannel;
   private _isInitializing = false;
-  private readonly _serverManager: {waitForReady: () => Promise<void>};
+  private readonly _serverManager: {waitForReady: () => Promise<void>; hasWorkspace: () => boolean};
   private _selectedWorkload: string = '';
 
   constructor(
@@ -95,7 +99,7 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider, vscode.D
     private readonly _dialogService: DialogService,
     private readonly _configService: ConfigService,
     private readonly _apiService: ApiService,
-    serverManager: {waitForReady: () => Promise<void>},
+    serverManager: {waitForReady: () => Promise<void>; hasWorkspace: () => boolean},
   ) {
     this._serverManager = serverManager;
     this._outputChannel = vscode.window.createOutputChannel('AgentSmithy Webview');
@@ -243,7 +247,19 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider, vscode.D
           this._stream.abort();
           break;
         case WEBVIEW_IN_MSG.READY:
-          this._outputChannel.appendLine('[READY message] Received, waiting for server...');
+          this._outputChannel.appendLine('[READY message] Received, checking workspace...');
+
+          // Check if workspace is available before trying to start server
+          if (!this._serverManager.hasWorkspace()) {
+            this._outputChannel.appendLine('[READY message] No workspace open');
+            this._postMessage({
+              type: WEBVIEW_OUT_MSG.SERVER_STATUS,
+              status: 'no-workspace',
+              message: 'Open a folder or workspace to get started',
+            });
+            break;
+          }
+
           this._postMessage({type: WEBVIEW_OUT_MSG.SERVER_STATUS, status: 'launching', message: 'Launching server...'});
 
           try {

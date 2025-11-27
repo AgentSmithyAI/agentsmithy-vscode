@@ -102,7 +102,7 @@ describe('ChatWebviewProvider - Workload and Diff', () => {
       } as unknown as DialogService,
       configService,
       apiService,
-      {waitForReady: vi.fn().mockResolvedValue(undefined)},
+      {waitForReady: vi.fn().mockResolvedValue(undefined), hasWorkspace: vi.fn().mockReturnValue(true)},
     );
 
     // Trigger resolve to attach listeners

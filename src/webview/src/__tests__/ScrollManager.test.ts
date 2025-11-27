@@ -5,6 +5,7 @@ import {beforeEach, describe, expect, it, vi} from 'vitest';
 import {ScrollManager} from '../scroll/ScrollManager';
 import {MessageRenderer} from '../renderer';
 import {VSCodeAPI} from '../types';
+import {WEBVIEW_IN_MSG} from '../../../shared/messages';
 
 describe('ScrollManager', () => {
   let messagesContainer: HTMLElement;
@@ -91,7 +92,7 @@ describe('ScrollManager', () => {
         messagesContainer.scrollTop = 80;
         messagesContainer.dispatchEvent(new Event('scroll'));
 
-        expect(postSpy).toHaveBeenCalledWith({type: expect.stringContaining('LOAD_MORE_HISTORY')});
+        expect(postSpy).toHaveBeenCalledWith({type: WEBVIEW_IN_MSG.LOAD_MORE_HISTORY});
       });
 
       it('does not trigger load immediately again until re-armed', () => {
@@ -135,7 +136,7 @@ describe('ScrollManager', () => {
         // Still near top; another scroll should not trigger immediately
         messagesContainer.scrollTop = 70;
         messagesContainer.dispatchEvent(new Event('scroll'));
-        const calls = postSpy.mock.calls.filter((c) => String(c[0]?.type || '').includes('LOAD_MORE_HISTORY')).length;
+        const calls = postSpy.mock.calls.filter((c) => c[0]?.type === WEBVIEW_IN_MSG.LOAD_MORE_HISTORY).length;
         expect(calls).toBe(1);
       });
 
@@ -149,7 +150,7 @@ describe('ScrollManager', () => {
         messagesContainer.dispatchEvent(new Event('scroll'));
 
         // No new load should be requested
-        const calls = postSpy.mock.calls.filter((c) => String(c[0]?.type || '').includes('LOAD_MORE_HISTORY')).length;
+        const calls = postSpy.mock.calls.filter((c) => c[0]?.type === WEBVIEW_IN_MSG.LOAD_MORE_HISTORY).length;
         expect(calls).toBe(0);
       });
     });
@@ -354,7 +355,7 @@ describe('ScrollManager', () => {
       // Step 1: Scroll back and trigger history load
       messagesContainer.scrollTop = 50;
       messagesContainer.dispatchEvent(new Event('scroll'));
-      let loadCalls = postSpy.mock.calls.filter((c) => c[0]?.type === 'loadMoreHistory');
+      let loadCalls = postSpy.mock.calls.filter((c) => c[0]?.type === WEBVIEW_IN_MSG.LOAD_MORE_HISTORY);
       expect(loadCalls.length).toBe(1);
 
       // Step 2: Finish loading, trigger disarms
@@ -375,7 +376,7 @@ describe('ScrollManager', () => {
       messagesContainer.scrollTop = 80;
       messagesContainer.dispatchEvent(new Event('scroll'));
 
-      loadCalls = postSpy.mock.calls.filter((c) => c[0]?.type === 'loadMoreHistory');
+      loadCalls = postSpy.mock.calls.filter((c) => c[0]?.type === WEBVIEW_IN_MSG.LOAD_MORE_HISTORY);
       expect(loadCalls.length).toBe(1);
     });
 
@@ -390,7 +391,7 @@ describe('ScrollManager', () => {
       // User scrolls back -> history loads
       messagesContainer.scrollTop = 50;
       messagesContainer.dispatchEvent(new Event('scroll'));
-      expect(postSpy.mock.calls.some((c) => c[0]?.type === 'loadMoreHistory')).toBe(true);
+      expect(postSpy.mock.calls.some((c) => c[0]?.type === WEBVIEW_IN_MSG.LOAD_MORE_HISTORY)).toBe(true);
 
       scrollManager.finishHistoryLoad();
 
@@ -410,7 +411,7 @@ describe('ScrollManager', () => {
 
       // With fix: trigger is re-armed after prune, so history loads
       // Without fix: trigger not re-armed, no history request
-      const loadCalls = postSpy.mock.calls.filter((c) => c[0]?.type === 'loadMoreHistory');
+      const loadCalls = postSpy.mock.calls.filter((c) => c[0]?.type === WEBVIEW_IN_MSG.LOAD_MORE_HISTORY);
       expect(loadCalls.length).toBe(1);
     });
   });
