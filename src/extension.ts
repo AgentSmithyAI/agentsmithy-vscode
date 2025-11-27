@@ -21,8 +21,7 @@ export const activate = async (context: vscode.ExtensionContext) => {
 
   // Create API services (use getter to always get fresh URL)
   const apiService = new ApiService(() => configService.getServerUrl());
-  const serverUrl = configService.getServerUrl();
-  const streamService = new StreamService(serverUrl, normalizeSSEEvent);
+  const streamService = new StreamService(() => configService.getServerUrl(), normalizeSSEEvent);
   const historyService = new HistoryService(apiService);
   const dialogService = new DialogService(apiService);
 

@@ -24,7 +24,7 @@ describe('ChatWebviewProvider - stream error handling', () => {
     mockWorkspaceMethods();
 
     api = new ApiService('http://localhost');
-    stream = new StreamService('http://localhost', normalizeSSEEvent);
+    stream = new StreamService(() => 'http://localhost', normalizeSSEEvent);
     history = new HistoryService(api);
     const dialog = new DialogService(api);
     const config = new ConfigService();

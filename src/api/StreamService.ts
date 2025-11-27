@@ -55,7 +55,7 @@ export class StreamService {
   private readonly endpoint = '/api/chat';
 
   constructor(
-    private readonly baseUrl: string,
+    private readonly getBaseUrl: () => string,
     private readonly normalizeEvent: (raw: unknown) => SSEEvent | null,
   ) {}
 
@@ -102,7 +102,7 @@ export class StreamService {
   }
 
   private async createRequest(request: ChatRequest): Promise<Response> {
-    const response = await fetch(`${this.baseUrl}${this.endpoint}`, {
+    const response = await fetch(`${this.getBaseUrl()}${this.endpoint}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

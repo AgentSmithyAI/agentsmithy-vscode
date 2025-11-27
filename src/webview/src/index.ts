@@ -412,6 +412,11 @@ export class ChatWebview {
       this.serverStatusOverlay = null;
     }
 
+    // Disable/enable input based on server status
+    const isReady = status === 'ready';
+    this.messageInput.disabled = !isReady;
+    this.sendButton.disabled = !isReady;
+
     // Only create overlay for launching, error, and no-workspace states
     if (status === 'launching' || status === 'error' || status === 'no-workspace') {
       const overlay = document.createElement('div');

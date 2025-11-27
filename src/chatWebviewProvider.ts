@@ -589,12 +589,13 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider, vscode.D
           title,
         });
 
-        // Scroll to bottom after initial history load
-        this._postMessage({type: WEBVIEW_OUT_MSG.SCROLL_TO_BOTTOM, dialogId});
-
-        // Update session status
+        // Update session status (renders changes panel)
         this._outputChannel.appendLine('[_handleWebviewReady] Updating session status...');
         await this._updateSessionStatus(dialogId);
+        this._outputChannel.appendLine('[_handleWebviewReady] Session status updated');
+
+        // Scroll to bottom AFTER session status so changes panel is already rendered
+        this._postMessage({type: WEBVIEW_OUT_MSG.SCROLL_TO_BOTTOM, dialogId});
         this._outputChannel.appendLine('[_handleWebviewReady] Complete!');
       } else {
         this._outputChannel.appendLine('[_handleWebviewReady] No dialog ID, skipping');
