@@ -327,4 +327,16 @@ describe('ServerManager', () => {
       expect(outputChannel.dispose).toHaveBeenCalled();
     });
   });
+
+  describe('hasWorkspace', () => {
+    it('should return true when workspace is available', () => {
+      configService.getWorkspaceRoot.mockReturnValue('/tmp/workspace');
+      expect(manager.hasWorkspace()).toBe(true);
+    });
+
+    it('should return false when no workspace is open', () => {
+      configService.getWorkspaceRoot.mockReturnValue(null);
+      expect(manager.hasWorkspace()).toBe(false);
+    });
+  });
 });
