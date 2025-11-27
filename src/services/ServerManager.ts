@@ -343,11 +343,9 @@ export class ServerManager {
         const workspaceRoot = this.configService.getWorkspaceRoot();
         if (!workspaceRoot) {
           this.outputChannel.appendLine('No workspace folder open');
-          // Silently fail if no workspace is open (auto-start scenario)
-          // But we have ensured server binary is checked/downloaded.
-
-          this.isStarting = false;
-          return; // Resolve the promise successfully but do nothing
+          // Silently return if no workspace is open (auto-start scenario)
+          // Binary is ensured; finally block will clean up isStarting/startPromise
+          return;
         }
 
         this.outputChannel.appendLine(`Workspace: ${workspaceRoot}`);
