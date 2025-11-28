@@ -1,17 +1,24 @@
-# Build files
+# Source files (we ship bundled dist/)
+src/**
+out/**
+
+# Build configuration
 .vscode/**
 .vscode-test/**
-src/**
-.gitignore
-.github/**
-.yarnrc
 tsconfig.json
+tsconfig.eslint.json
 vitest.config.ts
 vitest.config.js
-esbuild.webview.mjs
+esbuild.*.mjs
+
+# Dependencies (bundled into dist/)
+node_modules/**
 
 # Test files
 **/__tests__/**
+**/*.test.ts
+**/*.test.js
+vitest.config.*
 coverage/**
 
 # Linting and formatting
@@ -20,11 +27,19 @@ coverage/**
 .prettierignore
 eslint.config.mjs
 
+# Documentation (not needed in package)
+docs/**
+*.md
+!README.md
+
 # CI/CD
 .releaserc.json
+codecov.yml
+.github/**
 
 # Git
 .git/**
+.gitignore
 
 # AgentSmithy working directory
 .agentsmithy/**
@@ -33,18 +48,11 @@ eslint.config.mjs
 .env
 .env.*
 
-# Source maps (optional - remove if you want to include them)
-**/*.map
+# Source maps in production
+dist/*.map
 
 # macOS
 **/.DS_Store
 
 # VSIX packages
 *.vsix
-
-# node_modules cleanup - keep .js files but exclude tests, TS sources, and docs
-node_modules/**/test/**
-node_modules/**/tests/**
-node_modules/**/*.ts
-node_modules/**/*.md
-!node_modules/marked/**
