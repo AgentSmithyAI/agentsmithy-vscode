@@ -69,6 +69,8 @@ export const createVSCodeMock = () => ({
     showInformationMessage: vi.fn(),
     showErrorMessage: vi.fn(),
     showWarningMessage: vi.fn(),
+    showInputBox: vi.fn(),
+    showQuickPick: vi.fn(),
     onDidChangeActiveTextEditor: vi.fn(() => ({dispose: vi.fn()})),
     createOutputChannel: vi.fn(() => ({
       append: vi.fn(),

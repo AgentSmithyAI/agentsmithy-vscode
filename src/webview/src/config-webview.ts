@@ -15,6 +15,9 @@ const CONFIG_IN_MSG = {
   READY: 'ready',
   LOAD_CONFIG: 'loadConfig',
   SAVE_CONFIG: 'saveConfig',
+  SHOW_INPUT_BOX: 'showInputBox',
+  SHOW_QUICK_PICK: 'showQuickPick',
+  SHOW_CONFIRM: 'showConfirm',
 } as const;
 
 const CONFIG_OUT_MSG = {
@@ -23,7 +26,63 @@ const CONFIG_OUT_MSG = {
   ERROR: 'error',
   LOADING: 'loading',
   VALIDATION_ERRORS: 'validationErrors',
+  INPUT_RESULT: 'inputResult',
+  QUICK_PICK_RESULT: 'quickPickResult',
+  CONFIRM_RESULT: 'confirmResult',
 } as const;
+
+// Pending dialog requests
+type DialogResolver = (value: string | null | boolean) => void;
+const pendingDialogs: Map<string, DialogResolver> = new Map();
+let dialogIdCounter = 0;
+
+/**
+ * Show input box via VS Code API
+ */
+function showInputBox(prompt: string, placeholder?: string, value?: string): Promise<string | null> {
+  return new Promise((resolve) => {
+    const requestId = `input_${++dialogIdCounter}`;
+    pendingDialogs.set(requestId, resolve as DialogResolver);
+    vscode.postMessage({
+      type: CONFIG_IN_MSG.SHOW_INPUT_BOX,
+      requestId,
+      prompt,
+      placeholder,
+      value,
+    });
+  });
+}
+
+/**
+ * Show quick pick via VS Code API
+ */
+function showQuickPick(items: string[], placeholder?: string): Promise<string | null> {
+  return new Promise((resolve) => {
+    const requestId = `pick_${++dialogIdCounter}`;
+    pendingDialogs.set(requestId, resolve as DialogResolver);
+    vscode.postMessage({
+      type: CONFIG_IN_MSG.SHOW_QUICK_PICK,
+      requestId,
+      items,
+      placeholder,
+    });
+  });
+}
+
+/**
+ * Show confirm dialog via VS Code API
+ */
+function showConfirm(message: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const requestId = `confirm_${++dialogIdCounter}`;
+    pendingDialogs.set(requestId, resolve as DialogResolver);
+    vscode.postMessage({
+      type: CONFIG_IN_MSG.SHOW_CONFIRM,
+      requestId,
+      message,
+    });
+  });
+}
 
 // State
 let currentConfig: Record<string, unknown> = {};
@@ -87,7 +146,15 @@ function init(): void {
 /**
  * Handle messages from extension
  */
-function handleMessage(message: {type: string; data?: unknown; message?: string; errors?: string[]}): void {
+function handleMessage(message: {
+  type: string;
+  data?: unknown;
+  message?: string;
+  errors?: string[];
+  requestId?: string;
+  value?: string | null;
+  confirmed?: boolean;
+}): void {
   switch (message.type) {
     case CONFIG_OUT_MSG.LOADING:
       showLoading();
@@ -186,6 +253,28 @@ function handleMessage(message: {type: string; data?: unknown; message?: string;
       pendingValidationErrors = Array.isArray(message.errors) ? message.errors : [];
       updateValidationSummary();
       applyValidationHighlights();
+      break;
+
+    // Dialog response handlers
+    case CONFIG_OUT_MSG.INPUT_RESULT:
+    case CONFIG_OUT_MSG.QUICK_PICK_RESULT:
+      if (message.requestId) {
+        const resolver = pendingDialogs.get(message.requestId);
+        if (resolver) {
+          pendingDialogs.delete(message.requestId);
+          resolver(message.value ?? null);
+        }
+      }
+      break;
+
+    case CONFIG_OUT_MSG.CONFIRM_RESULT:
+      if (message.requestId) {
+        const resolver = pendingDialogs.get(message.requestId);
+        if (resolver) {
+          pendingDialogs.delete(message.requestId);
+          resolver(message.confirmed ?? false);
+        }
+      }
       break;
   }
 }
@@ -815,9 +904,9 @@ function attachEventListeners(): void {
       const workloadName = (button as HTMLElement).getAttribute('data-workload');
 
       if (providerName) {
-        deleteProvider(providerName);
+        void deleteProvider(providerName);
       } else if (workloadName) {
-        deleteWorkload(workloadName);
+        void deleteWorkload(workloadName);
       }
     });
   }
@@ -826,7 +915,7 @@ function attachEventListeners(): void {
   const addProviderBtn = document.getElementById('addProviderBtn');
   if (addProviderBtn) {
     addProviderBtn.addEventListener('click', () => {
-      addProvider();
+      void addProvider();
     });
   }
 
@@ -834,7 +923,7 @@ function attachEventListeners(): void {
   const addWorkloadBtn = document.getElementById('addWorkloadBtn');
   if (addWorkloadBtn) {
     addWorkloadBtn.addEventListener('click', () => {
-      addWorkload();
+      void addWorkload();
     });
   }
 }
@@ -904,8 +993,8 @@ function setWorkloadExpanded(workloadName: string, expanded: boolean): void {
 /**
  * Add new provider
  */
-function addProvider(): void {
-  const name = prompt('Enter provider name:');
+async function addProvider(): Promise<void> {
+  const name = await showInputBox('Enter provider name:', 'e.g., my-openai');
   if (!name || name.trim() === '') {
     return;
   }
@@ -916,7 +1005,7 @@ function addProvider(): void {
   if (currentConfig.providers && typeof currentConfig.providers === 'object') {
     const providers = currentConfig.providers as Record<string, unknown>;
     if (trimmedName in providers) {
-      alert('Provider with this name already exists!');
+      showError('Provider with this name already exists!');
       return;
     }
   }
@@ -924,8 +1013,8 @@ function addProvider(): void {
   // Select provider type
   let type = 'openai';
   if (providerTypes.length > 0) {
-    const typeChoice = prompt(`Enter provider type (${providerTypes.join(', ')}):`, providerTypes[0]);
-    if (typeChoice && providerTypes.includes(typeChoice)) {
+    const typeChoice = await showQuickPick(providerTypes, 'Select provider type');
+    if (typeChoice) {
       type = typeChoice;
     }
   }
@@ -956,8 +1045,8 @@ function addProvider(): void {
 /**
  * Add new workload
  */
-function addWorkload(): void {
-  const name = prompt('Enter workload name (e.g., reasoning, execution):');
+async function addWorkload(): Promise<void> {
+  const name = await showInputBox('Enter workload name:', 'e.g., reasoning, execution');
   if (!name || name.trim() === '') {
     return;
   }
@@ -968,7 +1057,7 @@ function addWorkload(): void {
   if (currentConfig.workloads && typeof currentConfig.workloads === 'object') {
     const workloads = currentConfig.workloads as Record<string, unknown>;
     if (trimmedName in workloads) {
-      alert('Workload with this name already exists!');
+      showError('Workload with this name already exists!');
       return;
     }
   }
@@ -998,8 +1087,9 @@ function addWorkload(): void {
 /**
  * Delete provider
  */
-function deleteProvider(providerName: string): void {
-  if (!confirm(`Are you sure you want to delete provider "${providerName}"?`)) {
+async function deleteProvider(providerName: string): Promise<void> {
+  const confirmed = await showConfirm(`Are you sure you want to delete provider "${providerName}"?`);
+  if (!confirmed) {
     return;
   }
 
@@ -1015,8 +1105,9 @@ function deleteProvider(providerName: string): void {
 /**
  * Delete workload
  */
-function deleteWorkload(workloadName: string): void {
-  if (!confirm(`Are you sure you want to delete workload "${workloadName}"?`)) {
+async function deleteWorkload(workloadName: string): Promise<void> {
+  const confirmed = await showConfirm(`Are you sure you want to delete workload "${workloadName}"?`);
+  if (!confirmed) {
     return;
   }
 

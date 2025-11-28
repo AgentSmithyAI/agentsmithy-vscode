@@ -7,6 +7,9 @@ const CONFIG_IN_MSG = {
   READY: 'ready',
   LOAD_CONFIG: 'loadConfig',
   SAVE_CONFIG: 'saveConfig',
+  SHOW_INPUT_BOX: 'showInputBox',
+  SHOW_QUICK_PICK: 'showQuickPick',
+  SHOW_CONFIRM: 'showConfirm',
 } as const;
 
 // Messages from extension to webview
@@ -16,12 +19,18 @@ const CONFIG_OUT_MSG = {
   ERROR: 'error',
   LOADING: 'loading',
   VALIDATION_ERRORS: 'validationErrors',
+  INPUT_RESULT: 'inputResult',
+  QUICK_PICK_RESULT: 'quickPickResult',
+  CONFIRM_RESULT: 'confirmResult',
 } as const;
 
 type ConfigInMessage =
   | {type: typeof CONFIG_IN_MSG.READY}
   | {type: typeof CONFIG_IN_MSG.LOAD_CONFIG}
-  | {type: typeof CONFIG_IN_MSG.SAVE_CONFIG; config: Record<string, unknown>};
+  | {type: typeof CONFIG_IN_MSG.SAVE_CONFIG; config: Record<string, unknown>}
+  | {type: typeof CONFIG_IN_MSG.SHOW_INPUT_BOX; requestId: string; prompt: string; placeholder?: string; value?: string}
+  | {type: typeof CONFIG_IN_MSG.SHOW_QUICK_PICK; requestId: string; items: string[]; placeholder?: string}
+  | {type: typeof CONFIG_IN_MSG.SHOW_CONFIRM; requestId: string; message: string};
 
 type ConfigOutMessage =
   | {type: typeof CONFIG_OUT_MSG.CONFIG_LOADED; data: ConfigResponse}
@@ -109,7 +118,69 @@ export class ConfigWebviewProvider implements vscode.Disposable {
       case CONFIG_IN_MSG.SAVE_CONFIG:
         await this.saveConfig(message.config);
         break;
+
+      case CONFIG_IN_MSG.SHOW_INPUT_BOX:
+        await this.handleShowInputBox(message.requestId, message.prompt, message.placeholder, message.value);
+        break;
+
+      case CONFIG_IN_MSG.SHOW_QUICK_PICK:
+        await this.handleShowQuickPick(message.requestId, message.items, message.placeholder);
+        break;
+
+      case CONFIG_IN_MSG.SHOW_CONFIRM:
+        await this.handleShowConfirm(message.requestId, message.message);
+        break;
     }
+  }
+
+  /**
+   * Show VS Code input box and send result back to webview
+   */
+  private async handleShowInputBox(
+    requestId: string,
+    prompt: string,
+    placeholder?: string,
+    value?: string,
+  ): Promise<void> {
+    const result = await vscode.window.showInputBox({
+      prompt,
+      placeHolder: placeholder,
+      value,
+    });
+
+    this.postMessage({
+      type: CONFIG_OUT_MSG.INPUT_RESULT,
+      requestId,
+      value: result ?? null,
+    });
+  }
+
+  /**
+   * Show VS Code quick pick and send result back to webview
+   */
+  private async handleShowQuickPick(requestId: string, items: string[], placeholder?: string): Promise<void> {
+    const result = await vscode.window.showQuickPick(items, {
+      placeHolder: placeholder,
+    });
+
+    this.postMessage({
+      type: CONFIG_OUT_MSG.QUICK_PICK_RESULT,
+      requestId,
+      value: result ?? null,
+    });
+  }
+
+  /**
+   * Show VS Code confirmation dialog and send result back to webview
+   */
+  private async handleShowConfirm(requestId: string, message: string): Promise<void> {
+    const result = await vscode.window.showWarningMessage(message, {modal: true}, 'Yes', 'No');
+
+    this.postMessage({
+      type: CONFIG_OUT_MSG.CONFIRM_RESULT,
+      requestId,
+      confirmed: result === 'Yes',
+    });
   }
 
   /**
@@ -178,7 +249,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
   /**
    * Post message to webview
    */
-  private postMessage(message: ConfigOutMessage): void {
+  private postMessage(message: ConfigOutMessage | Record<string, unknown>): void {
     if (this.panel) {
       void this.panel.webview.postMessage(message);
     }
