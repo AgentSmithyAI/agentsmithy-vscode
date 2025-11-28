@@ -18,8 +18,7 @@ const production = process.argv.includes('--production');
  *
  * Why: The webview needs codicon.css and codicon.ttf for icon buttons.
  * Since we exclude node_modules from VSIX, we must copy these static assets
- * to media/ where they're included in the package. This runs on every build
- * so updates to @vscode/codicons are picked up automatically.
+ * to media/ where they're included in the package.
  */
 const copyCodiconAssets = () => {
   const codiconSrc = join(__dirname, 'node_modules', '@vscode', 'codicons', 'dist');
@@ -31,7 +30,18 @@ const copyCodiconAssets = () => {
   console.log('Copied codicon assets to media/');
 };
 
-copyCodiconAssets();
+/**
+ * Plugin that copies codicon assets on every build (including rebuilds in watch mode).
+ * This ensures updates to @vscode/codicons are picked up automatically.
+ */
+const copyCodiconsPlugin = {
+  name: 'copy-codicons',
+  setup(build) {
+    build.onStart(() => {
+      copyCodiconAssets();
+    });
+  },
+};
 
 /** @type {import('esbuild').BuildOptions} */
 const config = {
@@ -45,6 +55,7 @@ const config = {
   minify: production,
   logLevel: 'info',
   external: ['vscode'], // vscode module is provided by VS Code runtime
+  plugins: [copyCodiconsPlugin],
 };
 
 const ctx = await esbuild.context(config);
