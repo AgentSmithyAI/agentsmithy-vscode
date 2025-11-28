@@ -1,3 +1,10 @@
+## [1.8.4](https://github.com/AgentSmithyAI/agentsmithy-vscode/compare/v1.8.3...v1.8.4) (2025-11-28)
+
+
+### Bug Fixes
+
+* Fix bundling ([#50](https://github.com/AgentSmithyAI/agentsmithy-vscode/issues/50)) ([c21ea23](https://github.com/AgentSmithyAI/agentsmithy-vscode/commit/c21ea2328490f903cd88242d2f3c12b310c955d7))
+
 ## [1.8.3](https://github.com/AgentSmithyAI/agentsmithy-vscode/compare/v1.8.2...v1.8.3) (2025-11-27)
 
 
