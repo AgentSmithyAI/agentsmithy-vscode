@@ -7,3 +7,8 @@ node_modules
 .vscode
 coverage
 .env
+
+# Generated assets - copied from node_modules/@vscode/codicons during build
+# (see esbuild.extension.mjs for why this is needed)
+media/codicon.css
+media/codicon.ttf

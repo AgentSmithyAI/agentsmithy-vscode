@@ -1,31 +1,31 @@
 import * as esbuild from 'esbuild';
 
 const watch = process.argv.includes('--watch');
+const production = process.argv.includes('--production');
 
-// Build main webview
-const mainCtx = await esbuild.context({
-  entryPoints: ['src/webview/src/index.ts'],
+/** @type {import('esbuild').BuildOptions} */
+const sharedConfig = {
   bundle: true,
-  outfile: 'dist/webview.js',
   format: 'iife',
   platform: 'browser',
   target: 'es2020',
-  sourcemap: true,
-  minify: !watch,
+  sourcemap: !production,
+  minify: production || !watch,
   logLevel: 'info',
+};
+
+// Build main webview
+const mainCtx = await esbuild.context({
+  ...sharedConfig,
+  entryPoints: ['src/webview/src/index.ts'],
+  outfile: 'dist/webview.js',
 });
 
 // Build config webview
 const configCtx = await esbuild.context({
+  ...sharedConfig,
   entryPoints: ['src/webview/src/config-webview.ts'],
-  bundle: true,
   outfile: 'dist/config-webview.js',
-  format: 'iife',
-  platform: 'browser',
-  target: 'es2020',
-  sourcemap: true,
-  minify: !watch,
-  logLevel: 'info',
 });
 
 if (watch) {

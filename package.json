@@ -40,13 +40,13 @@
     "theme": "dark"
   },
   "engines": {
-    "vscode": "^1.100.0"
+    "vscode": "^1.106.0"
   },
   "categories": [
     "AI",
     "Chat"
   ],
-  "main": "./out/extension.js",
+  "main": "./dist/extension.js",
   "contributes": {
     "viewsContainers": {
       "activitybar": [
@@ -171,12 +171,14 @@
     }
   },
   "scripts": {
-    "vscode:prepublish": "npm run compile",
+    "vscode:prepublish": "npm run compile:prod",
     "compile": "npm run compile:extension && npm run compile:webview",
-    "compile:extension": "tsc -p ./",
+    "compile:prod": "npm run bundle:extension -- --production && npm run compile:webview -- --production",
+    "compile:extension": "tsc --noEmit -p ./ && node esbuild.extension.mjs",
+    "bundle:extension": "node esbuild.extension.mjs",
     "compile:webview": "node esbuild.webview.mjs",
     "watch": "concurrently \"npm run watch:extension\" \"npm run watch:webview\"",
-    "watch:extension": "tsc -watch -p ./",
+    "watch:extension": "concurrently \"tsc --noEmit -watch -p ./\" \"node esbuild.extension.mjs --watch\"",
     "watch:webview": "node esbuild.webview.mjs --watch",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
@@ -186,7 +188,7 @@
     "format": "prettier . --write",
     "format:check": "prettier . --check",
     "vsce:package": "vsce package --no-git-tag-version --no-update-package-json",
-    "package": "npm run format && npm run lint:fix && npm run compile && npm run vsce:package",
+    "package": "npm run format && npm run lint:fix && npm run compile:prod && npm run vsce:package",
     "publish:ovsx": "npx ovsx publish *.vsix",
     "publish:prepare": "npm run package && echo 'Package ready! To publish to Open VSX, run: npm run publish:ovsx'"
   },
