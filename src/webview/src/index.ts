@@ -257,14 +257,6 @@ export class ChatWebview {
     this.messageInput.addEventListener('select', captureSelection);
     this.messageInput.addEventListener('input', captureSelection);
 
-    // NOTE: Paste behavior
-    // We intentionally DO NOT override the default browser paste behavior.
-    // The browser natively places the caret at the END OF THE PASTED FRAGMENT,
-    // which is the correct UX for inserting text in the middle of existing content.
-    // Previously there was code here that moved the caret to the end of the ENTIRE
-    // textarea content after paste, which broke middle-insertion workflows.
-    // See docs/focus-behavior.md for details.
-
     // Send/Stop button
     // Prevent the button from grabbing focus on mouse down; keep caret in input
     this.sendButton.addEventListener('mousedown', (e) => e.preventDefault());
