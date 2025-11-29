@@ -193,7 +193,28 @@ export class ServerManager {
   private ensureServer = async (): Promise<void> => {
     try {
       this.outputChannel.appendLine('Fetching latest release info from GitHub...');
-      const latestRelease = await this.downloadManager.fetchLatestRelease();
+
+      let latestRelease: {version: string; size: number; sha256: string};
+      try {
+        latestRelease = await this.downloadManager.fetchLatestRelease();
+      } catch (fetchError) {
+        // If fetching latest release fails (e.g., asset not found because build is in progress),
+        // check if we have an installed version we can use
+        const installedVersion = this.downloadManager.getLatestInstalled();
+        if (installedVersion && this.serverExists()) {
+          const errorMessage = fetchError instanceof Error ? fetchError.message : String(fetchError);
+          this.outputChannel.appendLine(`Warning: Could not fetch latest release info: ${errorMessage}`);
+          this.outputChannel.appendLine(`Using installed version ${installedVersion} (release may still be building)`);
+          // Show a non-blocking warning to the user
+          void vscode.window.showWarningMessage(
+            `AgentSmithy: Using installed server v${installedVersion}. Latest release may still be building.`,
+          );
+          return;
+        }
+        // No installed version to fall back to - rethrow
+        throw fetchError;
+      }
+
       const {version: latestVersionTag, size: expectedSize, sha256: expectedSHA} = latestRelease;
       // Use semver to clean version (removes 'v' prefix)
       const latestVersion = semver.clean(latestVersionTag) || latestVersionTag.replace(/^v/, '');
