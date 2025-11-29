@@ -1014,9 +1014,10 @@ async function addProvider(): Promise<void> {
   let type = 'openai';
   if (providerTypes.length > 0) {
     const typeChoice = await showQuickPick(providerTypes, 'Select provider type');
-    if (typeChoice) {
-      type = typeChoice;
+    if (!typeChoice) {
+      return; // User cancelled
     }
+    type = typeChoice;
   }
 
   // Add new provider to config

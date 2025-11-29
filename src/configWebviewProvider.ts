@@ -37,7 +37,10 @@ type ConfigOutMessage =
   | {type: typeof CONFIG_OUT_MSG.CONFIG_SAVED; data: UpdateConfigResponse}
   | {type: typeof CONFIG_OUT_MSG.ERROR; message: string}
   | {type: typeof CONFIG_OUT_MSG.LOADING}
-  | {type: typeof CONFIG_OUT_MSG.VALIDATION_ERRORS; errors: string[]};
+  | {type: typeof CONFIG_OUT_MSG.VALIDATION_ERRORS; errors: string[]}
+  | {type: typeof CONFIG_OUT_MSG.INPUT_RESULT; requestId: string; value: string | null}
+  | {type: typeof CONFIG_OUT_MSG.QUICK_PICK_RESULT; requestId: string; value: string | null}
+  | {type: typeof CONFIG_OUT_MSG.CONFIRM_RESULT; requestId: string; confirmed: boolean};
 
 export class ConfigWebviewProvider implements vscode.Disposable {
   private panel: vscode.WebviewPanel | undefined;
@@ -134,7 +137,8 @@ export class ConfigWebviewProvider implements vscode.Disposable {
   }
 
   /**
-   * Show VS Code input box and send result back to webview
+   * Show VS Code input box and send result back to webview.
+   * Always sends a response to prevent webview from hanging if dialog fails.
    */
   private async handleShowInputBox(
     requestId: string,
@@ -142,45 +146,74 @@ export class ConfigWebviewProvider implements vscode.Disposable {
     placeholder?: string,
     value?: string,
   ): Promise<void> {
-    const result = await vscode.window.showInputBox({
-      prompt,
-      placeHolder: placeholder,
-      value,
-    });
+    try {
+      const result = await vscode.window.showInputBox({
+        prompt,
+        placeHolder: placeholder,
+        value,
+      });
 
-    this.postMessage({
-      type: CONFIG_OUT_MSG.INPUT_RESULT,
-      requestId,
-      value: result ?? null,
-    });
+      this.postMessage({
+        type: CONFIG_OUT_MSG.INPUT_RESULT,
+        requestId,
+        value: result ?? null,
+      });
+    } catch {
+      // Ensure webview doesn't hang waiting for response
+      this.postMessage({
+        type: CONFIG_OUT_MSG.INPUT_RESULT,
+        requestId,
+        value: null,
+      });
+    }
   }
 
   /**
-   * Show VS Code quick pick and send result back to webview
+   * Show VS Code quick pick and send result back to webview.
+   * Always sends a response to prevent webview from hanging if dialog fails.
    */
   private async handleShowQuickPick(requestId: string, items: string[], placeholder?: string): Promise<void> {
-    const result = await vscode.window.showQuickPick(items, {
-      placeHolder: placeholder,
-    });
+    try {
+      const result = await vscode.window.showQuickPick(items, {
+        placeHolder: placeholder,
+      });
 
-    this.postMessage({
-      type: CONFIG_OUT_MSG.QUICK_PICK_RESULT,
-      requestId,
-      value: result ?? null,
-    });
+      this.postMessage({
+        type: CONFIG_OUT_MSG.QUICK_PICK_RESULT,
+        requestId,
+        value: result ?? null,
+      });
+    } catch {
+      // Ensure webview doesn't hang waiting for response
+      this.postMessage({
+        type: CONFIG_OUT_MSG.QUICK_PICK_RESULT,
+        requestId,
+        value: null,
+      });
+    }
   }
 
   /**
-   * Show VS Code confirmation dialog and send result back to webview
+   * Show VS Code confirmation dialog and send result back to webview.
+   * Always sends a response to prevent webview from hanging if dialog fails.
    */
   private async handleShowConfirm(requestId: string, message: string): Promise<void> {
-    const result = await vscode.window.showWarningMessage(message, {modal: true}, 'Yes', 'No');
+    try {
+      const result = await vscode.window.showWarningMessage(message, {modal: true}, 'Yes', 'No');
 
-    this.postMessage({
-      type: CONFIG_OUT_MSG.CONFIRM_RESULT,
-      requestId,
-      confirmed: result === 'Yes',
-    });
+      this.postMessage({
+        type: CONFIG_OUT_MSG.CONFIRM_RESULT,
+        requestId,
+        confirmed: result === 'Yes',
+      });
+    } catch {
+      // Ensure webview doesn't hang waiting for response
+      this.postMessage({
+        type: CONFIG_OUT_MSG.CONFIRM_RESULT,
+        requestId,
+        confirmed: false,
+      });
+    }
   }
 
   /**
@@ -249,7 +282,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
   /**
    * Post message to webview
    */
-  private postMessage(message: ConfigOutMessage | Record<string, unknown>): void {
+  private postMessage(message: ConfigOutMessage): void {
     if (this.panel) {
       void this.panel.webview.postMessage(message);
     }
