@@ -7,6 +7,9 @@ const CONFIG_IN_MSG = {
   READY: 'ready',
   LOAD_CONFIG: 'loadConfig',
   SAVE_CONFIG: 'saveConfig',
+  SHOW_INPUT_BOX: 'showInputBox',
+  SHOW_QUICK_PICK: 'showQuickPick',
+  SHOW_CONFIRM: 'showConfirm',
 } as const;
 
 // Messages from extension to webview
@@ -16,19 +19,28 @@ const CONFIG_OUT_MSG = {
   ERROR: 'error',
   LOADING: 'loading',
   VALIDATION_ERRORS: 'validationErrors',
+  INPUT_RESULT: 'inputResult',
+  QUICK_PICK_RESULT: 'quickPickResult',
+  CONFIRM_RESULT: 'confirmResult',
 } as const;
 
 type ConfigInMessage =
   | {type: typeof CONFIG_IN_MSG.READY}
   | {type: typeof CONFIG_IN_MSG.LOAD_CONFIG}
-  | {type: typeof CONFIG_IN_MSG.SAVE_CONFIG; config: Record<string, unknown>};
+  | {type: typeof CONFIG_IN_MSG.SAVE_CONFIG; config: Record<string, unknown>}
+  | {type: typeof CONFIG_IN_MSG.SHOW_INPUT_BOX; requestId: string; prompt: string; placeholder?: string; value?: string}
+  | {type: typeof CONFIG_IN_MSG.SHOW_QUICK_PICK; requestId: string; items: string[]; placeholder?: string}
+  | {type: typeof CONFIG_IN_MSG.SHOW_CONFIRM; requestId: string; message: string};
 
 type ConfigOutMessage =
   | {type: typeof CONFIG_OUT_MSG.CONFIG_LOADED; data: ConfigResponse}
   | {type: typeof CONFIG_OUT_MSG.CONFIG_SAVED; data: UpdateConfigResponse}
   | {type: typeof CONFIG_OUT_MSG.ERROR; message: string}
   | {type: typeof CONFIG_OUT_MSG.LOADING}
-  | {type: typeof CONFIG_OUT_MSG.VALIDATION_ERRORS; errors: string[]};
+  | {type: typeof CONFIG_OUT_MSG.VALIDATION_ERRORS; errors: string[]}
+  | {type: typeof CONFIG_OUT_MSG.INPUT_RESULT; requestId: string; value: string | null}
+  | {type: typeof CONFIG_OUT_MSG.QUICK_PICK_RESULT; requestId: string; value: string | null}
+  | {type: typeof CONFIG_OUT_MSG.CONFIRM_RESULT; requestId: string; confirmed: boolean};
 
 export class ConfigWebviewProvider implements vscode.Disposable {
   private panel: vscode.WebviewPanel | undefined;
@@ -109,6 +121,98 @@ export class ConfigWebviewProvider implements vscode.Disposable {
       case CONFIG_IN_MSG.SAVE_CONFIG:
         await this.saveConfig(message.config);
         break;
+
+      case CONFIG_IN_MSG.SHOW_INPUT_BOX:
+        await this.handleShowInputBox(message.requestId, message.prompt, message.placeholder, message.value);
+        break;
+
+      case CONFIG_IN_MSG.SHOW_QUICK_PICK:
+        await this.handleShowQuickPick(message.requestId, message.items, message.placeholder);
+        break;
+
+      case CONFIG_IN_MSG.SHOW_CONFIRM:
+        await this.handleShowConfirm(message.requestId, message.message);
+        break;
+    }
+  }
+
+  /**
+   * Show VS Code input box and send result back to webview.
+   * Always sends a response to prevent webview from hanging if dialog fails.
+   */
+  private async handleShowInputBox(
+    requestId: string,
+    prompt: string,
+    placeholder?: string,
+    value?: string,
+  ): Promise<void> {
+    try {
+      const result = await vscode.window.showInputBox({
+        prompt,
+        placeHolder: placeholder,
+        value,
+      });
+
+      this.postMessage({
+        type: CONFIG_OUT_MSG.INPUT_RESULT,
+        requestId,
+        value: result ?? null,
+      });
+    } catch {
+      // Ensure webview doesn't hang waiting for response
+      this.postMessage({
+        type: CONFIG_OUT_MSG.INPUT_RESULT,
+        requestId,
+        value: null,
+      });
+    }
+  }
+
+  /**
+   * Show VS Code quick pick and send result back to webview.
+   * Always sends a response to prevent webview from hanging if dialog fails.
+   */
+  private async handleShowQuickPick(requestId: string, items: string[], placeholder?: string): Promise<void> {
+    try {
+      const result = await vscode.window.showQuickPick(items, {
+        placeHolder: placeholder,
+      });
+
+      this.postMessage({
+        type: CONFIG_OUT_MSG.QUICK_PICK_RESULT,
+        requestId,
+        value: result ?? null,
+      });
+    } catch {
+      // Ensure webview doesn't hang waiting for response
+      this.postMessage({
+        type: CONFIG_OUT_MSG.QUICK_PICK_RESULT,
+        requestId,
+        value: null,
+      });
+    }
+  }
+
+  /**
+   * Show VS Code confirmation dialog and send result back to webview.
+   * Always sends a response to prevent webview from hanging if dialog fails.
+   */
+  private async handleShowConfirm(requestId: string, message: string): Promise<void> {
+    try {
+      const result = await vscode.window.showWarningMessage(message, {modal: true}, 'Yes', 'No');
+
+      this.postMessage({
+        type: CONFIG_OUT_MSG.CONFIRM_RESULT,
+        requestId,
+        confirmed: result === 'Yes',
+      });
+    } catch {
+      // Ensure webview doesn't hang waiting for response
+      this.postMessage({
+        type: CONFIG_OUT_MSG.CONFIRM_RESULT,
+        requestId,
+        confirmed: false,
+      });
     }
   }
 

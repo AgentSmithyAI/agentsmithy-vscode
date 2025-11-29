@@ -17,6 +17,7 @@ vi.mock('vscode', async (importOriginal) => {
     window: {
       showInformationMessage: vi.fn(),
       showErrorMessage: vi.fn(),
+      showWarningMessage: vi.fn(),
       createOutputChannel: vi.fn().mockReturnValue({
         appendLine: vi.fn(),
         append: vi.fn(),
@@ -317,6 +318,63 @@ describe('ServerManager', () => {
 
       await expect((manager as any).ensureServer()).rejects.toThrow('GitHub API error');
       expect(outputChannel.appendLine).toHaveBeenCalledWith('ERROR in ensureServer: GitHub API error');
+    });
+
+    describe('fallback to installed version when release fetch fails', () => {
+      it('uses installed version when fetchLatestRelease fails and server exists', async () => {
+        // Simulate "Asset not found" error (e.g., release still building)
+        downloadManagerMock.fetchLatestRelease.mockRejectedValue(
+          new Error('Asset agentsmithy-linux-amd64-1.12.0 not found in release v1.12.0'),
+        );
+        downloadManagerMock.getLatestInstalled.mockReturnValue('1.11.0');
+        vi.spyOn(manager as any, 'serverExists').mockReturnValue(true);
+
+        // Should NOT throw - fallback to installed version
+        await expect((manager as any).ensureServer()).resolves.not.toThrow();
+
+        // Should log warning about using installed version
+        expect(outputChannel.appendLine).toHaveBeenCalledWith(
+          expect.stringContaining('Using installed version 1.11.0'),
+        );
+        expect(outputChannel.appendLine).toHaveBeenCalledWith(
+          expect.stringContaining('Warning: Could not fetch latest release info'),
+        );
+        // Should show warning message to user
+        expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
+          expect.stringContaining('Using installed server v1.11.0'),
+        );
+        // Should NOT attempt download
+        expect(downloadManagerMock.downloadBinary).not.toHaveBeenCalled();
+      });
+
+      it('throws error when fetchLatestRelease fails and no installed version exists', async () => {
+        downloadManagerMock.fetchLatestRelease.mockRejectedValue(new Error('Asset not found in release'));
+        downloadManagerMock.getLatestInstalled.mockReturnValue(null);
+
+        // Should rethrow original error
+        await expect((manager as any).ensureServer()).rejects.toThrow('Asset not found in release');
+      });
+
+      it('throws error when fetchLatestRelease fails and server binary does not exist', async () => {
+        downloadManagerMock.fetchLatestRelease.mockRejectedValue(new Error('Asset not found in release'));
+        downloadManagerMock.getLatestInstalled.mockReturnValue('1.11.0');
+        vi.spyOn(manager as any, 'serverExists').mockReturnValue(false);
+
+        // Should rethrow original error because server binary doesn't exist
+        await expect((manager as any).ensureServer()).rejects.toThrow('Asset not found in release');
+      });
+
+      it('handles network errors gracefully when installed version exists', async () => {
+        downloadManagerMock.fetchLatestRelease.mockRejectedValue(new Error('Network timeout'));
+        downloadManagerMock.getLatestInstalled.mockReturnValue('1.10.0');
+        vi.spyOn(manager as any, 'serverExists').mockReturnValue(true);
+
+        await expect((manager as any).ensureServer()).resolves.not.toThrow();
+
+        expect(outputChannel.appendLine).toHaveBeenCalledWith(
+          expect.stringContaining('Using installed version 1.10.0'),
+        );
+      });
     });
   });
 

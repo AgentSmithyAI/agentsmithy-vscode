@@ -18,11 +18,10 @@ export class UIController {
       this.messageInput.style.height = 'auto';
       this.messageInput.style.height = this.messageInput.scrollHeight + 'px';
 
-      // Ensure the last line is visible when content grows (e.g., large paste)
-      // Works both when auto-resize hits max-height and when the field is shorter.
-      try {
-        this.messageInput.scrollTop = this.messageInput.scrollHeight;
-      } catch {}
+      // NOTE: We intentionally DO NOT force scroll to bottom here.
+      // The browser automatically scrolls the textarea to keep the caret visible.
+      // Forcing scrollTop = scrollHeight would break middle-insertion UX by
+      // jumping the viewport away from where the user is typing/pasting.
     });
   }
 

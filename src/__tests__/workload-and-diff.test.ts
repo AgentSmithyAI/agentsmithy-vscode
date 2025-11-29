@@ -254,6 +254,52 @@ describe('ChatWebviewProvider - Workload and Diff', () => {
         }),
       );
     });
+
+    it('refreshes workloads in UI after selection', async () => {
+      // Mock config with reasoning workload
+      const mockConfig = {
+        models: {
+          agents: {
+            reasoning: {workload: 'reasoning'},
+          },
+        },
+        workloads: {
+          reasoning: {provider: 'openai', model: 'gpt-4'},
+        },
+      };
+
+      const mockMetadata = {
+        model_catalog: {
+          openai: {
+            chat: ['gpt-4', 'gpt-5'],
+          },
+        },
+        providers: [{name: 'my-openai', type: 'openai'}],
+        workloads: [{name: 'reasoning', provider: 'my-openai', model: 'gpt-4'}],
+      };
+
+      (apiService.getConfig as any).mockResolvedValue({
+        config: mockConfig,
+        metadata: mockMetadata,
+      });
+
+      const handler = mockWebview.onDidReceiveMessage.mock.calls[0][0];
+
+      // Clear previous calls
+      mockWebview.postMessage.mockClear();
+
+      await handler({
+        type: WEBVIEW_IN_MSG.SELECT_WORKLOAD,
+        workload: 'gpt-5',
+      });
+
+      // After saving, should send WORKLOADS_UPDATE to refresh UI
+      expect(mockWebview.postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: WEBVIEW_OUT_MSG.WORKLOADS_UPDATE,
+        }),
+      );
+    });
   });
 
   describe('WORKLOADS_UPDATE', () => {

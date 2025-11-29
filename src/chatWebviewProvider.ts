@@ -360,6 +360,9 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider, vscode.D
         ...config,
         workloads: updatedWorkloads,
       } as Record<string, unknown>);
+
+      // Refresh workloads to ensure UI is in sync with saved config
+      await this._loadAndSendWorkloads();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       void vscode.window.showErrorMessage(`Failed to update model: ${msg}`);

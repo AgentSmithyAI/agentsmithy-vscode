@@ -178,6 +178,134 @@ describe('ConfigWebviewProvider - validation refresh', () => {
     expect(saveSpy).toHaveBeenCalledWith(payload);
   });
 
+  it('handles showInputBox message and returns result', async () => {
+    (vscode.window.showInputBox as ReturnType<typeof vi.fn>).mockResolvedValue('my-provider');
+
+    await (provider as any).handleMessage({
+      type: 'showInputBox',
+      requestId: 'input_1',
+      prompt: 'Enter provider name:',
+      placeholder: 'e.g., my-openai',
+    });
+
+    expect(vscode.window.showInputBox).toHaveBeenCalledWith({
+      prompt: 'Enter provider name:',
+      placeHolder: 'e.g., my-openai',
+      value: undefined,
+    });
+    expect(mockPanel.webview.postMessage).toHaveBeenCalledWith({
+      type: 'inputResult',
+      requestId: 'input_1',
+      value: 'my-provider',
+    });
+  });
+
+  it('handles showInputBox cancellation (returns null)', async () => {
+    (vscode.window.showInputBox as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+
+    await (provider as any).handleMessage({
+      type: 'showInputBox',
+      requestId: 'input_2',
+      prompt: 'Enter name:',
+    });
+
+    expect(mockPanel.webview.postMessage).toHaveBeenCalledWith({
+      type: 'inputResult',
+      requestId: 'input_2',
+      value: null,
+    });
+  });
+
+  it('handles showQuickPick message and returns selected item', async () => {
+    (vscode.window.showQuickPick as ReturnType<typeof vi.fn>).mockResolvedValue('openai');
+
+    await (provider as any).handleMessage({
+      type: 'showQuickPick',
+      requestId: 'pick_1',
+      items: ['openai', 'anthropic', 'azure'],
+      placeholder: 'Select provider type',
+    });
+
+    expect(vscode.window.showQuickPick).toHaveBeenCalledWith(['openai', 'anthropic', 'azure'], {
+      placeHolder: 'Select provider type',
+    });
+    expect(mockPanel.webview.postMessage).toHaveBeenCalledWith({
+      type: 'quickPickResult',
+      requestId: 'pick_1',
+      value: 'openai',
+    });
+  });
+
+  it('handles showQuickPick cancellation (returns null)', async () => {
+    (vscode.window.showQuickPick as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+
+    await (provider as any).handleMessage({
+      type: 'showQuickPick',
+      requestId: 'pick_2',
+      items: ['a', 'b'],
+    });
+
+    expect(mockPanel.webview.postMessage).toHaveBeenCalledWith({
+      type: 'quickPickResult',
+      requestId: 'pick_2',
+      value: null,
+    });
+  });
+
+  it('handles showConfirm message and returns true when confirmed', async () => {
+    (vscode.window.showWarningMessage as ReturnType<typeof vi.fn>).mockResolvedValue('Yes');
+
+    await (provider as any).handleMessage({
+      type: 'showConfirm',
+      requestId: 'confirm_1',
+      message: 'Delete provider "test"?',
+    });
+
+    expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
+      'Delete provider "test"?',
+      {modal: true},
+      'Yes',
+      'No',
+    );
+    expect(mockPanel.webview.postMessage).toHaveBeenCalledWith({
+      type: 'confirmResult',
+      requestId: 'confirm_1',
+      confirmed: true,
+    });
+  });
+
+  it('handles showConfirm message and returns false when declined', async () => {
+    (vscode.window.showWarningMessage as ReturnType<typeof vi.fn>).mockResolvedValue('No');
+
+    await (provider as any).handleMessage({
+      type: 'showConfirm',
+      requestId: 'confirm_2',
+      message: 'Delete?',
+    });
+
+    expect(mockPanel.webview.postMessage).toHaveBeenCalledWith({
+      type: 'confirmResult',
+      requestId: 'confirm_2',
+      confirmed: false,
+    });
+  });
+
+  it('handles showConfirm cancellation (returns false)', async () => {
+    (vscode.window.showWarningMessage as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+
+    await (provider as any).handleMessage({
+      type: 'showConfirm',
+      requestId: 'confirm_3',
+      message: 'Delete?',
+    });
+
+    expect(mockPanel.webview.postMessage).toHaveBeenCalledWith({
+      type: 'confirmResult',
+      requestId: 'confirm_3',
+      confirmed: false,
+    });
+  });
+
   it('resets state when panel is disposed', async () => {
     const disposeHandlers: Array<() => void> = [];
     apiService.getHealth.mockResolvedValue({config_valid: true, config_errors: []});

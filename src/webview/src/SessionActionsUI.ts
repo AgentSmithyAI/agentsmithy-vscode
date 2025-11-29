@@ -47,6 +47,13 @@ export class SessionActionsUI {
     }
   }
 
+  /**
+   * Get the maximum allowed height for the panel based on viewport size.
+   */
+  private getMaxAllowedHeight(): number {
+    return Math.floor(window.innerHeight * SessionActionsUI.MAX_HEIGHT_RATIO);
+  }
+
   private currentDialogId: string | null = null;
 
   // Single source of truth for processing and availability
@@ -74,6 +81,8 @@ export class SessionActionsUI {
   // Snap behavior constants
   private static readonly SNAP_PX = 8;
   private static readonly UNSNAP_PX = SessionActionsUI.SNAP_PX * 2;
+  // Maximum panel height as a fraction of viewport height
+  private static readonly MAX_HEIGHT_RATIO = 0.4;
 
   constructor(
     private readonly vscode: VSCodeAPI,
@@ -349,7 +358,7 @@ export class SessionActionsUI {
       }
 
       const desired = Math.ceil(headerH + bodyContentH);
-      const viewportLimit = Math.floor(window.innerHeight * 0.8);
+      const viewportLimit = this.getMaxAllowedHeight();
 
       // Never below one-row minimum
       const minOneRow = this.getMinOneRowHeight();
@@ -372,11 +381,14 @@ export class SessionActionsUI {
     const saved = (state as WebviewState)?.sessionChangesHeight;
 
     const minOneRow = this.getMinOneRowHeight();
+    const maxAllowed = this.getMaxAllowedHeight();
 
     if (typeof saved === 'number' && saved > minOneRow) {
       // Explicit height overrides max-height on the container so it resizes
-      panelEl.style.height = `${saved}px`;
-      panelEl.style.maxHeight = 'none';
+      // Clamp to maximum allowed height
+      const clampedHeight = Math.min(saved, maxAllowed);
+      panelEl.style.height = `${clampedHeight}px`;
+      panelEl.style.maxHeight = `${maxAllowed}px`;
       return;
     }
 
@@ -414,7 +426,8 @@ export class SessionActionsUI {
 
     // Enforce minimum height: header + exactly one row
     const minOneRow = this.getMinOneRowHeight();
-    const clamped = Math.max(minOneRow, Math.min(window.innerHeight * 0.8, newH));
+    const maxAllowed = this.getMaxAllowedHeight();
+    const clamped = Math.max(minOneRow, Math.min(maxAllowed, newH));
 
     // Use frozen default target to avoid oscillation while dragging
     const defaultH = this.resizeState.defaultHAtDrag ?? this.getDefaultMaxHeight();
@@ -442,7 +455,7 @@ export class SessionActionsUI {
     }
 
     panelEl.style.height = `${applied}px`;
-    panelEl.style.maxHeight = 'none';
+    panelEl.style.maxHeight = `${maxAllowed}px`;
   }
 
   private onResizeEnd(): void {
@@ -468,11 +481,12 @@ export class SessionActionsUI {
         panelEl.style.removeProperty('height');
         panelEl.style.maxHeight = `${defaultH}px`;
       } else {
-        // Persist explicit height but never below one-row min
+        // Persist explicit height but never below one-row min and never above max allowed
         const minOneRow = this.getMinOneRowHeight();
-        const target = Math.max(minOneRow, Math.round(rect.height));
+        const maxAllowed = this.getMaxAllowedHeight();
+        const target = Math.max(minOneRow, Math.min(maxAllowed, Math.round(rect.height)));
         this.vscode.setState?.({...prev, sessionChangesHeight: target});
-        panelEl.style.maxHeight = 'none';
+        panelEl.style.maxHeight = `${maxAllowed}px`;
       }
     } catch {}
 

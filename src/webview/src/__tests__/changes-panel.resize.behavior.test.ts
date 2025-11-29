@@ -125,6 +125,8 @@ describe('SessionActionsUI changes panel resize snap/hysteresis', () => {
 
   it('unsnaps only after exceeding UNSNAP_PX and persists explicit height', () => {
     const expectedDefault = 68;
+    // maxAllowed = window.innerHeight (1000) * 0.4 = 400
+    const expectedMaxAllowed = 400;
 
     mousedownAt(300);
     // Snap first
@@ -138,13 +140,13 @@ describe('SessionActionsUI changes panel resize snap/hysteresis', () => {
     expect(parseInt(panelEl.style.height, 10)).toBe(50);
     expect((panelEl as any).dataset.snapped).toBeUndefined();
 
-    // Release mouse -> should persist explicit height and set maxHeight to none
+    // Release mouse -> should persist explicit height and set maxHeight to max allowed (not 'none')
     mouseup();
 
     expect(mockVscode.setState).toHaveBeenCalled();
     const stateArg = (mockVscode.setState as any).mock.calls.at(-1)[0];
     expect(stateArg.sessionChangesHeight).toBeGreaterThanOrEqual(50);
-    expect(panelEl.style.maxHeight).toBe('none');
+    expect(panelEl.style.maxHeight).toBe(`${expectedMaxAllowed}px`);
   });
 
   it('when released while snapped, clears persisted height and applies default maxHeight', () => {

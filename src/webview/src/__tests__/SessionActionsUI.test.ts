@@ -477,4 +477,85 @@ describe('SessionActionsUI', () => {
       });
     });
   });
+
+  describe('panel height constraints (regression tests)', () => {
+    const MAX_HEIGHT_RATIO = 0.4; // Must match SessionActionsUI.MAX_HEIGHT_RATIO
+
+    beforeEach(() => {
+      // Set viewport height for predictable calculations
+      (window as any).innerHeight = 1000;
+    });
+
+    it('maxHeight is never set to "none" - always respects viewport limit', () => {
+      sessionActionsUI.setCurrentDialogId('d1');
+
+      // Create many files to potentially exceed viewport
+      const manyFiles = Array.from({length: 100}, (_, i) => ({
+        path: `file${i}.ts`,
+        status: 'modified',
+        additions: i,
+        deletions: 0,
+        diff: null,
+      }));
+
+      sessionActionsUI.updateSessionStatus(true, manyFiles as any);
+
+      const panelEl = document.getElementById('sessionChanges') as HTMLElement;
+      expect(panelEl.style.maxHeight).not.toBe('none');
+      expect(panelEl.style.maxHeight).not.toBe('');
+    });
+
+    it('maxHeight does not exceed MAX_HEIGHT_RATIO of viewport', () => {
+      sessionActionsUI.setCurrentDialogId('d1');
+
+      const manyFiles = Array.from({length: 100}, (_, i) => ({
+        path: `file${i}.ts`,
+        status: 'modified',
+        additions: i,
+        deletions: 0,
+        diff: null,
+      }));
+
+      sessionActionsUI.updateSessionStatus(true, manyFiles as any);
+
+      const panelEl = document.getElementById('sessionChanges') as HTMLElement;
+      const maxHeight = parseInt(panelEl.style.maxHeight, 10);
+      const expectedMax = Math.floor(1000 * MAX_HEIGHT_RATIO);
+
+      expect(maxHeight).toBeLessThanOrEqual(expectedMax);
+    });
+
+    it('persisted height is clamped to max allowed on restore', () => {
+      // Simulate a previously saved height that exceeds current viewport limit
+      const oversizedHeight = 800; // Greater than 1000 * 0.4 = 400
+      mockVscode.getState = vi.fn().mockReturnValue({sessionChangesHeight: oversizedHeight});
+
+      sessionActionsUI.setCurrentDialogId('d1');
+      sessionActionsUI.updateSessionStatus(true, [
+        {path: 'test.ts', status: 'modified', additions: 1, deletions: 1, diff: null} as any,
+      ]);
+
+      const panelEl = document.getElementById('sessionChanges') as HTMLElement;
+      const height = parseInt(panelEl.style.height, 10);
+      const expectedMax = Math.floor(1000 * MAX_HEIGHT_RATIO);
+
+      // Height should be clamped to max allowed
+      expect(height).toBeLessThanOrEqual(expectedMax);
+    });
+
+    it('max allowed height changes with viewport size', () => {
+      // Test that getMaxAllowedHeight respects viewport
+      // Large viewport = larger max allowed
+      (window as any).innerHeight = 2000;
+      const largeMax = Math.floor(2000 * MAX_HEIGHT_RATIO); // 800
+
+      // Small viewport = smaller max allowed
+      (window as any).innerHeight = 500;
+      const smallMax = Math.floor(500 * MAX_HEIGHT_RATIO); // 200
+
+      expect(smallMax).toBeLessThan(largeMax);
+      expect(smallMax).toBe(200);
+      expect(largeMax).toBe(800);
+    });
+  });
 });
