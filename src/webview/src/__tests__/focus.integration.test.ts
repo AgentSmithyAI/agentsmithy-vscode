@@ -241,3 +241,117 @@ describe('Paste behavior in message input', () => {
     expect(messageInput.selectionEnd).toBe(14);
   });
 });
+
+/**
+ * Scroll behavior tests for message input textarea
+ *
+ * These tests verify that the textarea scroll position is NOT forcibly set to
+ * the bottom on every input event. Previously, code did `scrollTop = scrollHeight`
+ * on each input, which caused the viewport to jump to the end even when the user
+ * was editing/pasting in the middle of the text.
+ *
+ * The correct behavior: let the browser handle scrolling naturally.
+ * The browser automatically scrolls to keep the caret visible, which works for
+ * all cases (typing at end, typing in middle, pasting anywhere).
+ *
+ * See UIController.ts setupInputAutoResize() and docs/focus-behavior.md for details.
+ */
+describe('Textarea scroll behavior on input (regression tests)', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    vi.useFakeTimers();
+    document.body.innerHTML = '';
+  });
+
+  /**
+   * Helper to set up a textarea with mocked scroll properties.
+   * JSDOM doesn't implement actual scrolling, so we mock scrollTop/scrollHeight.
+   */
+  function setupScrollableMock(textarea: HTMLTextAreaElement, scrollHeight: number) {
+    let currentScrollTop = 0;
+
+    Object.defineProperty(textarea, 'scrollHeight', {
+      get: () => scrollHeight,
+      configurable: true,
+    });
+
+    Object.defineProperty(textarea, 'scrollTop', {
+      get: () => currentScrollTop,
+      set: (v: number) => {
+        currentScrollTop = v;
+      },
+      configurable: true,
+    });
+
+    return {
+      getScrollTop: () => currentScrollTop,
+      setScrollTop: (v: number) => {
+        currentScrollTop = v;
+      },
+    };
+  }
+
+  it('does NOT force scrollTop to scrollHeight on input event', async () => {
+    // This is a regression test: previously input handler did scrollTop = scrollHeight,
+    // which broke editing in the middle of long text by jumping viewport to the end.
+    const {messageInput} = await mountWebview();
+
+    // Simulate a tall textarea with lots of content
+    const scrollMock = setupScrollableMock(messageInput, 500);
+
+    // User has scrolled to middle of content (not at bottom)
+    scrollMock.setScrollTop(100);
+
+    // Simulate typing - dispatch input event
+    messageInput.dispatchEvent(new Event('input', {bubbles: true}));
+
+    vi.runAllTimers();
+
+    // scrollTop should NOT have been forced to 500 (scrollHeight)
+    // It should remain where it was, or browser would adjust to keep caret visible
+    // (browser behavior not simulated in JSDOM, but at least we verify no forced jump)
+    expect(scrollMock.getScrollTop()).not.toBe(500);
+  });
+
+  it('allows natural scroll position when editing in middle of text', async () => {
+    const {messageInput} = await mountWebview();
+
+    // Setup: long text, scrolled to middle
+    messageInput.value = 'Line1\nLine2\nLine3\nLine4\nLine5\nLine6\nLine7\nLine8\nLine9\nLine10';
+    const scrollMock = setupScrollableMock(messageInput, 300);
+    scrollMock.setScrollTop(50); // Viewing middle portion
+
+    // User types in the middle
+    messageInput.setSelectionRange(20, 20);
+    messageInput.dispatchEvent(new Event('input', {bubbles: true}));
+
+    vi.runAllTimers();
+
+    // Scroll should not jump to bottom (300)
+    expect(scrollMock.getScrollTop()).toBe(50);
+  });
+
+  it('textarea auto-resize still works (height adjustment)', async () => {
+    // Verify that removing scroll manipulation didn't break auto-resize
+    const {messageInput} = await mountWebview();
+
+    // Set initial height
+    messageInput.style.height = '50px';
+    const initialHeight = messageInput.style.height;
+
+    // Mock scrollHeight to simulate content growth
+    Object.defineProperty(messageInput, 'scrollHeight', {
+      get: () => 150,
+      configurable: true,
+    });
+
+    // Trigger input event which should trigger auto-resize
+    messageInput.dispatchEvent(new Event('input', {bubbles: true}));
+
+    vi.runAllTimers();
+
+    // Height should have been updated (auto-resize logic: height = scrollHeight + 'px')
+    expect(messageInput.style.height).toBe('150px');
+    expect(messageInput.style.height).not.toBe(initialHeight);
+  });
+});
