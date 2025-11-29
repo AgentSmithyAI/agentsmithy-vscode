@@ -50,16 +50,6 @@ export class ChatWebview {
     this.messageInput = document.getElementById(DOM_IDS.MESSAGE_INPUT) as HTMLTextAreaElement;
     this.sendButton = document.getElementById(DOM_IDS.SEND_BUTTON) as HTMLButtonElement;
 
-    // Ensure input scrolls to the bottom when content grows (in case UIController listener isn't yet attached)
-    this.messageInput.addEventListener(
-      'input',
-      () => {
-        try {
-          this.messageInput.scrollTop = this.messageInput.scrollHeight;
-        } catch {}
-      },
-      {capture: false},
-    );
     const welcomePlaceholder = document.getElementById(DOM_IDS.WELCOME_PLACEHOLDER);
 
     // Initialize dialog view manager
@@ -267,23 +257,13 @@ export class ChatWebview {
     this.messageInput.addEventListener('select', captureSelection);
     this.messageInput.addEventListener('input', captureSelection);
 
-    // After paste, move caret to the end of the textarea content (requested UX)
-    this.messageInput.addEventListener('paste', () => {
-      // Run after the input value updates
-      requestAnimationFrame(() => {
-        if (!document.body.contains(this.messageInput) || this.messageInput.disabled) return;
-        const len = this.messageInput.value.length;
-        try {
-          this.messageInput.setSelectionRange(len, len, 'none');
-        } catch {
-          try {
-            this.messageInput.setSelectionRange(len, len);
-          } catch {}
-        }
-        // Keep our snapshot consistent
-        this.lastSelection = {start: len, end: len, direction: 'none'};
-      });
-    });
+    // NOTE: Paste behavior
+    // We intentionally DO NOT override the default browser paste behavior.
+    // The browser natively places the caret at the END OF THE PASTED FRAGMENT,
+    // which is the correct UX for inserting text in the middle of existing content.
+    // Previously there was code here that moved the caret to the end of the ENTIRE
+    // textarea content after paste, which broke middle-insertion workflows.
+    // See docs/focus-behavior.md for details.
 
     // Send/Stop button
     // Prevent the button from grabbing focus on mouse down; keep caret in input
