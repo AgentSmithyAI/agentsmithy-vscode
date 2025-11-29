@@ -1,3 +1,10 @@
+## [1.8.5](https://github.com/AgentSmithyAI/agentsmithy-vscode/compare/v1.8.4...v1.8.5) (2025-11-29)
+
+
+### Bug Fixes
+
+* Fix adding new providers and workloads ([#51](https://github.com/AgentSmithyAI/agentsmithy-vscode/issues/51)) ([524505a](https://github.com/AgentSmithyAI/agentsmithy-vscode/commit/524505abe0d4b1abcc38d2fdd98b1e57e1af788b))
+
 ## [1.8.4](https://github.com/AgentSmithyAI/agentsmithy-vscode/compare/v1.8.3...v1.8.4) (2025-11-28)
 
 
