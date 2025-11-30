@@ -119,6 +119,18 @@ export interface UpdateConfigResponse {
   config: Record<string, unknown>;
 }
 
+export type RenameConfigType = 'workload' | 'provider';
+
+export interface RenameConfigResponse {
+  success: boolean;
+  message: string;
+  old_name: string;
+  new_name: string;
+  updated_references: string[];
+  config: Record<string, unknown>;
+  metadata: Record<string, unknown> | null;
+}
+
 /**
  * Service for REST API calls to AgentSmithy server
  */
@@ -609,6 +621,54 @@ export class ApiService {
       success: Boolean(data.success),
       message: typeof data.message === 'string' ? data.message : '',
       config: isRecord(data.config) ? data.config : {},
+    };
+  }
+
+  /**
+   * Rename a workload or provider
+   */
+  async renameConfig(type: RenameConfigType, oldName: string, newName: string): Promise<RenameConfigResponse> {
+    const url = `${this.getBaseUrl()}/api/config/rename`;
+    const body = JSON.stringify({
+      type,
+      old_name: oldName,
+      new_name: newName,
+    });
+
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body,
+    });
+
+    const responseText = await resp.text();
+
+    if (!resp.ok) {
+      throw ApiError.fromResponse(responseText, resp.status);
+    }
+
+    const data: unknown = JSON.parse(responseText);
+    if (!isRecord(data)) {
+      throw new Error('Malformed rename config response');
+    }
+
+    let updated_references: string[] = [];
+    if (Array.isArray(data.updated_references)) {
+      const rawRefs = data.updated_references as unknown[];
+      updated_references = rawRefs.filter((x): x is string => typeof x === 'string');
+    }
+
+    return {
+      success: Boolean(data.success),
+      message: typeof data.message === 'string' ? data.message : '',
+      old_name: typeof data.old_name === 'string' ? data.old_name : oldName,
+      new_name: typeof data.new_name === 'string' ? data.new_name : newName,
+      updated_references,
+      config: isRecord(data.config) ? data.config : {},
+      metadata: isRecord(data.metadata) ? data.metadata : null,
     };
   }
 }

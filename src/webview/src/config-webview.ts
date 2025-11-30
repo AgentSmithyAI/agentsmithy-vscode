@@ -15,6 +15,7 @@ const CONFIG_IN_MSG = {
   READY: 'ready',
   LOAD_CONFIG: 'loadConfig',
   SAVE_CONFIG: 'saveConfig',
+  RENAME_CONFIG: 'renameConfig',
   SHOW_INPUT_BOX: 'showInputBox',
   SHOW_QUICK_PICK: 'showQuickPick',
   SHOW_CONFIRM: 'showConfirm',
@@ -23,6 +24,7 @@ const CONFIG_IN_MSG = {
 const CONFIG_OUT_MSG = {
   CONFIG_LOADED: 'configLoaded',
   CONFIG_SAVED: 'configSaved',
+  CONFIG_RENAMED: 'configRenamed',
   ERROR: 'error',
   LOADING: 'loading',
   VALIDATION_ERRORS: 'validationErrors',
@@ -240,6 +242,29 @@ function handleMessage(message: {
       }
       break;
 
+    case CONFIG_OUT_MSG.CONFIG_RENAMED:
+      isDirty = false;
+      saveButton.disabled = true;
+
+      // Clear pending validation errors on successful rename
+      pendingValidationErrors = [];
+      updateValidationSummary();
+      applyValidationHighlights();
+
+      if (suppressedSuccessMessages > 0) {
+        suppressedSuccessMessages -= 1;
+        successContainer.innerHTML = '';
+      } else {
+        showSuccess(message.message || 'Renamed successfully!');
+      }
+
+      // Reload config from server to get the updated state
+      loadConfig();
+      if (pendingReloadAfterSaveCount > 0) {
+        pendingReloadAfterSaveCount -= 1;
+      }
+      break;
+
     case CONFIG_OUT_MSG.ERROR:
       // Reset pending counters on error
       if (pendingReloadAfterSaveCount > 0) {
@@ -442,6 +467,7 @@ function renderProvider(name: string, config: Record<string, unknown>, hasApiKey
     html.push('<span class="provider-warning-badge" title="API key not configured">⚠</span>');
   }
 
+  html.push(`<button class="provider-rename" data-provider="${name}" title="Rename provider">✎</button>`);
   html.push(`<button class="provider-delete" data-provider="${name}" title="Delete provider">×</button>`);
   html.push('</div>');
 
@@ -486,6 +512,7 @@ function renderWorkload(name: string, config: Record<string, unknown>): string {
     );
   }
 
+  html.push(`<button class="provider-rename" data-workload="${name}" title="Rename workload">✎</button>`);
   html.push(`<button class="provider-delete" data-workload="${name}" title="Delete workload">×</button>`);
   html.push('</div>');
 
@@ -898,6 +925,22 @@ function attachEventListeners(): void {
     });
   }
 
+  // Provider/Workload rename buttons
+  const renameButtons = document.querySelectorAll('.provider-rename');
+  for (const button of renameButtons) {
+    button.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const providerName = (button as HTMLElement).getAttribute('data-provider');
+      const workloadName = (button as HTMLElement).getAttribute('data-workload');
+
+      if (providerName) {
+        void renameProvider(providerName);
+      } else if (workloadName) {
+        void renameWorkload(workloadName);
+      }
+    });
+  }
+
   // Provider/Workload delete buttons
   const deleteButtons = document.querySelectorAll('.provider-delete');
   for (const button of deleteButtons) {
@@ -1086,6 +1129,76 @@ async function addWorkload(): Promise<void> {
   setTimeout(() => {
     toggleWorkload(trimmedName);
   }, 100);
+}
+
+/**
+ * Rename provider
+ */
+async function renameProvider(providerName: string): Promise<void> {
+  const newName = await showInputBox(
+    `Enter new name for provider "${providerName}":`,
+    'New provider name',
+    providerName,
+  );
+  if (!newName || newName.trim() === '' || newName.trim() === providerName) {
+    return;
+  }
+
+  const trimmedName = newName.trim();
+
+  // Check if provider with new name already exists
+  if (currentConfig.providers && typeof currentConfig.providers === 'object') {
+    const providers = currentConfig.providers as Record<string, unknown>;
+    if (trimmedName in providers) {
+      showError('Provider with this name already exists!');
+      return;
+    }
+  }
+
+  // Send rename request to server
+  pendingReloadAfterSaveCount += 1;
+  suppressedSuccessMessages += 1;
+  vscode.postMessage({
+    type: CONFIG_IN_MSG.RENAME_CONFIG,
+    renameType: 'provider',
+    oldName: providerName,
+    newName: trimmedName,
+  });
+}
+
+/**
+ * Rename workload
+ */
+async function renameWorkload(workloadName: string): Promise<void> {
+  const newName = await showInputBox(
+    `Enter new name for workload "${workloadName}":`,
+    'New workload name',
+    workloadName,
+  );
+  if (!newName || newName.trim() === '' || newName.trim() === workloadName) {
+    return;
+  }
+
+  const trimmedName = newName.trim();
+
+  // Check if workload with new name already exists
+  if (currentConfig.workloads && typeof currentConfig.workloads === 'object') {
+    const workloads = currentConfig.workloads as Record<string, unknown>;
+    if (trimmedName in workloads) {
+      showError('Workload with this name already exists!');
+      return;
+    }
+  }
+
+  // Send rename request to server
+  pendingReloadAfterSaveCount += 1;
+  suppressedSuccessMessages += 1;
+  vscode.postMessage({
+    type: CONFIG_IN_MSG.RENAME_CONFIG,
+    renameType: 'workload',
+    oldName: workloadName,
+    newName: trimmedName,
+  });
 }
 
 /**

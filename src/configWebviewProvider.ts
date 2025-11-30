@@ -1,5 +1,11 @@
 import * as vscode from 'vscode';
-import {ApiService, ConfigResponse, UpdateConfigResponse} from './api/ApiService';
+import {
+  ApiService,
+  ConfigResponse,
+  UpdateConfigResponse,
+  RenameConfigResponse,
+  RenameConfigType,
+} from './api/ApiService';
 import {getErrorMessage} from './utils/typeGuards';
 
 // Messages from webview to extension
@@ -7,6 +13,7 @@ const CONFIG_IN_MSG = {
   READY: 'ready',
   LOAD_CONFIG: 'loadConfig',
   SAVE_CONFIG: 'saveConfig',
+  RENAME_CONFIG: 'renameConfig',
   SHOW_INPUT_BOX: 'showInputBox',
   SHOW_QUICK_PICK: 'showQuickPick',
   SHOW_CONFIRM: 'showConfirm',
@@ -16,6 +23,7 @@ const CONFIG_IN_MSG = {
 const CONFIG_OUT_MSG = {
   CONFIG_LOADED: 'configLoaded',
   CONFIG_SAVED: 'configSaved',
+  CONFIG_RENAMED: 'configRenamed',
   ERROR: 'error',
   LOADING: 'loading',
   VALIDATION_ERRORS: 'validationErrors',
@@ -28,6 +36,7 @@ type ConfigInMessage =
   | {type: typeof CONFIG_IN_MSG.READY}
   | {type: typeof CONFIG_IN_MSG.LOAD_CONFIG}
   | {type: typeof CONFIG_IN_MSG.SAVE_CONFIG; config: Record<string, unknown>}
+  | {type: typeof CONFIG_IN_MSG.RENAME_CONFIG; renameType: RenameConfigType; oldName: string; newName: string}
   | {type: typeof CONFIG_IN_MSG.SHOW_INPUT_BOX; requestId: string; prompt: string; placeholder?: string; value?: string}
   | {type: typeof CONFIG_IN_MSG.SHOW_QUICK_PICK; requestId: string; items: string[]; placeholder?: string}
   | {type: typeof CONFIG_IN_MSG.SHOW_CONFIRM; requestId: string; message: string};
@@ -35,6 +44,7 @@ type ConfigInMessage =
 type ConfigOutMessage =
   | {type: typeof CONFIG_OUT_MSG.CONFIG_LOADED; data: ConfigResponse}
   | {type: typeof CONFIG_OUT_MSG.CONFIG_SAVED; data: UpdateConfigResponse}
+  | {type: typeof CONFIG_OUT_MSG.CONFIG_RENAMED; data: RenameConfigResponse}
   | {type: typeof CONFIG_OUT_MSG.ERROR; message: string}
   | {type: typeof CONFIG_OUT_MSG.LOADING}
   | {type: typeof CONFIG_OUT_MSG.VALIDATION_ERRORS; errors: string[]}
@@ -120,6 +130,10 @@ export class ConfigWebviewProvider implements vscode.Disposable {
 
       case CONFIG_IN_MSG.SAVE_CONFIG:
         await this.saveConfig(message.config);
+        break;
+
+      case CONFIG_IN_MSG.RENAME_CONFIG:
+        await this.renameConfig(message.renameType, message.oldName, message.newName);
         break;
 
       case CONFIG_IN_MSG.SHOW_INPUT_BOX:
@@ -276,6 +290,36 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         message: `Failed to save configuration: ${errorMsg}`,
       });
       void vscode.window.showErrorMessage(`Failed to save configuration: ${errorMsg}`);
+    }
+  }
+
+  /**
+   * Rename a workload or provider
+   */
+  private async renameConfig(type: RenameConfigType, oldName: string, newName: string): Promise<void> {
+    if (!this.panel) {
+      return;
+    }
+
+    try {
+      this.postMessage({type: CONFIG_OUT_MSG.LOADING});
+      const result = await this.apiService.renameConfig(type, oldName, newName);
+
+      // Clear pending validation errors on successful rename
+      this.pendingValidationErrors = [];
+      this.postValidationErrors();
+
+      this.postMessage({
+        type: CONFIG_OUT_MSG.CONFIG_RENAMED,
+        data: result,
+      });
+    } catch (error) {
+      const errorMsg = getErrorMessage(error, 'Unknown error');
+      this.postMessage({
+        type: CONFIG_OUT_MSG.ERROR,
+        message: `Failed to rename ${type}: ${errorMsg}`,
+      });
+      void vscode.window.showErrorMessage(`Failed to rename ${type}: ${errorMsg}`);
     }
   }
 
@@ -575,6 +619,21 @@ export class ConfigWebviewProvider implements vscode.Disposable {
       padding: 2px 6px;
       border-radius: 2px;
       margin-right: 8px;
+    }
+
+    .provider-rename {
+      color: var(--vscode-foreground);
+      border: none;
+      background: none;
+      cursor: pointer;
+      padding: 2px 6px;
+      font-size: 14px;
+      opacity: 0.6;
+    }
+
+    .provider-rename:hover {
+      opacity: 1;
+      color: var(--vscode-textLink-foreground);
     }
 
     .provider-delete {
