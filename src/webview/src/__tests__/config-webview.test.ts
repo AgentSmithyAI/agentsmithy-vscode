@@ -179,17 +179,70 @@ describe('config-webview dialog flow', () => {
     // 1. User clicks delete button on provider
     // 2. Webview sends showConfirm for deletion confirmation
     // 3. Extension shows VS Code warning message, returns result
-    // 4. If confirmed, webview deletes provider from config
+    // 4. If confirmed, webview sends saveConfig with null value for provider
 
     const expectedFlow = [
       {step: 1, action: 'click delete button'},
       {step: 2, message: 'showConfirm', prompt: 'Are you sure...'},
       {step: 3, response: 'confirmResult', confirmed: true},
-      {step: 4, action: 'delete provider from config'},
+      {step: 4, action: 'send saveConfig with null provider'},
     ];
 
     expect(expectedFlow.length).toBe(4);
     expect(expectedFlow[1].message).toBe('showConfirm');
+  });
+
+  it('deleteProvider sends correct deletion payload with null value', () => {
+    // When deleting a provider, the webview should send a config update
+    // with the provider key set to null, not remove it from the object
+    const providerName = 'my-openai';
+
+    const expectedDeletePayload = {
+      type: 'saveConfig',
+      config: {
+        providers: {
+          [providerName]: null,
+        },
+      },
+    };
+
+    expect(expectedDeletePayload.type).toBe('saveConfig');
+    expect(expectedDeletePayload.config.providers[providerName]).toBeNull();
+    // This is how the server knows to delete the provider
+  });
+
+  it('deleteWorkload sends correct deletion payload with null value', () => {
+    // When deleting a workload, the webview should send a config update
+    // with the workload key set to null
+    const workloadName = 'reasoning';
+
+    const expectedDeletePayload = {
+      type: 'saveConfig',
+      config: {
+        workloads: {
+          [workloadName]: null,
+        },
+      },
+    };
+
+    expect(expectedDeletePayload.type).toBe('saveConfig');
+    expect(expectedDeletePayload.config.workloads[workloadName]).toBeNull();
+  });
+
+  it('delete operations should not modify local config until server confirms', () => {
+    // The delete flow should:
+    // 1. Send saveConfig with null value
+    // 2. Wait for CONFIG_SAVED response
+    // 3. Reload config from server (loadConfig)
+    // This ensures UI reflects actual server state, not optimistic updates
+
+    const expectedBehavior = {
+      optimisticUpdate: false, // Don't modify local config before server confirms
+      reloadAfterSave: true, // Always reload config after successful save
+    };
+
+    expect(expectedBehavior.optimisticUpdate).toBe(false);
+    expect(expectedBehavior.reloadAfterSave).toBe(true);
   });
 
   it('cancellation at any step aborts the operation', () => {

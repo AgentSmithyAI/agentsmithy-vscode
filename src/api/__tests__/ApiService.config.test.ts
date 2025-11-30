@@ -170,7 +170,8 @@ describe('ApiService - Configuration', () => {
 
       (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
         ok: true,
-        json: async () => mockResponse,
+        status: 200,
+        text: async () => JSON.stringify(mockResponse),
       });
 
       const result = await apiService.updateConfig(configUpdate);
@@ -186,6 +187,42 @@ describe('ApiService - Configuration', () => {
 
       expect(result.success).toBe(true);
       expect(result.message).toBe('Successfully updated 1 configuration key(s)');
+    });
+
+    it('throws ApiError with structured errors on validation failure', async () => {
+      const {ApiError} = await import('../ApiService');
+
+      const configUpdate = {
+        providers: {
+          ollama: null,
+        },
+      };
+
+      const errorResponse = {
+        detail: {
+          message: 'Invalid configuration',
+          errors: ["Workload 'reasoning' references unknown provider 'ollama'"],
+        },
+      };
+
+      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+        ok: false,
+        status: 400,
+        text: async () => JSON.stringify(errorResponse),
+      });
+
+      await expect(apiService.updateConfig(configUpdate)).rejects.toThrow(ApiError);
+
+      try {
+        await apiService.updateConfig(configUpdate);
+      } catch (e) {
+        // Re-mock for second call
+        (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+          ok: false,
+          status: 400,
+          text: async () => JSON.stringify(errorResponse),
+        });
+      }
     });
   });
 });

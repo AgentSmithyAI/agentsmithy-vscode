@@ -1,4 +1,5 @@
 import {isRecord} from '../utils/typeGuards';
+import {ApiError} from './errors';
 
 interface CurrentDialogResponse {
   id: string | null;
@@ -582,20 +583,24 @@ export class ApiService {
    */
   async updateConfig(config: Record<string, unknown>): Promise<UpdateConfigResponse> {
     const url = `${this.getBaseUrl()}/api/config`;
+    const body = JSON.stringify({config});
+
     const resp = await fetch(url, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
         Accept: 'application/json',
       },
-      body: JSON.stringify({config}),
+      body,
     });
 
+    const responseText = await resp.text();
+
     if (!resp.ok) {
-      throw new Error(`HTTP error! status: ${resp.status}`);
+      throw ApiError.fromResponse(responseText, resp.status);
     }
 
-    const data: unknown = await resp.json();
+    const data: unknown = JSON.parse(responseText);
     if (!isRecord(data)) {
       throw new Error('Malformed update config response');
     }
@@ -607,3 +612,6 @@ export class ApiService {
     };
   }
 }
+
+// Re-export ApiError for convenience
+export {ApiError} from './errors';

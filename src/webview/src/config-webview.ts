@@ -217,34 +217,37 @@ function handleMessage(message: {
       break;
 
     case CONFIG_OUT_MSG.CONFIG_SAVED:
-      if (message.data && typeof message.data === 'object') {
-        const data = message.data as {config: Record<string, unknown>};
-        currentConfig = data.config;
-        isDirty = false;
-        saveButton.disabled = true;
+      isDirty = false;
+      saveButton.disabled = true;
 
-        // Clear pending validation errors on successful save
-        pendingValidationErrors = [];
-        updateValidationSummary();
-        applyValidationHighlights();
+      // Clear pending validation errors on successful save
+      pendingValidationErrors = [];
+      updateValidationSummary();
+      applyValidationHighlights();
 
-        if (suppressedSuccessMessages > 0) {
-          suppressedSuccessMessages -= 1;
-          successContainer.innerHTML = '';
-        } else {
-          showSuccess('Configuration saved successfully!');
-        }
+      if (suppressedSuccessMessages > 0) {
+        suppressedSuccessMessages -= 1;
+        successContainer.innerHTML = '';
+      } else {
+        showSuccess('Configuration saved successfully!');
+      }
 
-        if (pendingReloadAfterSaveCount > 0) {
-          pendingReloadAfterSaveCount -= 1;
-          loadConfig();
-        } else {
-          renderConfig();
-        }
+      // Always reload config from server to get the actual state
+      // Don't use the response config as it may be partial
+      loadConfig();
+      if (pendingReloadAfterSaveCount > 0) {
+        pendingReloadAfterSaveCount -= 1;
       }
       break;
 
     case CONFIG_OUT_MSG.ERROR:
+      // Reset pending counters on error
+      if (pendingReloadAfterSaveCount > 0) {
+        pendingReloadAfterSaveCount -= 1;
+      }
+      if (suppressedSuccessMessages > 0) {
+        suppressedSuccessMessages -= 1;
+      }
       showError(message.message || 'An error occurred');
       hideLoading();
       break;
@@ -1094,13 +1097,20 @@ async function deleteProvider(providerName: string): Promise<void> {
     return;
   }
 
-  if (currentConfig.providers && typeof currentConfig.providers === 'object') {
-    const providers = currentConfig.providers as Record<string, unknown>;
-    delete providers[providerName];
-    markDirty();
-    renderConfig();
-    saveConfig(true);
-  }
+  // Send deletion request with null value for the provider
+  // Don't modify local config - wait for server response and reload
+  const deleteConfig = {
+    providers: {
+      [providerName]: null,
+    },
+  };
+
+  pendingReloadAfterSaveCount += 1;
+  suppressedSuccessMessages += 1;
+  vscode.postMessage({
+    type: CONFIG_IN_MSG.SAVE_CONFIG,
+    config: deleteConfig,
+  });
 }
 
 /**
@@ -1112,13 +1122,20 @@ async function deleteWorkload(workloadName: string): Promise<void> {
     return;
   }
 
-  if (currentConfig.workloads && typeof currentConfig.workloads === 'object') {
-    const workloads = currentConfig.workloads as Record<string, unknown>;
-    delete workloads[workloadName];
-    markDirty();
-    renderConfig();
-    saveConfig(true);
-  }
+  // Send deletion request with null value for the workload
+  // Don't modify local config - wait for server response and reload
+  const deleteConfig = {
+    workloads: {
+      [workloadName]: null,
+    },
+  };
+
+  pendingReloadAfterSaveCount += 1;
+  suppressedSuccessMessages += 1;
+  vscode.postMessage({
+    type: CONFIG_IN_MSG.SAVE_CONFIG,
+    config: deleteConfig,
+  });
 }
 
 /**
