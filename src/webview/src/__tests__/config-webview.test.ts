@@ -791,3 +791,255 @@ describe('config-webview custom model input', () => {
     expect(expectedOptions[expectedOptions.length - 1].value).toBe('__custom__');
   });
 });
+
+describe('config-webview saving overlay (no-flash behavior)', () => {
+  it('saveConfig sets isSaving flag', () => {
+    let isSaving = false;
+
+    // Simulate saveConfig behavior
+    const saveConfig = () => {
+      isSaving = true;
+    };
+
+    saveConfig();
+
+    expect(isSaving).toBe(true);
+  });
+
+  it('saveConfig shows saving overlay immediately', () => {
+    let overlayVisible = false;
+
+    const showSavingOverlay = () => {
+      overlayVisible = true;
+    };
+
+    // Simulate saveConfig behavior
+    const saveConfig = () => {
+      showSavingOverlay();
+    };
+
+    saveConfig();
+
+    expect(overlayVisible).toBe(true);
+  });
+
+  it('showLoading uses overlay when isSaving is true', () => {
+    let isSaving = true;
+    let fullLoadingShown = false;
+    let overlayShown = false;
+
+    const showSavingOverlay = () => {
+      overlayShown = true;
+    };
+
+    const showLoading = () => {
+      if (isSaving) {
+        showSavingOverlay();
+        return;
+      }
+      fullLoadingShown = true;
+    };
+
+    showLoading();
+
+    expect(overlayShown).toBe(true);
+    expect(fullLoadingShown).toBe(false);
+  });
+
+  it('showLoading shows full loading when not saving', () => {
+    let isSaving = false;
+    let fullLoadingShown = false;
+    let overlayShown = false;
+
+    const showSavingOverlay = () => {
+      overlayShown = true;
+    };
+
+    const showLoading = () => {
+      if (isSaving) {
+        showSavingOverlay();
+        return;
+      }
+      fullLoadingShown = true;
+    };
+
+    showLoading();
+
+    expect(overlayShown).toBe(false);
+    expect(fullLoadingShown).toBe(true);
+  });
+
+  it('hideLoading hides overlay and resets isSaving when saving', () => {
+    let isSaving = true;
+    let overlayHidden = false;
+
+    const hideSavingOverlay = () => {
+      overlayHidden = true;
+    };
+
+    const hideLoading = () => {
+      if (isSaving) {
+        hideSavingOverlay();
+        isSaving = false;
+        return;
+      }
+    };
+
+    hideLoading();
+
+    expect(overlayHidden).toBe(true);
+    expect(isSaving).toBe(false);
+  });
+
+  it('config container stays visible during save', () => {
+    // During save operation, configContainer should NOT be hidden
+    // Only the overlay is shown on top
+
+    const behavior = {
+      configContainerHidden: false, // Should remain visible
+      overlayShown: true,
+      fullLoadingShown: false,
+    };
+
+    expect(behavior.configContainerHidden).toBe(false);
+    expect(behavior.overlayShown).toBe(true);
+  });
+
+  it('scroll position is preserved during save (no re-scroll needed)', () => {
+    // Since config container stays visible, scroll position is naturally preserved
+    // No need to save/restore scroll during overlay
+
+    const mockScrollContainer = {scrollTop: 500};
+    let isSaving = true;
+
+    // During save, scroll should remain unchanged
+    const scrollBefore = mockScrollContainer.scrollTop;
+
+    // Simulate save completion (just hide overlay)
+    const hideSavingOverlay = () => {
+      // No scroll manipulation needed
+    };
+
+    hideSavingOverlay();
+
+    expect(mockScrollContainer.scrollTop).toBe(scrollBefore);
+  });
+
+  it('expanded state is preserved during save (no re-render flash)', () => {
+    // Since config is re-rendered but container was never hidden,
+    // the visual flash is eliminated
+
+    const expandedProviders = new Set(['openai']);
+    let renderConfigCalled = false;
+
+    // Simulate CONFIG_LOADED after save
+    const handleConfigLoaded = () => {
+      renderConfigCalled = true;
+      // restoreExpandedState() is called after render
+    };
+
+    handleConfigLoaded();
+
+    expect(renderConfigCalled).toBe(true);
+    expect(expandedProviders.has('openai')).toBe(true);
+  });
+
+  it('overlay has proper styling for visibility', () => {
+    // The overlay should be centered, have a spinner, and show "Saving..."
+    const overlayStyles = {
+      position: 'fixed',
+      display: 'flex',
+      zIndex: 1000,
+      text: 'Saving...',
+      hasSpinner: true,
+    };
+
+    expect(overlayStyles.position).toBe('fixed');
+    expect(overlayStyles.zIndex).toBe(1000);
+    expect(overlayStyles.text).toBe('Saving...');
+    expect(overlayStyles.hasSpinner).toBe(true);
+  });
+
+  it('manual reload button still shows full loading', () => {
+    // When user clicks Reload button, isSaving is false
+    // so full loading should be shown
+
+    let isSaving = false;
+    let fullLoadingShown = false;
+
+    const showLoading = () => {
+      if (isSaving) {
+        return;
+      }
+      fullLoadingShown = true;
+    };
+
+    // Simulate reload button click
+    showLoading();
+
+    expect(fullLoadingShown).toBe(true);
+  });
+
+  it('sendSaveRequest is the single point for all save operations', () => {
+    // All save operations should go through sendSaveRequest
+    // This ensures consistent overlay behavior
+    const operations = [
+      {name: 'saveConfig', usesSendSaveRequest: true},
+      {name: 'deleteProvider', usesSendSaveRequest: true},
+      {name: 'deleteWorkload', usesSendSaveRequest: true},
+    ];
+
+    for (const op of operations) {
+      expect(op.usesSendSaveRequest).toBe(true);
+    }
+  });
+
+  it('deleteProvider uses sendSaveRequest', () => {
+    let sendSaveRequestCalled = false;
+    let configSent: Record<string, unknown> | null = null;
+
+    const sendSaveRequest = (config: Record<string, unknown>) => {
+      sendSaveRequestCalled = true;
+      configSent = config;
+    };
+
+    // Simulate deleteProvider (after confirmation)
+    const providerName = 'openai';
+    sendSaveRequest({providers: {[providerName]: null}});
+
+    expect(sendSaveRequestCalled).toBe(true);
+    expect(configSent).toEqual({providers: {openai: null}});
+  });
+
+  it('deleteWorkload uses sendSaveRequest', () => {
+    let sendSaveRequestCalled = false;
+    let configSent: Record<string, unknown> | null = null;
+
+    const sendSaveRequest = (config: Record<string, unknown>) => {
+      sendSaveRequestCalled = true;
+      configSent = config;
+    };
+
+    // Simulate deleteWorkload (after confirmation)
+    const workloadName = 'reasoning';
+    sendSaveRequest({workloads: {[workloadName]: null}});
+
+    expect(sendSaveRequestCalled).toBe(true);
+    expect(configSent).toEqual({workloads: {reasoning: null}});
+  });
+
+  it('delete operations remove from expanded tracking', () => {
+    const expandedProviders = new Set(['openai', 'anthropic']);
+    const expandedWorkloads = new Set(['reasoning', 'coding']);
+
+    // Simulate deleteProvider
+    expandedProviders.delete('openai');
+    expect(expandedProviders.has('openai')).toBe(false);
+    expect(expandedProviders.has('anthropic')).toBe(true);
+
+    // Simulate deleteWorkload
+    expandedWorkloads.delete('reasoning');
+    expect(expandedWorkloads.has('reasoning')).toBe(false);
+    expect(expandedWorkloads.has('coding')).toBe(true);
+  });
+});

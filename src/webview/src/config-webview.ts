@@ -113,6 +113,10 @@ let expandedWorkloads: Set<string> = new Set();
 let savedScrollTop = 0;
 let scrollContainer: HTMLElement;
 
+// Track if we're in a save operation (to show overlay instead of full loading)
+let isSaving = false;
+let savingOverlay: HTMLElement;
+
 // DOM elements
 let errorContainer: HTMLElement;
 let successContainer: HTMLElement;
@@ -133,6 +137,7 @@ function init(): void {
   validationSummary = document.getElementById('validationSummary')!;
   reloadButton = document.getElementById('reloadButton') as HTMLButtonElement;
   scrollContainer = document.querySelector('.scroll-container') as HTMLElement;
+  savingOverlay = document.getElementById('savingOverlay') as HTMLElement;
 
   // Set up event listeners
   reloadButton.addEventListener('click', () => {
@@ -317,9 +322,15 @@ function handleMessage(message: {
 }
 
 /**
- * Show loading state
+ * Show loading state (full page loading, used for initial load and manual reload)
  */
 function showLoading(): void {
+  // If we're saving, use overlay instead of full loading
+  if (isSaving) {
+    showSavingOverlay();
+    return;
+  }
+
   // Save scroll position before hiding container (only if not already saved by saveConfig)
   const currentScroll = scrollContainer.scrollTop;
   if (currentScroll > 0) {
@@ -336,11 +347,32 @@ function showLoading(): void {
  * Hide loading state
  */
 function hideLoading(): void {
+  // If we were saving, hide overlay instead
+  if (isSaving) {
+    hideSavingOverlay();
+    isSaving = false;
+    return;
+  }
+
   loadingContainer.classList.add('hidden');
   configContainer.classList.remove('hidden');
 
   // Restore scroll position after container is visible
   scrollContainer.scrollTop = savedScrollTop;
+}
+
+/**
+ * Show saving overlay (non-blocking, content stays visible)
+ */
+function showSavingOverlay(): void {
+  savingOverlay.classList.remove('hidden');
+}
+
+/**
+ * Hide saving overlay
+ */
+function hideSavingOverlay(): void {
+  savingOverlay.classList.add('hidden');
 }
 
 /**
@@ -374,18 +406,29 @@ function loadConfig(): void {
 /**
  * Save configuration
  */
-function saveConfig(auto = false): void {
+/**
+ * Central function to send save request with overlay
+ */
+function sendSaveRequest(config: Record<string, unknown>, suppressSuccess = false): void {
   // Save scroll position before reload
   savedScrollTop = scrollContainer.scrollTop;
 
-  if (auto) {
+  // Mark as saving to show overlay instead of full loading
+  isSaving = true;
+  showSavingOverlay();
+
+  if (suppressSuccess) {
     suppressedSuccessMessages += 1;
   }
   pendingReloadAfterSaveCount += 1;
   vscode.postMessage({
     type: CONFIG_IN_MSG.SAVE_CONFIG,
-    config: currentConfig,
+    config: config,
   });
+}
+
+function saveConfig(auto = false): void {
+  sendSaveRequest(currentConfig, auto);
 }
 
 /**
@@ -1498,20 +1541,11 @@ async function deleteProvider(providerName: string): Promise<void> {
     return;
   }
 
-  // Send deletion request with null value for the provider
-  // Don't modify local config - wait for server response and reload
-  const deleteConfig = {
-    providers: {
-      [providerName]: null,
-    },
-  };
+  // Remove from expanded state tracking
+  expandedProviders.delete(providerName);
 
-  pendingReloadAfterSaveCount += 1;
-  suppressedSuccessMessages += 1;
-  vscode.postMessage({
-    type: CONFIG_IN_MSG.SAVE_CONFIG,
-    config: deleteConfig,
-  });
+  // Send deletion request with null value for the provider
+  sendSaveRequest({providers: {[providerName]: null}}, true);
 }
 
 /**
@@ -1523,20 +1557,11 @@ async function deleteWorkload(workloadName: string): Promise<void> {
     return;
   }
 
-  // Send deletion request with null value for the workload
-  // Don't modify local config - wait for server response and reload
-  const deleteConfig = {
-    workloads: {
-      [workloadName]: null,
-    },
-  };
+  // Remove from expanded state tracking
+  expandedWorkloads.delete(workloadName);
 
-  pendingReloadAfterSaveCount += 1;
-  suppressedSuccessMessages += 1;
-  vscode.postMessage({
-    type: CONFIG_IN_MSG.SAVE_CONFIG,
-    config: deleteConfig,
-  });
+  // Send deletion request with null value for the workload
+  sendSaveRequest({workloads: {[workloadName]: null}}, true);
 }
 
 /**

@@ -449,6 +449,41 @@ export class ConfigWebviewProvider implements vscode.Disposable {
       color: var(--vscode-descriptionForeground);
     }
 
+    .saving-overlay {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background-color: var(--vscode-editor-background);
+      border: 1px solid var(--vscode-panel-border);
+      border-radius: 6px;
+      padding: 16px 24px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 13px;
+      color: var(--vscode-foreground);
+    }
+
+    .saving-overlay.hidden {
+      display: none;
+    }
+
+    .saving-spinner {
+      width: 16px;
+      height: 16px;
+      border: 2px solid var(--vscode-progressBar-background);
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
     .error {
       background-color: var(--vscode-inputValidation-errorBackground);
       border: 1px solid var(--vscode-inputValidation-errorBorder);
@@ -783,6 +818,11 @@ export class ConfigWebviewProvider implements vscode.Disposable {
 
       <div id="loadingContainer" class="loading">
         <p>Loading configuration...</p>
+      </div>
+
+      <div id="savingOverlay" class="saving-overlay hidden">
+        <div class="saving-spinner"></div>
+        <span>Saving...</span>
       </div>
 
       <div id="configContainer" class="hidden">
