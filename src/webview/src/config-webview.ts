@@ -737,6 +737,8 @@ function renderWorkloadKindDropdown(value: unknown, path: string[]): string {
   html.push('<div class="setting-item-control">');
   html.push(`<select id="${fieldId}" class="setting-select config-field" data-path='${dataPath}'>`);
 
+  html.push(`<option value="">-- Select Kind --</option>`);
+
   // Add workload kinds from metadata
   for (const kind of workloadKinds) {
     const selected = kind === currentValue ? 'selected' : '';
