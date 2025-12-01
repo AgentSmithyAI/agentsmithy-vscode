@@ -32,6 +32,8 @@ const CONFIG_OUT_MSG = {
   CONFIRM_RESULT: 'confirmResult',
 } as const;
 
+const DEFAULT_ERROR_MESSAGE = 'Unknown error';
+
 type ConfigInMessage =
   | {type: typeof CONFIG_IN_MSG.READY}
   | {type: typeof CONFIG_IN_MSG.LOAD_CONFIG}
@@ -255,7 +257,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
 
       await this.refreshValidationErrors();
     } catch (error) {
-      const errorMsg = getErrorMessage(error, 'Unknown error');
+      const errorMsg = getErrorMessage(error, DEFAULT_ERROR_MESSAGE);
       this.postMessage({
         type: CONFIG_OUT_MSG.ERROR,
         message: `Failed to load configuration: ${errorMsg}`,
@@ -284,7 +286,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         data: result,
       });
     } catch (error) {
-      const errorMsg = getErrorMessage(error, 'Unknown error');
+      const errorMsg = getErrorMessage(error, DEFAULT_ERROR_MESSAGE);
       this.postMessage({
         type: CONFIG_OUT_MSG.ERROR,
         message: `Failed to save configuration: ${errorMsg}`,
@@ -314,7 +316,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         data: result,
       });
     } catch (error) {
-      const errorMsg = getErrorMessage(error, 'Unknown error');
+      const errorMsg = getErrorMessage(error, DEFAULT_ERROR_MESSAGE);
       this.postMessage({
         type: CONFIG_OUT_MSG.ERROR,
         message: `Failed to rename ${type}: ${errorMsg}`,
