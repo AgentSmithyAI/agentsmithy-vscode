@@ -1,3 +1,10 @@
+# [1.9.0](https://github.com/AgentSmithyAI/agentsmithy-vscode/compare/v1.8.5...v1.9.0) (2025-12-01)
+
+
+### Features
+
+* Improved settings workflow ([#52](https://github.com/AgentSmithyAI/agentsmithy-vscode/issues/52)) ([9bb27ae](https://github.com/AgentSmithyAI/agentsmithy-vscode/commit/9bb27ae301f585e05ae1c53318386d7024300b3a))
+
 ## [1.8.5](https://github.com/AgentSmithyAI/agentsmithy-vscode/compare/v1.8.4...v1.8.5) (2025-11-29)
 
 
