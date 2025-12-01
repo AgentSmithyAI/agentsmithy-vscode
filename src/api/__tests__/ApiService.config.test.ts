@@ -26,7 +26,7 @@ describe('ApiService - Configuration', () => {
             },
           },
           workloads: {
-            reasoning: {provider: 'openai', model: 'gpt-5', options: {}},
+            reasoning: {provider: 'openai', model: 'gpt-5', kind: 'chat', options: {}},
           },
           models: {
             agents: {
@@ -36,8 +36,9 @@ describe('ApiService - Configuration', () => {
         },
         metadata: {
           provider_types: ['openai', 'anthropic'],
+          workload_kinds: ['chat', 'embeddings'],
           providers: [{name: 'openai', type: 'openai', has_api_key: false, model: null}],
-          workloads: [{name: 'reasoning', provider: 'openai', model: 'gpt-5'}],
+          workloads: [{name: 'reasoning', provider: 'openai', model: 'gpt-5', kind: 'chat'}],
           agent_provider_slots: [{path: 'models.agents.universal.workload', workload: 'reasoning'}],
           model_catalog: {
             openai: {
@@ -170,7 +171,8 @@ describe('ApiService - Configuration', () => {
 
       (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
         ok: true,
-        json: async () => mockResponse,
+        status: 200,
+        text: async () => JSON.stringify(mockResponse),
       });
 
       const result = await apiService.updateConfig(configUpdate);
@@ -186,6 +188,201 @@ describe('ApiService - Configuration', () => {
 
       expect(result.success).toBe(true);
       expect(result.message).toBe('Successfully updated 1 configuration key(s)');
+    });
+
+    it('throws ApiError with structured errors on validation failure', async () => {
+      const {ApiError} = await import('../ApiService');
+
+      const configUpdate = {
+        providers: {
+          ollama: null,
+        },
+      };
+
+      const errorResponse = {
+        detail: {
+          message: 'Invalid configuration',
+          errors: ["Workload 'reasoning' references unknown provider 'ollama'"],
+        },
+      };
+
+      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+        ok: false,
+        status: 400,
+        text: async () => JSON.stringify(errorResponse),
+      });
+
+      await expect(apiService.updateConfig(configUpdate)).rejects.toThrow(ApiError);
+    });
+  });
+
+  describe('renameConfig', () => {
+    it('renames workload and returns updated config', async () => {
+      const mockResponse = {
+        success: true,
+        message: "Successfully renamed workload 'reasoning' to 'main-model'",
+        old_name: 'reasoning',
+        new_name: 'main-model',
+        updated_references: ['models.agents.universal.workload'],
+        config: {
+          workloads: {
+            'main-model': {provider: 'openai', model: 'gpt-5'},
+          },
+        },
+        metadata: {
+          workloads: [{name: 'main-model', provider: 'openai', model: 'gpt-5', kind: 'chat'}],
+        },
+      };
+
+      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify(mockResponse),
+      });
+
+      const result = await apiService.renameConfig('workload', 'reasoning', 'main-model');
+
+      expect(global.fetch).toHaveBeenCalledWith(`${baseUrl}/api/config/rename`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({
+          type: 'workload',
+          old_name: 'reasoning',
+          new_name: 'main-model',
+        }),
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.old_name).toBe('reasoning');
+      expect(result.new_name).toBe('main-model');
+      expect(result.updated_references).toEqual(['models.agents.universal.workload']);
+    });
+
+    it('renames provider and returns updated config', async () => {
+      const mockResponse = {
+        success: true,
+        message: "Successfully renamed provider 'openai' to 'my-openai'",
+        old_name: 'openai',
+        new_name: 'my-openai',
+        updated_references: ['workloads.reasoning.provider'],
+        config: {
+          providers: {
+            'my-openai': {type: 'openai', api_key: 'sk-test'},
+          },
+        },
+        metadata: null,
+      };
+
+      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify(mockResponse),
+      });
+
+      const result = await apiService.renameConfig('provider', 'openai', 'my-openai');
+
+      expect(global.fetch).toHaveBeenCalledWith(`${baseUrl}/api/config/rename`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({
+          type: 'provider',
+          old_name: 'openai',
+          new_name: 'my-openai',
+        }),
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.old_name).toBe('openai');
+      expect(result.new_name).toBe('my-openai');
+      expect(result.metadata).toBeNull();
+    });
+
+    it('throws ApiError when entity not found', async () => {
+      const {ApiError} = await import('../ApiService');
+
+      const errorResponse = {
+        detail: {
+          message: "Workload 'unknown' not found",
+          errors: [],
+        },
+      };
+
+      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+        ok: false,
+        status: 400,
+        text: async () => JSON.stringify(errorResponse),
+      });
+
+      await expect(apiService.renameConfig('workload', 'unknown', 'new-name')).rejects.toThrow(ApiError);
+    });
+
+    it('throws ApiError when new name already exists', async () => {
+      const {ApiError} = await import('../ApiService');
+
+      const errorResponse = {
+        detail: {
+          message: "Workload 'existing' already exists",
+          errors: [],
+        },
+      };
+
+      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+        ok: false,
+        status: 400,
+        text: async () => JSON.stringify(errorResponse),
+      });
+
+      await expect(apiService.renameConfig('workload', 'old-name', 'existing')).rejects.toThrow(ApiError);
+    });
+
+    it('handles response with missing optional fields', async () => {
+      const mockResponse = {
+        success: true,
+        message: 'Renamed',
+        config: {},
+      };
+
+      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify(mockResponse),
+      });
+
+      const result = await apiService.renameConfig('workload', 'old', 'new');
+
+      expect(result.success).toBe(true);
+      expect(result.old_name).toBe('old'); // Falls back to input
+      expect(result.new_name).toBe('new'); // Falls back to input
+      expect(result.updated_references).toEqual([]);
+      expect(result.metadata).toBeNull();
+    });
+
+    it('filters non-string updated_references', async () => {
+      const mockResponse = {
+        success: true,
+        message: 'Renamed',
+        old_name: 'old',
+        new_name: 'new',
+        updated_references: ['valid.path', 123, null, 'another.path'],
+        config: {},
+        metadata: null,
+      };
+
+      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify(mockResponse),
+      });
+
+      const result = await apiService.renameConfig('workload', 'old', 'new');
+
+      expect(result.updated_references).toEqual(['valid.path', 'another.path']);
     });
   });
 });

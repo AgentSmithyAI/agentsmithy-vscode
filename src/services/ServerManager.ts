@@ -188,35 +188,50 @@ export class ServerManager {
   };
 
   /**
+   * Try to fetch latest release, fallback to installed version if fetch fails
+   */
+  private fetchLatestOrFallback = async (): Promise<{version: string; size: number; sha256: string} | null> => {
+    try {
+      return await this.downloadManager.fetchLatestRelease();
+    } catch (fetchError) {
+      const installedVersion = this.downloadManager.getLatestInstalled();
+      if (installedVersion && this.serverExists()) {
+        const errorMessage = fetchError instanceof Error ? fetchError.message : String(fetchError);
+        this.outputChannel.appendLine(`Warning: Could not fetch latest release info: ${errorMessage}`);
+        this.outputChannel.appendLine(`Using installed version ${installedVersion} (release may still be building)`);
+        void vscode.window.showWarningMessage(
+          `AgentSmithy: Using installed server v${installedVersion}. Latest release may still be building.`,
+        );
+        return null; // Signal to use existing installation
+      }
+      throw fetchError;
+    }
+  };
+
+  /**
+   * Request user confirmation for download, throw if cancelled
+   */
+  private confirmDownloadOrThrow = async (version: string, size: number, isUpdate: boolean): Promise<void> => {
+    const confirmed = await this.showDownloadConfirmation(version, size, isUpdate);
+    if (!confirmed) {
+      this.outputChannel.appendLine('Download cancelled by user');
+      throw new Error('Server download cancelled by user');
+    }
+  };
+
+  /**
    * Ensure server binary is available, download/update if necessary
    */
   private ensureServer = async (): Promise<void> => {
     try {
       this.outputChannel.appendLine('Fetching latest release info from GitHub...');
 
-      let latestRelease: {version: string; size: number; sha256: string};
-      try {
-        latestRelease = await this.downloadManager.fetchLatestRelease();
-      } catch (fetchError) {
-        // If fetching latest release fails (e.g., asset not found because build is in progress),
-        // check if we have an installed version we can use
-        const installedVersion = this.downloadManager.getLatestInstalled();
-        if (installedVersion && this.serverExists()) {
-          const errorMessage = fetchError instanceof Error ? fetchError.message : String(fetchError);
-          this.outputChannel.appendLine(`Warning: Could not fetch latest release info: ${errorMessage}`);
-          this.outputChannel.appendLine(`Using installed version ${installedVersion} (release may still be building)`);
-          // Show a non-blocking warning to the user
-          void vscode.window.showWarningMessage(
-            `AgentSmithy: Using installed server v${installedVersion}. Latest release may still be building.`,
-          );
-          return;
-        }
-        // No installed version to fall back to - rethrow
-        throw fetchError;
+      const latestRelease = await this.fetchLatestOrFallback();
+      if (!latestRelease) {
+        return; // Using existing installation
       }
 
       const {version: latestVersionTag, size: expectedSize, sha256: expectedSHA} = latestRelease;
-      // Use semver to clean version (removes 'v' prefix)
       const latestVersion = semver.clean(latestVersionTag) || latestVersionTag.replace(/^v/, '');
 
       this.outputChannel.appendLine(`Latest available version: ${latestVersion} (size: ${expectedSize} bytes)`);
@@ -237,23 +252,11 @@ export class ServerManager {
         if (handled) {
           return;
         }
-
-        // New version available - ask for confirmation
-        const confirmed = await this.showDownloadConfirmation(latestVersion, expectedSize, true);
-        if (!confirmed) {
-          this.outputChannel.appendLine('Download cancelled by user');
-          throw new Error('Server download cancelled by user');
-        }
+        await this.confirmDownloadOrThrow(latestVersion, expectedSize, true);
       } else {
-        // No version installed - ask for confirmation
-        const confirmed = await this.showDownloadConfirmation(latestVersion, expectedSize, false);
-        if (!confirmed) {
-          this.outputChannel.appendLine('Download cancelled by user');
-          throw new Error('Server download cancelled by user');
-        }
+        await this.confirmDownloadOrThrow(latestVersion, expectedSize, false);
       }
 
-      // Download new version
       await this.downloadWithLock(latestVersionTag, latestVersion, expectedSize, expectedSHA, 'Downloading');
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);

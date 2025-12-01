@@ -1,4 +1,5 @@
 import {isRecord} from '../utils/typeGuards';
+import {ApiError} from './errors';
 
 interface CurrentDialogResponse {
   id: string | null;
@@ -116,6 +117,18 @@ export interface UpdateConfigResponse {
   success: boolean;
   message: string;
   config: Record<string, unknown>;
+}
+
+export type RenameConfigType = 'workload' | 'provider';
+
+export interface RenameConfigResponse {
+  success: boolean;
+  message: string;
+  old_name: string;
+  new_name: string;
+  updated_references: string[];
+  config: Record<string, unknown>;
+  metadata: Record<string, unknown> | null;
 }
 
 /**
@@ -582,20 +595,24 @@ export class ApiService {
    */
   async updateConfig(config: Record<string, unknown>): Promise<UpdateConfigResponse> {
     const url = `${this.getBaseUrl()}/api/config`;
+    const body = JSON.stringify({config});
+
     const resp = await fetch(url, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
         Accept: 'application/json',
       },
-      body: JSON.stringify({config}),
+      body,
     });
 
+    const responseText = await resp.text();
+
     if (!resp.ok) {
-      throw new Error(`HTTP error! status: ${resp.status}`);
+      throw ApiError.fromResponse(responseText, resp.status);
     }
 
-    const data: unknown = await resp.json();
+    const data: unknown = JSON.parse(responseText);
     if (!isRecord(data)) {
       throw new Error('Malformed update config response');
     }
@@ -606,4 +623,55 @@ export class ApiService {
       config: isRecord(data.config) ? data.config : {},
     };
   }
+
+  /**
+   * Rename a workload or provider
+   */
+  async renameConfig(type: RenameConfigType, oldName: string, newName: string): Promise<RenameConfigResponse> {
+    const url = `${this.getBaseUrl()}/api/config/rename`;
+    const body = JSON.stringify({
+      type,
+      old_name: oldName,
+      new_name: newName,
+    });
+
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body,
+    });
+
+    const responseText = await resp.text();
+
+    if (!resp.ok) {
+      throw ApiError.fromResponse(responseText, resp.status);
+    }
+
+    const data: unknown = JSON.parse(responseText);
+    if (!isRecord(data)) {
+      throw new Error('Malformed rename config response');
+    }
+
+    let updated_references: string[] = [];
+    if (Array.isArray(data.updated_references)) {
+      const rawRefs = data.updated_references as unknown[];
+      updated_references = rawRefs.filter((x): x is string => typeof x === 'string');
+    }
+
+    return {
+      success: Boolean(data.success),
+      message: typeof data.message === 'string' ? data.message : '',
+      old_name: typeof data.old_name === 'string' ? data.old_name : oldName,
+      new_name: typeof data.new_name === 'string' ? data.new_name : newName,
+      updated_references,
+      config: isRecord(data.config) ? data.config : {},
+      metadata: isRecord(data.metadata) ? data.metadata : null,
+    };
+  }
 }
+
+// Re-export ApiError for convenience
+export {ApiError} from './errors';

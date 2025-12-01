@@ -16,6 +16,7 @@ describe('ConfigWebviewProvider - validation refresh', () => {
     getConfig: ReturnType<typeof vi.fn>;
     getHealth: ReturnType<typeof vi.fn>;
     updateConfig: ReturnType<typeof vi.fn>;
+    renameConfig: ReturnType<typeof vi.fn>;
   };
   let mockPanel: {
     webview: {postMessage: ReturnType<typeof vi.fn>};
@@ -26,6 +27,7 @@ describe('ConfigWebviewProvider - validation refresh', () => {
       getConfig: vi.fn().mockResolvedValue({config: {}, metadata: null}),
       getHealth: vi.fn(),
       updateConfig: vi.fn(),
+      renameConfig: vi.fn(),
     };
 
     provider = new ConfigWebviewProvider(vscode.Uri.file('/tmp'), apiService as unknown as ApiService);
@@ -334,5 +336,169 @@ describe('ConfigWebviewProvider - validation refresh', () => {
     expect((provider as any).panel).toBeUndefined();
     expect((provider as any).webviewReady).toBe(false);
     expect((provider as any).pendingValidationErrors).toEqual([]);
+  });
+
+  it('handles renameConfig message for workload', async () => {
+    const renameResponse = {
+      success: true,
+      message: "Renamed workload 'old' to 'new'",
+      old_name: 'old',
+      new_name: 'new',
+      updated_references: ['models.agents.universal.workload'],
+      config: {},
+      metadata: null,
+    };
+    apiService.renameConfig.mockResolvedValue(renameResponse);
+
+    await (provider as any).handleMessage({
+      type: 'renameConfig',
+      renameType: 'workload',
+      oldName: 'old',
+      newName: 'new',
+    });
+
+    expect(apiService.renameConfig).toHaveBeenCalledWith('workload', 'old', 'new');
+    expect(mockPanel.webview.postMessage).toHaveBeenCalledWith({type: 'loading'});
+    expect(mockPanel.webview.postMessage).toHaveBeenCalledWith({type: 'validationErrors', errors: []});
+    expect(mockPanel.webview.postMessage).toHaveBeenCalledWith({
+      type: 'configRenamed',
+      data: renameResponse,
+    });
+  });
+
+  it('handles renameConfig message for provider', async () => {
+    const renameResponse = {
+      success: true,
+      message: "Renamed provider 'openai' to 'my-openai'",
+      old_name: 'openai',
+      new_name: 'my-openai',
+      updated_references: ['workloads.reasoning.provider'],
+      config: {},
+      metadata: null,
+    };
+    apiService.renameConfig.mockResolvedValue(renameResponse);
+
+    await (provider as any).handleMessage({
+      type: 'renameConfig',
+      renameType: 'provider',
+      oldName: 'openai',
+      newName: 'my-openai',
+    });
+
+    expect(apiService.renameConfig).toHaveBeenCalledWith('provider', 'openai', 'my-openai');
+    expect(mockPanel.webview.postMessage).toHaveBeenCalledWith({
+      type: 'configRenamed',
+      data: renameResponse,
+    });
+  });
+
+  it('renameConfig posts error when rename fails', async () => {
+    apiService.renameConfig.mockRejectedValue(new Error('Workload not found'));
+
+    (provider as any).panel = mockPanel;
+    (provider as any).webviewReady = true;
+
+    await (provider as any).renameConfig('workload', 'unknown', 'new-name');
+
+    expect(mockPanel.webview.postMessage).toHaveBeenCalledWith({type: 'loading'});
+    const errorPayload = mockPanel.webview.postMessage.mock.calls.find(([msg]) => msg.type === 'error')?.[0];
+    expect(errorPayload).toBeDefined();
+    expect(errorPayload.message).toContain('Failed to rename workload');
+  });
+
+  it('renameConfig clears validation errors on success', async () => {
+    apiService.renameConfig.mockResolvedValue({
+      success: true,
+      config: {},
+      metadata: null,
+    });
+
+    (provider as any).panel = mockPanel;
+    (provider as any).webviewReady = true;
+    (provider as any).pendingValidationErrors = ['stale error'];
+
+    await (provider as any).renameConfig('provider', 'old', 'new');
+
+    expect((provider as any).pendingValidationErrors).toEqual([]);
+    expect(mockPanel.webview.postMessage).toHaveBeenCalledWith({type: 'validationErrors', errors: []});
+  });
+
+  it('fires onDidChangeConfig event after successful save', async () => {
+    apiService.updateConfig.mockResolvedValue({config: {}});
+
+    (provider as any).panel = mockPanel;
+    (provider as any).webviewReady = true;
+
+    const listener = vi.fn();
+    provider.onDidChangeConfig(listener);
+
+    await (provider as any).saveConfig({providers: {}});
+
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  it('fires onDidChangeConfig event after successful rename', async () => {
+    apiService.renameConfig.mockResolvedValue({
+      success: true,
+      config: {},
+      metadata: null,
+    });
+
+    (provider as any).panel = mockPanel;
+    (provider as any).webviewReady = true;
+
+    const listener = vi.fn();
+    provider.onDidChangeConfig(listener);
+
+    await (provider as any).renameConfig('workload', 'old', 'new');
+
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not fire onDidChangeConfig on save error', async () => {
+    apiService.updateConfig.mockRejectedValue(new Error('save failed'));
+
+    (provider as any).panel = mockPanel;
+    (provider as any).webviewReady = true;
+
+    const listener = vi.fn();
+    provider.onDidChangeConfig(listener);
+
+    await (provider as any).saveConfig({});
+
+    expect(listener).not.toHaveBeenCalled();
+  });
+
+  it('reloadConfig triggers loadConfig when panel is open and ready', async () => {
+    apiService.getConfig.mockResolvedValue({config: {test: 'data'}, metadata: null});
+    apiService.getHealth.mockResolvedValue({config_valid: true, config_errors: []});
+
+    (provider as any).panel = mockPanel;
+    (provider as any).webviewReady = true;
+
+    provider.reloadConfig();
+
+    // Wait for async loadConfig to complete
+    await new Promise(process.nextTick);
+
+    expect(apiService.getConfig).toHaveBeenCalled();
+    expect(mockPanel.webview.postMessage).toHaveBeenCalledWith(expect.objectContaining({type: 'configLoaded'}));
+  });
+
+  it('reloadConfig does nothing when panel is not open', () => {
+    (provider as any).panel = undefined;
+
+    provider.reloadConfig();
+
+    expect(apiService.getConfig).not.toHaveBeenCalled();
+  });
+
+  it('reloadConfig does nothing when webview is not ready', () => {
+    (provider as any).panel = mockPanel;
+    (provider as any).webviewReady = false;
+
+    provider.reloadConfig();
+
+    expect(apiService.getConfig).not.toHaveBeenCalled();
   });
 });

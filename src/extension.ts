@@ -58,6 +58,18 @@ export const activate = async (context: vscode.ExtensionContext) => {
   const configProvider = new ConfigWebviewProvider(context.extensionUri, apiService);
   context.subscriptions.push(configProvider);
 
+  // Subscribe to config changes to refresh workloads selector
+  const configChangeDisposable = configProvider.onDidChangeConfig(() => {
+    void provider.refreshWorkloads();
+  });
+  context.subscriptions.push(configChangeDisposable);
+
+  // Subscribe to workload selection to refresh config panel
+  const workloadChangeDisposable = provider.onDidChangeConfig(() => {
+    configProvider.reloadConfig();
+  });
+  context.subscriptions.push(workloadChangeDisposable);
+
   // Subscribe to server ready event
   const eventsChannel = vscode.window.createOutputChannel('AgentSmithy Events');
   context.subscriptions.push(eventsChannel);

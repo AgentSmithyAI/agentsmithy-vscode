@@ -10,28 +10,47 @@ import {WEBVIEW_IN_MSG, WEBVIEW_OUT_MSG} from '../shared/messages';
 import {ServerManager} from '../services/ServerManager';
 
 // Mock vscode
-vi.mock('vscode', () => ({
-  Uri: {
-    file: (path: string) => ({fsPath: path, with: vi.fn(), toString: () => path}),
-    joinPath: (...args: any[]) => ({fsPath: args.join('/'), with: vi.fn(), toString: () => args.join('/')}),
-  },
-  window: {
-    createOutputChannel: vi.fn(() => ({appendLine: vi.fn(), dispose: vi.fn()})),
-    showErrorMessage: vi.fn(),
-    activeTextEditor: undefined,
-  },
-  workspace: {
-    getConfiguration: vi.fn(),
-    openTextDocument: vi.fn(),
-  },
-  ConfigurationTarget: {
-    Global: 1,
-  },
-  WebviewViewProvider: class {},
-  Disposable: {
-    from: vi.fn(),
-  },
-}));
+vi.mock('vscode', () => {
+  class MockEventEmitter<T = void> {
+    private listeners: Array<(e: T) => unknown> = [];
+    event = (listener: (e: T) => unknown) => {
+      this.listeners.push(listener);
+      return {dispose: () => this.listeners.splice(this.listeners.indexOf(listener), 1)};
+    };
+    fire(data?: T) {
+      for (const listener of this.listeners) {
+        listener(data as T);
+      }
+    }
+    dispose() {
+      this.listeners = [];
+    }
+  }
+
+  return {
+    EventEmitter: MockEventEmitter,
+    Uri: {
+      file: (path: string) => ({fsPath: path, with: vi.fn(), toString: () => path}),
+      joinPath: (...args: any[]) => ({fsPath: args.join('/'), with: vi.fn(), toString: () => args.join('/')}),
+    },
+    window: {
+      createOutputChannel: vi.fn(() => ({appendLine: vi.fn(), dispose: vi.fn()})),
+      showErrorMessage: vi.fn(),
+      activeTextEditor: undefined,
+    },
+    workspace: {
+      getConfiguration: vi.fn(),
+      openTextDocument: vi.fn(),
+    },
+    ConfigurationTarget: {
+      Global: 1,
+    },
+    WebviewViewProvider: class {},
+    Disposable: {
+      from: vi.fn(),
+    },
+  };
+});
 
 describe('ChatWebviewProvider Full Flow', () => {
   let provider: ChatWebviewProvider;

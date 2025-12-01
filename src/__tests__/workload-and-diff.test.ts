@@ -3,28 +3,47 @@ import * as vscode from 'vscode';
 import {ChatWebviewProvider} from '../chatWebviewProvider';
 
 // Mock vscode
-vi.mock('vscode', () => ({
-  Uri: {
-    file: (path: string) => ({fsPath: path, with: vi.fn(), toString: () => path}),
-    joinPath: (...args: any[]) => ({fsPath: args.join('/'), with: vi.fn(), toString: () => args.join('/')}),
-  },
-  window: {
-    createOutputChannel: vi.fn(() => ({appendLine: vi.fn(), dispose: vi.fn()})),
-    showErrorMessage: vi.fn(),
-  },
-  workspace: {
-    getConfiguration: vi.fn(),
-  },
-  ConfigurationTarget: {
-    Global: 1,
-    Workspace: 2,
-    WorkspaceFolder: 3,
-  },
-  WebviewViewProvider: class {},
-  Disposable: {
-    from: vi.fn(),
-  },
-}));
+vi.mock('vscode', () => {
+  class MockEventEmitter<T = void> {
+    private listeners: Array<(e: T) => unknown> = [];
+    event = (listener: (e: T) => unknown) => {
+      this.listeners.push(listener);
+      return {dispose: () => this.listeners.splice(this.listeners.indexOf(listener), 1)};
+    };
+    fire(data?: T) {
+      for (const listener of this.listeners) {
+        listener(data as T);
+      }
+    }
+    dispose() {
+      this.listeners = [];
+    }
+  }
+
+  return {
+    EventEmitter: MockEventEmitter,
+    Uri: {
+      file: (path: string) => ({fsPath: path, with: vi.fn(), toString: () => path}),
+      joinPath: (...args: any[]) => ({fsPath: args.join('/'), with: vi.fn(), toString: () => args.join('/')}),
+    },
+    window: {
+      createOutputChannel: vi.fn(() => ({appendLine: vi.fn(), dispose: vi.fn()})),
+      showErrorMessage: vi.fn(),
+    },
+    workspace: {
+      getConfiguration: vi.fn(),
+    },
+    ConfigurationTarget: {
+      Global: 1,
+      Workspace: 2,
+      WorkspaceFolder: 3,
+    },
+    WebviewViewProvider: class {},
+    Disposable: {
+      from: vi.fn(),
+    },
+  };
+});
 
 import {ApiService} from '../api/ApiService';
 import {ConfigService} from '../services/ConfigService';
@@ -187,95 +206,48 @@ describe('ChatWebviewProvider - Workload and Diff', () => {
   });
 
   describe('SELECT_WORKLOAD', () => {
-    it('updates workload model in config', async () => {
-      // Mock current config
-      const mockConfig = {
-        models: {
-          agents: {
-            reasoning: {workload: 'my-reasoning'},
-          },
-        },
-        workloads: {
-          'my-reasoning': {provider: 'openai', model: 'old-model'},
-        },
-      };
-
-      (apiService.getConfig as any).mockResolvedValue({
-        config: mockConfig,
-        metadata: {},
-      });
-
+    it('updates models.agents.universal.workload in config', async () => {
       // Get the message handler
       const handler = mockWebview.onDidReceiveMessage.mock.calls[0][0];
 
-      // Simulate select workload "gpt-5"
+      // Simulate select workload "gpt-5-codex"
       await handler({
         type: WEBVIEW_IN_MSG.SELECT_WORKLOAD,
-        workload: 'gpt-5',
+        workload: 'gpt-5-codex',
       });
 
-      // Verify updateConfig called with updated model
-      expect(apiService.getConfig).toHaveBeenCalled();
-      expect(apiService.updateConfig).toHaveBeenCalledWith(
-        expect.objectContaining({
-          workloads: expect.objectContaining({
-            'my-reasoning': expect.objectContaining({
-              model: 'gpt-5',
-            }),
-          }),
-        }),
-      );
-    });
-
-    it('handles missing workload gracefully by creating it', async () => {
-      // Config without workloads
-      const mockConfig = {models: {}};
-      (apiService.getConfig as any).mockResolvedValue({
-        config: mockConfig,
-        metadata: {},
-      });
-
-      const handler = mockWebview.onDidReceiveMessage.mock.calls[0][0];
-
-      await handler({
-        type: WEBVIEW_IN_MSG.SELECT_WORKLOAD,
-        workload: 'gpt-5',
-      });
-
-      // Should create 'reasoning' workload with default provider
-      expect(apiService.updateConfig).toHaveBeenCalledWith(
-        expect.objectContaining({
-          workloads: {
-            reasoning: {
-              provider: 'openai',
-              model: 'gpt-5',
+      // Verify updateConfig called with updated universal workload
+      expect(apiService.updateConfig).toHaveBeenCalledWith({
+        models: {
+          agents: {
+            universal: {
+              workload: 'gpt-5-codex',
             },
           },
-        }),
-      );
+        },
+      });
     });
 
     it('refreshes workloads in UI after selection', async () => {
-      // Mock config with reasoning workload
+      // Mock config with universal workload
       const mockConfig = {
         models: {
           agents: {
-            reasoning: {workload: 'reasoning'},
+            universal: {workload: 'gpt-4-codex'},
           },
         },
         workloads: {
-          reasoning: {provider: 'openai', model: 'gpt-4'},
+          'gpt-4-codex': {provider: 'openai', model: 'gpt-4', kind: 'chat'},
+          'gpt-5-codex': {provider: 'openai', model: 'gpt-5', kind: 'chat'},
         },
       };
 
       const mockMetadata = {
-        model_catalog: {
-          openai: {
-            chat: ['gpt-4', 'gpt-5'],
-          },
-        },
-        providers: [{name: 'my-openai', type: 'openai'}],
-        workloads: [{name: 'reasoning', provider: 'my-openai', model: 'gpt-4'}],
+        workloads: [
+          {name: 'gpt-4-codex', provider: 'openai', model: 'gpt-4', kind: 'chat'},
+          {name: 'gpt-5-codex', provider: 'openai', model: 'gpt-5', kind: 'chat'},
+        ],
+        providers: [{name: 'openai', type: 'openai'}],
       };
 
       (apiService.getConfig as any).mockResolvedValue({
@@ -290,7 +262,7 @@ describe('ChatWebviewProvider - Workload and Diff', () => {
 
       await handler({
         type: WEBVIEW_IN_MSG.SELECT_WORKLOAD,
-        workload: 'gpt-5',
+        workload: 'gpt-5-codex',
       });
 
       // After saving, should send WORKLOADS_UPDATE to refresh UI
@@ -303,31 +275,28 @@ describe('ChatWebviewProvider - Workload and Diff', () => {
   });
 
   describe('WORKLOADS_UPDATE', () => {
-    it('sends workloads list to webview on ready', async () => {
-      // Mock config with reasoning workload
+    it('sends chat workloads list to webview on ready', async () => {
+      // Mock config with universal workload
       const mockConfig = {
         models: {
           agents: {
-            reasoning: {workload: 'my-reasoning'},
+            universal: {workload: 'gpt-4-codex'},
           },
         },
         workloads: {
-          'my-reasoning': {provider: 'openai', model: 'gpt-4'},
+          'gpt-4-codex': {provider: 'openai', model: 'gpt-4', kind: 'chat'},
+          'gpt-5-codex': {provider: 'openai', model: 'gpt-5', kind: 'chat'},
+          'text-embedding': {provider: 'openai', model: 'text-embedding-3', kind: 'embeddings'},
         },
       };
 
       const mockMetadata = {
         providers: [{name: 'openai', type: 'openai'}],
         workloads: [
-          {name: 'reasoning-gpt4', purpose: 'reasoning', model: 'gpt-4'},
-          {name: 'reasoning-gpt5', purpose: 'reasoning', model: 'gpt-5'},
-          {name: 'reasoning-3.5', purpose: 'reasoning', model: 'gpt-3.5-turbo'},
+          {name: 'gpt-4-codex', provider: 'openai', model: 'gpt-4', kind: 'chat'},
+          {name: 'gpt-5-codex', provider: 'openai', model: 'gpt-5', kind: 'chat'},
+          {name: 'text-embedding', provider: 'openai', model: 'text-embedding-3', kind: 'embeddings'},
         ],
-        model_catalog: {
-          openai: {
-            chat: ['gpt-4', 'gpt-5', 'gpt-3.5-turbo'],
-          },
-        },
       };
 
       (apiService.getConfig as any).mockResolvedValue({
@@ -339,22 +308,20 @@ describe('ChatWebviewProvider - Workload and Diff', () => {
       const handler = mockWebview.onDidReceiveMessage.mock.calls[0][0];
       await handler({type: WEBVIEW_IN_MSG.READY});
 
-      // Verify postMessage with workloads
-      // It might be called multiple times, so we check if ONE of them matches
+      // Verify postMessage with only chat workloads (not embeddings)
       expect(mockWebview.postMessage).toHaveBeenCalledWith(
         expect.objectContaining({
           type: WEBVIEW_OUT_MSG.WORKLOADS_UPDATE,
-          selected: 'gpt-4',
+          selected: 'gpt-4-codex',
           workloads: [
-            {name: 'gpt-4', displayName: 'gpt-4'},
-            {name: 'gpt-5', displayName: 'gpt-5'},
-            {name: 'gpt-3.5-turbo', displayName: 'gpt-3.5-turbo'},
+            {name: 'gpt-4-codex', displayName: 'gpt-4-codex'},
+            {name: 'gpt-5-codex', displayName: 'gpt-5-codex'},
           ],
         }),
       );
     });
 
-    it('handles missing reasoning workload by defaulting to "reasoning"', async () => {
+    it('handles missing universal workload', async () => {
       // Mock empty config
       const mockConfig = {};
       const mockMetadata = {};

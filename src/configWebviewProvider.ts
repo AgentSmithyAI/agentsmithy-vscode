@@ -1,5 +1,11 @@
 import * as vscode from 'vscode';
-import {ApiService, ConfigResponse, UpdateConfigResponse} from './api/ApiService';
+import {
+  ApiService,
+  ConfigResponse,
+  UpdateConfigResponse,
+  RenameConfigResponse,
+  RenameConfigType,
+} from './api/ApiService';
 import {getErrorMessage} from './utils/typeGuards';
 
 // Messages from webview to extension
@@ -7,6 +13,7 @@ const CONFIG_IN_MSG = {
   READY: 'ready',
   LOAD_CONFIG: 'loadConfig',
   SAVE_CONFIG: 'saveConfig',
+  RENAME_CONFIG: 'renameConfig',
   SHOW_INPUT_BOX: 'showInputBox',
   SHOW_QUICK_PICK: 'showQuickPick',
   SHOW_CONFIRM: 'showConfirm',
@@ -16,6 +23,7 @@ const CONFIG_IN_MSG = {
 const CONFIG_OUT_MSG = {
   CONFIG_LOADED: 'configLoaded',
   CONFIG_SAVED: 'configSaved',
+  CONFIG_RENAMED: 'configRenamed',
   ERROR: 'error',
   LOADING: 'loading',
   VALIDATION_ERRORS: 'validationErrors',
@@ -24,10 +32,13 @@ const CONFIG_OUT_MSG = {
   CONFIRM_RESULT: 'confirmResult',
 } as const;
 
+const DEFAULT_ERROR_MESSAGE = 'Unknown error';
+
 type ConfigInMessage =
   | {type: typeof CONFIG_IN_MSG.READY}
   | {type: typeof CONFIG_IN_MSG.LOAD_CONFIG}
   | {type: typeof CONFIG_IN_MSG.SAVE_CONFIG; config: Record<string, unknown>}
+  | {type: typeof CONFIG_IN_MSG.RENAME_CONFIG; renameType: RenameConfigType; oldName: string; newName: string}
   | {type: typeof CONFIG_IN_MSG.SHOW_INPUT_BOX; requestId: string; prompt: string; placeholder?: string; value?: string}
   | {type: typeof CONFIG_IN_MSG.SHOW_QUICK_PICK; requestId: string; items: string[]; placeholder?: string}
   | {type: typeof CONFIG_IN_MSG.SHOW_CONFIRM; requestId: string; message: string};
@@ -35,6 +46,7 @@ type ConfigInMessage =
 type ConfigOutMessage =
   | {type: typeof CONFIG_OUT_MSG.CONFIG_LOADED; data: ConfigResponse}
   | {type: typeof CONFIG_OUT_MSG.CONFIG_SAVED; data: UpdateConfigResponse}
+  | {type: typeof CONFIG_OUT_MSG.CONFIG_RENAMED; data: RenameConfigResponse}
   | {type: typeof CONFIG_OUT_MSG.ERROR; message: string}
   | {type: typeof CONFIG_OUT_MSG.LOADING}
   | {type: typeof CONFIG_OUT_MSG.VALIDATION_ERRORS; errors: string[]}
@@ -48,10 +60,23 @@ export class ConfigWebviewProvider implements vscode.Disposable {
   private pendingValidationErrors: string[] = [];
   private webviewReady = false;
 
+  // Event emitter for config changes
+  private readonly _onDidChangeConfig = new vscode.EventEmitter<void>();
+  public readonly onDidChangeConfig = this._onDidChangeConfig.event;
+
   constructor(
     private readonly extensionUri: vscode.Uri,
     private readonly apiService: ApiService,
   ) {}
+
+  /**
+   * Reload config if panel is open
+   */
+  public reloadConfig(): void {
+    if (this.panel && this.webviewReady) {
+      void this.loadConfig();
+    }
+  }
 
   /**
    * Show configuration panel
@@ -120,6 +145,10 @@ export class ConfigWebviewProvider implements vscode.Disposable {
 
       case CONFIG_IN_MSG.SAVE_CONFIG:
         await this.saveConfig(message.config);
+        break;
+
+      case CONFIG_IN_MSG.RENAME_CONFIG:
+        await this.renameConfig(message.renameType, message.oldName, message.newName);
         break;
 
       case CONFIG_IN_MSG.SHOW_INPUT_BOX:
@@ -241,7 +270,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
 
       await this.refreshValidationErrors();
     } catch (error) {
-      const errorMsg = getErrorMessage(error, 'Unknown error');
+      const errorMsg = getErrorMessage(error, DEFAULT_ERROR_MESSAGE);
       this.postMessage({
         type: CONFIG_OUT_MSG.ERROR,
         message: `Failed to load configuration: ${errorMsg}`,
@@ -269,13 +298,49 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         type: CONFIG_OUT_MSG.CONFIG_SAVED,
         data: result,
       });
+
+      // Notify listeners that config changed
+      this._onDidChangeConfig.fire();
     } catch (error) {
-      const errorMsg = getErrorMessage(error, 'Unknown error');
+      const errorMsg = getErrorMessage(error, DEFAULT_ERROR_MESSAGE);
       this.postMessage({
         type: CONFIG_OUT_MSG.ERROR,
         message: `Failed to save configuration: ${errorMsg}`,
       });
       void vscode.window.showErrorMessage(`Failed to save configuration: ${errorMsg}`);
+    }
+  }
+
+  /**
+   * Rename a workload or provider
+   */
+  private async renameConfig(type: RenameConfigType, oldName: string, newName: string): Promise<void> {
+    if (!this.panel) {
+      return;
+    }
+
+    try {
+      this.postMessage({type: CONFIG_OUT_MSG.LOADING});
+      const result = await this.apiService.renameConfig(type, oldName, newName);
+
+      // Clear pending validation errors on successful rename
+      this.pendingValidationErrors = [];
+      this.postValidationErrors();
+
+      this.postMessage({
+        type: CONFIG_OUT_MSG.CONFIG_RENAMED,
+        data: result,
+      });
+
+      // Notify listeners that config changed
+      this._onDidChangeConfig.fire();
+    } catch (error) {
+      const errorMsg = getErrorMessage(error, DEFAULT_ERROR_MESSAGE);
+      this.postMessage({
+        type: CONFIG_OUT_MSG.ERROR,
+        message: `Failed to rename ${type}: ${errorMsg}`,
+      });
+      void vscode.window.showErrorMessage(`Failed to rename ${type}: ${errorMsg}`);
     }
   }
 
@@ -384,6 +449,41 @@ export class ConfigWebviewProvider implements vscode.Disposable {
       color: var(--vscode-descriptionForeground);
     }
 
+    .saving-overlay {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background-color: var(--vscode-editor-background);
+      border: 1px solid var(--vscode-panel-border);
+      border-radius: 6px;
+      padding: 16px 24px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 13px;
+      color: var(--vscode-foreground);
+    }
+
+    .saving-overlay.hidden {
+      display: none;
+    }
+
+    .saving-spinner {
+      width: 16px;
+      height: 16px;
+      border: 2px solid var(--vscode-progressBar-background);
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
     .error {
       background-color: var(--vscode-inputValidation-errorBackground);
       border: 1px solid var(--vscode-inputValidation-errorBorder);
@@ -473,6 +573,31 @@ export class ConfigWebviewProvider implements vscode.Disposable {
       resize: vertical;
       min-height: 60px;
       font-family: var(--vscode-editor-font-family);
+    }
+
+    .model-field-wrapper {
+      display: flex;
+      gap: 4px;
+      align-items: center;
+    }
+
+    .model-field-wrapper .setting-select,
+    .model-field-wrapper .setting-input {
+      flex: 1;
+    }
+
+    .model-toggle-btn {
+      padding: 4px 8px;
+      background-color: var(--vscode-button-secondaryBackground);
+      color: var(--vscode-button-secondaryForeground);
+      border: none;
+      cursor: pointer;
+      font-size: 10px;
+      line-height: 20px;
+    }
+
+    .model-toggle-btn:hover {
+      background-color: var(--vscode-button-secondaryHoverBackground);
     }
 
     .setting-checkbox-container {
@@ -575,6 +700,21 @@ export class ConfigWebviewProvider implements vscode.Disposable {
       padding: 2px 6px;
       border-radius: 2px;
       margin-right: 8px;
+    }
+
+    .provider-rename {
+      color: var(--vscode-foreground);
+      border: none;
+      background: none;
+      cursor: pointer;
+      padding: 2px 6px;
+      font-size: 14px;
+      opacity: 0.6;
+    }
+
+    .provider-rename:hover {
+      opacity: 1;
+      color: var(--vscode-textLink-foreground);
     }
 
     .provider-delete {
@@ -680,6 +820,11 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         <p>Loading configuration...</p>
       </div>
 
+      <div id="savingOverlay" class="saving-overlay hidden">
+        <div class="saving-spinner"></div>
+        <span>Saving...</span>
+      </div>
+
       <div id="configContainer" class="hidden">
         <!-- Configuration form will be rendered here -->
       </div>
@@ -688,7 +833,6 @@ export class ConfigWebviewProvider implements vscode.Disposable {
 
   <div class="footer-toolbar">
     <div class="container" style="width: 100%; display: flex; gap: 8px; padding: 0;">
-      <button id="saveButton" class="btn" disabled>Save Configuration</button>
       <button id="reloadButton" class="btn btn-secondary">Reload</button>
     </div>
   </div>
@@ -714,6 +858,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
    * Dispose resources
    */
   public dispose(): void {
+    this._onDidChangeConfig.dispose();
     this.panel?.dispose();
     for (const disposable of this.disposables) {
       disposable.dispose();

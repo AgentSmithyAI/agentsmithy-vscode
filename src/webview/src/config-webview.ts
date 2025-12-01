@@ -15,6 +15,7 @@ const CONFIG_IN_MSG = {
   READY: 'ready',
   LOAD_CONFIG: 'loadConfig',
   SAVE_CONFIG: 'saveConfig',
+  RENAME_CONFIG: 'renameConfig',
   SHOW_INPUT_BOX: 'showInputBox',
   SHOW_QUICK_PICK: 'showQuickPick',
   SHOW_CONFIRM: 'showConfirm',
@@ -23,6 +24,7 @@ const CONFIG_IN_MSG = {
 const CONFIG_OUT_MSG = {
   CONFIG_LOADED: 'configLoaded',
   CONFIG_SAVED: 'configSaved',
+  CONFIG_RENAMED: 'configRenamed',
   ERROR: 'error',
   LOADING: 'loading',
   VALIDATION_ERRORS: 'validationErrors',
@@ -88,9 +90,10 @@ function showConfirm(message: string): Promise<boolean> {
 let currentConfig: Record<string, unknown> = {};
 let currentMetadata: Record<string, unknown> | null = null;
 let availableProviders: Array<{name: string; type: string; has_api_key: boolean; model: string | null}> = [];
-let availableWorkloads: Array<{name: string; provider: string; model: string}> = [];
+let availableWorkloads: Array<{name: string; provider: string; model: string; kind: string | null}> = [];
 let agentProviderSlots: Array<{path: string; provider?: string; workload?: string}> = [];
 let providerTypes: string[] = [];
+let workloadKinds: string[] = [];
 let modelCatalog: Record<string, Record<string, string[]>> = {};
 let isDirty = false;
 let suppressedSuccessMessages = 0;
@@ -102,13 +105,24 @@ let pendingValidationErrors: string[] = [];
 let highlightedFields: HTMLElement[] = [];
 let highlightedItems: HTMLElement[] = [];
 
+// Track expanded state of providers and workloads
+let expandedProviders: Set<string> = new Set();
+let expandedWorkloads: Set<string> = new Set();
+
+// Track scroll position for restoration after re-render
+let savedScrollTop = 0;
+let scrollContainer: HTMLElement;
+
+// Track if we're in a save operation (to show overlay instead of full loading)
+let isSaving = false;
+let savingOverlay: HTMLElement;
+
 // DOM elements
 let errorContainer: HTMLElement;
 let successContainer: HTMLElement;
 let loadingContainer: HTMLElement;
 let configContainer: HTMLElement;
 let validationSummary: HTMLElement;
-let saveButton: HTMLButtonElement;
 let reloadButton: HTMLButtonElement;
 
 /**
@@ -121,14 +135,11 @@ function init(): void {
   loadingContainer = document.getElementById('loadingContainer')!;
   configContainer = document.getElementById('configContainer')!;
   validationSummary = document.getElementById('validationSummary')!;
-  saveButton = document.getElementById('saveButton') as HTMLButtonElement;
   reloadButton = document.getElementById('reloadButton') as HTMLButtonElement;
+  scrollContainer = document.querySelector('.scroll-container') as HTMLElement;
+  savingOverlay = document.getElementById('savingOverlay') as HTMLElement;
 
   // Set up event listeners
-  saveButton.addEventListener('click', () => {
-    saveConfig(false);
-  });
-
   reloadButton.addEventListener('click', () => {
     loadConfig();
   });
@@ -186,6 +197,7 @@ function handleMessage(message: {
               name: typeof w.name === 'string' ? w.name : '',
               provider: typeof w.provider === 'string' ? w.provider : '',
               model: typeof w.model === 'string' ? w.model : '',
+              kind: typeof w.kind === 'string' ? w.kind : null, // null is valid for legacy workloads without kind
             }));
         }
 
@@ -206,6 +218,12 @@ function handleMessage(message: {
           );
         }
 
+        if (currentMetadata && Array.isArray(currentMetadata.workload_kinds)) {
+          workloadKinds = (currentMetadata.workload_kinds as unknown[]).filter(
+            (t): t is string => typeof t === 'string',
+          );
+        }
+
         // Extract model catalog
         if (currentMetadata?.model_catalog && typeof currentMetadata.model_catalog === 'object') {
           modelCatalog = currentMetadata.model_catalog as Record<string, Record<string, string[]>>;
@@ -217,34 +235,58 @@ function handleMessage(message: {
       break;
 
     case CONFIG_OUT_MSG.CONFIG_SAVED:
-      if (message.data && typeof message.data === 'object') {
-        const data = message.data as {config: Record<string, unknown>};
-        currentConfig = data.config;
-        isDirty = false;
-        saveButton.disabled = true;
+      isDirty = false;
 
-        // Clear pending validation errors on successful save
-        pendingValidationErrors = [];
-        updateValidationSummary();
-        applyValidationHighlights();
+      // Clear pending validation errors on successful save
+      pendingValidationErrors = [];
+      updateValidationSummary();
+      applyValidationHighlights();
 
-        if (suppressedSuccessMessages > 0) {
-          suppressedSuccessMessages -= 1;
-          successContainer.innerHTML = '';
-        } else {
-          showSuccess('Configuration saved successfully!');
-        }
+      if (suppressedSuccessMessages > 0) {
+        suppressedSuccessMessages -= 1;
+        successContainer.innerHTML = '';
+      } else {
+        showSuccess('Configuration saved successfully!');
+      }
 
-        if (pendingReloadAfterSaveCount > 0) {
-          pendingReloadAfterSaveCount -= 1;
-          loadConfig();
-        } else {
-          renderConfig();
-        }
+      // Always reload config from server to get the actual state
+      // Don't use the response config as it may be partial
+      loadConfig();
+      if (pendingReloadAfterSaveCount > 0) {
+        pendingReloadAfterSaveCount -= 1;
+      }
+      break;
+
+    case CONFIG_OUT_MSG.CONFIG_RENAMED:
+      isDirty = false;
+
+      // Clear pending validation errors on successful rename
+      pendingValidationErrors = [];
+      updateValidationSummary();
+      applyValidationHighlights();
+
+      if (suppressedSuccessMessages > 0) {
+        suppressedSuccessMessages -= 1;
+        successContainer.innerHTML = '';
+      } else {
+        showSuccess(message.message || 'Renamed successfully!');
+      }
+
+      // Reload config from server to get the updated state
+      loadConfig();
+      if (pendingReloadAfterSaveCount > 0) {
+        pendingReloadAfterSaveCount -= 1;
       }
       break;
 
     case CONFIG_OUT_MSG.ERROR:
+      // Reset pending counters on error
+      if (pendingReloadAfterSaveCount > 0) {
+        pendingReloadAfterSaveCount -= 1;
+      }
+      if (suppressedSuccessMessages > 0) {
+        suppressedSuccessMessages -= 1;
+      }
       showError(message.message || 'An error occurred');
       hideLoading();
       break;
@@ -280,9 +322,21 @@ function handleMessage(message: {
 }
 
 /**
- * Show loading state
+ * Show loading state (full page loading, used for initial load and manual reload)
  */
 function showLoading(): void {
+  // If we're saving, use overlay instead of full loading
+  if (isSaving) {
+    showSavingOverlay();
+    return;
+  }
+
+  // Save scroll position before hiding container (only if not already saved by another operation)
+  const currentScroll = scrollContainer.scrollTop;
+  if (currentScroll > 0) {
+    savedScrollTop = currentScroll;
+  }
+
   loadingContainer.classList.remove('hidden');
   configContainer.classList.add('hidden');
   errorContainer.innerHTML = '';
@@ -293,8 +347,32 @@ function showLoading(): void {
  * Hide loading state
  */
 function hideLoading(): void {
+  // If we were saving, hide overlay instead
+  if (isSaving) {
+    hideSavingOverlay();
+    isSaving = false;
+    return;
+  }
+
   loadingContainer.classList.add('hidden');
   configContainer.classList.remove('hidden');
+
+  // Restore scroll position after container is visible
+  scrollContainer.scrollTop = savedScrollTop;
+}
+
+/**
+ * Show saving overlay (non-blocking, content stays visible)
+ */
+function showSavingOverlay(): void {
+  savingOverlay.classList.remove('hidden');
+}
+
+/**
+ * Hide saving overlay
+ */
+function hideSavingOverlay(): void {
+  savingOverlay.classList.add('hidden');
 }
 
 /**
@@ -328,15 +406,33 @@ function loadConfig(): void {
 /**
  * Save configuration
  */
-function saveConfig(auto = false): void {
-  if (auto) {
+/**
+ * Central function to send save request with overlay
+ */
+function sendSaveRequest(config: Record<string, unknown>, suppressSuccess = false): void {
+  // Save scroll position before reload (only if not already saved by caller)
+  // If scrollContainer.scrollTop is 0 but savedScrollTop is non-zero,
+  // it means caller already saved scroll before renderConfig()
+  if (scrollContainer.scrollTop > 0 || savedScrollTop === 0) {
+    savedScrollTop = scrollContainer.scrollTop;
+  }
+
+  // Mark as saving to show overlay instead of full loading
+  isSaving = true;
+  showSavingOverlay();
+
+  if (suppressSuccess) {
     suppressedSuccessMessages += 1;
   }
   pendingReloadAfterSaveCount += 1;
   vscode.postMessage({
     type: CONFIG_IN_MSG.SAVE_CONFIG,
-    config: currentConfig,
+    config: config,
   });
+}
+
+function saveConfig(auto = false): void {
+  sendSaveRequest(currentConfig, auto);
 }
 
 /**
@@ -412,6 +508,19 @@ function renderConfig(): void {
   // Attach event listeners
   attachEventListeners();
   applyValidationHighlights();
+  restoreExpandedState();
+}
+
+/**
+ * Restore expanded state for providers and workloads after re-render
+ */
+function restoreExpandedState(): void {
+  for (const providerName of expandedProviders) {
+    setProviderExpanded(providerName, true);
+  }
+  for (const workloadName of expandedWorkloads) {
+    setWorkloadExpanded(workloadName, true);
+  }
 }
 
 /**
@@ -439,6 +548,7 @@ function renderProvider(name: string, config: Record<string, unknown>, hasApiKey
     html.push('<span class="provider-warning-badge" title="API key not configured">⚠</span>');
   }
 
+  html.push(`<button class="config-item-rename" data-provider="${name}" title="Rename provider">✎</button>`);
   html.push(`<button class="provider-delete" data-provider="${name}" title="Delete provider">×</button>`);
   html.push('</div>');
 
@@ -483,6 +593,7 @@ function renderWorkload(name: string, config: Record<string, unknown>): string {
     );
   }
 
+  html.push(`<button class="config-item-rename" data-workload="${name}" title="Rename workload">✎</button>`);
   html.push(`<button class="provider-delete" data-workload="${name}" title="Delete workload">×</button>`);
   html.push('</div>');
 
@@ -500,6 +611,10 @@ function renderWorkload(name: string, config: Record<string, unknown>): string {
       const providerType = providerMeta?.type || '';
 
       html.push(renderModelDropdown(providerType, value, ['config', 'workloads', name, key]));
+    }
+    // Special handling for 'kind' field - dropdown with workload kinds
+    else if (key === 'kind') {
+      html.push(renderWorkloadKindDropdown(value, ['config', 'workloads', name, key]));
     } else {
       html.push(renderSettingItem(key, value, ['config', 'workloads', name, key]));
     }
@@ -606,6 +721,38 @@ function renderProviderSelectorDropdown(value: unknown, path: string[]): string 
 }
 
 /**
+ * Render workload kind dropdown (chat/embeddings)
+ */
+function renderWorkloadKindDropdown(value: unknown, path: string[]): string {
+  const html: string[] = [];
+  const fieldId = path.join('_');
+  const dataPath = JSON.stringify(path);
+  const currentValue = typeof value === 'string' ? value : '';
+
+  html.push('<div class="setting-item">');
+  html.push('<div class="setting-item-label">');
+  html.push('<span class="setting-item-label-text">Kind</span>');
+  html.push('<span class="setting-item-description">Workload type (chat or embeddings)</span>');
+  html.push('</div>');
+  html.push('<div class="setting-item-control">');
+  html.push(`<select id="${fieldId}" class="setting-select config-field" data-path='${dataPath}'>`);
+
+  html.push(`<option value="">-- Select Kind --</option>`);
+
+  // Add workload kinds from metadata
+  for (const kind of workloadKinds) {
+    const selected = kind === currentValue ? 'selected' : '';
+    html.push(`<option value="${escapeHtml(kind)}" ${selected}>${escapeHtml(kind)}</option>`);
+  }
+
+  html.push('</select>');
+  html.push('</div>');
+  html.push('</div>');
+
+  return html.join('');
+}
+
+/**
  * Render provider type dropdown
  */
 function renderProviderTypeDropdown(value: unknown, path: string[]): string {
@@ -679,16 +826,35 @@ function renderModelDropdown(providerType: string, value: unknown, path: string[
   html.push('<div class="setting-item-control">');
 
   if (uniqueModels.length > 0) {
-    // Render as dropdown
-    html.push(`<select id="${fieldId}" class="setting-select config-field" data-path='${dataPath}'>`);
-    html.push(`<option value="">-- None (use provider default) --</option>`);
+    // Check if current value is a custom model (not in catalog)
+    const isCustomValue = currentValue !== '' && !uniqueModels.includes(currentValue);
 
-    for (const model of uniqueModels) {
-      const selected = model === currentValue ? 'selected' : '';
-      html.push(`<option value="${escapeHtml(model)}" ${selected}>${escapeHtml(model)}</option>`);
+    // Wrapper for select/input switching
+    html.push(`<div class="model-field-wrapper" id="${fieldId}_wrapper" data-path='${dataPath}'>`);
+
+    if (isCustomValue) {
+      // Show input for custom value
+      html.push(
+        `<input type="text" id="${fieldId}" class="setting-input config-field model-custom-input" data-path='${dataPath}' value="${escapeHtml(currentValue)}" placeholder="e.g., gpt-4">`,
+      );
+      html.push(
+        `<button type="button" class="model-toggle-btn" data-field-id="${fieldId}" title="Switch to catalog selection">▼</button>`,
+      );
+    } else {
+      // Show dropdown
+      html.push(`<select id="${fieldId}" class="setting-select config-field model-select" data-path='${dataPath}'>`);
+      html.push(`<option value="">-- None (use provider default) --</option>`);
+
+      for (const model of uniqueModels) {
+        const selected = model === currentValue ? 'selected' : '';
+        html.push(`<option value="${escapeHtml(model)}" ${selected}>${escapeHtml(model)}</option>`);
+      }
+
+      html.push(`<option value="__custom__">Custom...</option>`);
+      html.push('</select>');
     }
 
-    html.push('</select>');
+    html.push('</div>');
   } else {
     // Fallback to text input if no catalog
     html.push(
@@ -730,7 +896,8 @@ function renderWorkloadDropdown(fieldName: string, currentWorkload: string, path
 
       // Find workload info from metadata for display
       const workloadMeta = availableWorkloads.find((w) => w.name === workloadName);
-      const displayInfo = workloadMeta ? ` (${workloadMeta.provider} → ${workloadMeta.model})` : '';
+      const kindLabel = workloadMeta?.kind ? `[${workloadMeta.kind}] ` : '';
+      const displayInfo = workloadMeta ? ` (${kindLabel}${workloadMeta.provider} → ${workloadMeta.model})` : '';
 
       html.push(
         `<option value="${escapeHtml(workloadName)}" ${selected}>${escapeHtml(workloadName)}${displayInfo}</option>`,
@@ -858,19 +1025,68 @@ function attachEventListeners(): void {
 
     const path = JSON.parse(pathStr) as string[];
 
-    const handleChange = () => {
+    const updateValue = () => {
       removeHighlightFromField(element);
       updateConfigValue(path, element);
       markDirty();
     };
 
-    // For text-like inputs we rely on 'input' for real-time updates.
-    element.addEventListener('input', handleChange);
+    const updateAndSave = () => {
+      updateValue();
+      saveConfig(true);
+    };
 
-    // For selects/checkboxes some browsers only fire 'change', so add it as fallback.
+    // Selects/checkboxes - save immediately on change
     if (element.tagName === 'SELECT' || element.type === 'checkbox' || element.type === 'radio') {
-      element.addEventListener('change', handleChange);
+      // Special handling for model selects with "Custom..." option
+      if (element.classList.contains('model-select')) {
+        element.addEventListener('change', () => {
+          const selectEl = element as HTMLSelectElement;
+          if (selectEl.value === '__custom__') {
+            switchModelToCustomInput(selectEl);
+          } else {
+            updateAndSave();
+          }
+        });
+      } else {
+        element.addEventListener('change', updateAndSave);
+      }
+    } else {
+      // Text inputs/textareas - update on input, save on blur or paste
+      let saveAfterNextInput = false;
+
+      element.addEventListener('input', () => {
+        updateValue();
+        // If paste triggered this input, save immediately
+        if (saveAfterNextInput) {
+          saveAfterNextInput = false;
+          saveConfig(true);
+        }
+      });
+
+      // Save on blur (when user finishes typing and leaves field)
+      element.addEventListener('blur', () => {
+        if (isDirty) {
+          saveConfig(true);
+        }
+      });
+
+      // Mark that next input event should trigger save (paste = bulk input)
+      element.addEventListener('paste', () => {
+        saveAfterNextInput = true;
+      });
     }
+  }
+
+  // Model toggle buttons (switch back from custom input to dropdown)
+  const modelToggleBtns = document.querySelectorAll('.model-toggle-btn');
+  for (const btn of modelToggleBtns) {
+    btn.addEventListener('click', () => {
+      const fieldId = (btn as HTMLElement).getAttribute('data-field-id');
+      if (fieldId) {
+        switchModelToDropdown(fieldId);
+      }
+    });
   }
 
   // Provider header clicks (expand/collapse)
@@ -891,6 +1107,22 @@ function attachEventListeners(): void {
         toggleProvider(providerName);
       } else if (workloadName) {
         toggleWorkload(workloadName);
+      }
+    });
+  }
+
+  // Provider/Workload rename buttons
+  const renameButtons = document.querySelectorAll('.config-item-rename');
+  for (const button of renameButtons) {
+    button.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const providerName = (button as HTMLElement).getAttribute('data-provider');
+      const workloadName = (button as HTMLElement).getAttribute('data-workload');
+
+      if (providerName) {
+        void renameProvider(providerName);
+      } else if (workloadName) {
+        void renameWorkload(workloadName);
       }
     });
   }
@@ -952,7 +1184,162 @@ function toggleWorkload(workloadName: string): void {
   setWorkloadExpanded(workloadName, shouldExpand);
 }
 
+/**
+ * Switch model field from dropdown to custom text input
+ */
+function switchModelToCustomInput(selectEl: HTMLSelectElement): void {
+  const wrapper = selectEl.closest('.model-field-wrapper');
+  if (!wrapper) return;
+
+  const pathStr = selectEl.getAttribute('data-path');
+  if (!pathStr) return;
+
+  const fieldId = selectEl.id;
+
+  // Create input element
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.id = fieldId;
+  input.className = 'setting-input config-field model-custom-input';
+  input.setAttribute('data-path', pathStr);
+  input.placeholder = 'Enter custom model name';
+
+  // Create toggle button
+  const toggleBtn = document.createElement('button');
+  toggleBtn.type = 'button';
+  toggleBtn.className = 'model-toggle-btn';
+  toggleBtn.setAttribute('data-field-id', fieldId);
+  toggleBtn.title = 'Switch to catalog selection';
+  toggleBtn.textContent = '▼';
+
+  // Replace select with input and button
+  wrapper.innerHTML = '';
+  wrapper.appendChild(input);
+  wrapper.appendChild(toggleBtn);
+
+  // Attach event listeners to new input
+  const path = JSON.parse(pathStr) as string[];
+  let saveAfterNextInput = false;
+
+  const updateValue = () => {
+    removeHighlightFromField(input);
+    updateConfigValue(path, input);
+    markDirty();
+  };
+
+  input.addEventListener('input', () => {
+    updateValue();
+    if (saveAfterNextInput) {
+      saveAfterNextInput = false;
+      saveConfig(true);
+    }
+  });
+
+  input.addEventListener('blur', () => {
+    if (isDirty) {
+      saveConfig(true);
+    }
+  });
+
+  input.addEventListener('paste', () => {
+    saveAfterNextInput = true;
+  });
+
+  // Attach toggle button listener
+  toggleBtn.addEventListener('click', () => {
+    switchModelToDropdown(fieldId);
+  });
+
+  // Focus the input
+  input.focus();
+}
+
+/**
+ * Switch model field from custom input back to dropdown
+ */
+function switchModelToDropdown(fieldId: string): void {
+  const wrapper = document.getElementById(`${fieldId}_wrapper`);
+  if (!wrapper) return;
+
+  const pathStr = wrapper.getAttribute('data-path');
+  if (!pathStr) return;
+
+  const path = JSON.parse(pathStr) as string[];
+
+  // Get provider type from path (path is like ['config', 'workloads', 'workloadName', 'model'])
+  const workloadName = path[2];
+  const workloadConfig = currentConfig.workloads?.[workloadName as keyof typeof currentConfig.workloads] as
+    | Record<string, unknown>
+    | undefined;
+  const providerName =
+    workloadConfig && typeof workloadConfig === 'object' && 'provider' in workloadConfig
+      ? String(workloadConfig.provider)
+      : '';
+  const providerMeta = availableProviders.find((p) => p.name === providerName);
+  const providerType = providerMeta?.type || '';
+
+  // Get models from catalog
+  const models: string[] = [];
+  if (providerType && modelCatalog[providerType]) {
+    const catalog = modelCatalog[providerType];
+    if (catalog.chat && Array.isArray(catalog.chat)) {
+      models.push(...catalog.chat.filter((m) => typeof m === 'string'));
+    }
+    if (catalog.embeddings && Array.isArray(catalog.embeddings)) {
+      models.push(...catalog.embeddings.filter((m) => typeof m === 'string'));
+    }
+  }
+  const uniqueModels = Array.from(new Set(models));
+
+  // Create select element
+  const select = document.createElement('select');
+  select.id = fieldId;
+  select.className = 'setting-select config-field model-select';
+  select.setAttribute('data-path', pathStr);
+
+  // Add options
+  const noneOption = document.createElement('option');
+  noneOption.value = '';
+  noneOption.textContent = '-- None (use provider default) --';
+  select.appendChild(noneOption);
+
+  for (const model of uniqueModels) {
+    const option = document.createElement('option');
+    option.value = model;
+    option.textContent = model;
+    select.appendChild(option);
+  }
+
+  const customOption = document.createElement('option');
+  customOption.value = '__custom__';
+  customOption.textContent = 'Custom...';
+  select.appendChild(customOption);
+
+  // Replace wrapper content
+  wrapper.innerHTML = '';
+  wrapper.appendChild(select);
+
+  // Attach event listener
+  select.addEventListener('change', () => {
+    if (select.value === '__custom__') {
+      switchModelToCustomInput(select);
+    } else {
+      removeHighlightFromField(select);
+      updateConfigValue(path, select);
+      markDirty();
+      saveConfig(true);
+    }
+  });
+}
+
 function setProviderExpanded(providerName: string, expanded: boolean): void {
+  // Track expanded state
+  if (expanded) {
+    expandedProviders.add(providerName);
+  } else {
+    expandedProviders.delete(providerName);
+  }
+
   const content = document.getElementById(`provider-${providerName}`);
   const header = document.querySelector(`[data-provider="${providerName}"]`);
   if (!content || !header) {
@@ -972,6 +1359,13 @@ function setProviderExpanded(providerName: string, expanded: boolean): void {
 }
 
 function setWorkloadExpanded(workloadName: string, expanded: boolean): void {
+  // Track expanded state
+  if (expanded) {
+    expandedWorkloads.add(workloadName);
+  } else {
+    expandedWorkloads.delete(workloadName);
+  }
+
   const content = document.getElementById(`workload-${workloadName}`);
   const header = document.querySelector(`[data-workload="${workloadName}"]`);
   if (!content || !header) {
@@ -1033,14 +1427,15 @@ async function addProvider(): Promise<void> {
     options: {},
   };
 
+  // Mark as expanded so it will be expanded after reload
+  expandedProviders.add(trimmedName);
+
+  // Save scroll position before render (renderConfig resets scroll)
+  savedScrollTop = scrollContainer.scrollTop;
+
   markDirty();
   renderConfig();
   saveConfig(true);
-
-  // Expand the newly added provider
-  setTimeout(() => {
-    toggleProvider(trimmedName);
-  }, 100);
 }
 
 /**
@@ -1075,14 +1470,109 @@ async function addWorkload(): Promise<void> {
     options: {},
   };
 
+  // Mark as expanded so it will be expanded after reload
+  expandedWorkloads.add(trimmedName);
+
+  // Save scroll position before render (renderConfig resets scroll)
+  savedScrollTop = scrollContainer.scrollTop;
+
   markDirty();
   renderConfig();
   saveConfig(true);
+}
 
-  // Expand the newly added workload
-  setTimeout(() => {
-    toggleWorkload(trimmedName);
-  }, 100);
+/**
+ * Rename provider
+ */
+async function renameProvider(providerName: string): Promise<void> {
+  const newName = await showInputBox(
+    `Enter new name for provider "${providerName}":`,
+    'New provider name',
+    providerName,
+  );
+  if (!newName || newName.trim() === '' || newName.trim() === providerName) {
+    return;
+  }
+
+  const trimmedName = newName.trim();
+
+  // Check if provider with new name already exists
+  if (currentConfig.providers && typeof currentConfig.providers === 'object') {
+    const providers = currentConfig.providers as Record<string, unknown>;
+    if (trimmedName in providers) {
+      showError('Provider with this name already exists!');
+      return;
+    }
+  }
+
+  // Update expanded state tracking for the rename
+  const wasExpanded = expandedProviders.has(providerName);
+  if (wasExpanded) {
+    expandedProviders.delete(providerName);
+    expandedProviders.add(trimmedName);
+  }
+
+  // Save scroll position and show overlay
+  savedScrollTop = scrollContainer.scrollTop;
+  isSaving = true;
+  showSavingOverlay();
+
+  // Send rename request to server
+  pendingReloadAfterSaveCount += 1;
+  suppressedSuccessMessages += 1;
+  vscode.postMessage({
+    type: CONFIG_IN_MSG.RENAME_CONFIG,
+    renameType: 'provider',
+    oldName: providerName,
+    newName: trimmedName,
+  });
+}
+
+/**
+ * Rename workload
+ */
+async function renameWorkload(workloadName: string): Promise<void> {
+  const newName = await showInputBox(
+    `Enter new name for workload "${workloadName}":`,
+    'New workload name',
+    workloadName,
+  );
+  if (!newName || newName.trim() === '' || newName.trim() === workloadName) {
+    return;
+  }
+
+  const trimmedName = newName.trim();
+
+  // Check if workload with new name already exists
+  if (currentConfig.workloads && typeof currentConfig.workloads === 'object') {
+    const workloads = currentConfig.workloads as Record<string, unknown>;
+    if (trimmedName in workloads) {
+      showError('Workload with this name already exists!');
+      return;
+    }
+  }
+
+  // Update expanded state tracking for the rename
+  const wasExpanded = expandedWorkloads.has(workloadName);
+  if (wasExpanded) {
+    expandedWorkloads.delete(workloadName);
+    expandedWorkloads.add(trimmedName);
+  }
+
+  // Save scroll position and show overlay
+  savedScrollTop = scrollContainer.scrollTop;
+  isSaving = true;
+  showSavingOverlay();
+
+  // Send rename request to server
+  pendingReloadAfterSaveCount += 1;
+  suppressedSuccessMessages += 1;
+  vscode.postMessage({
+    type: CONFIG_IN_MSG.RENAME_CONFIG,
+    renameType: 'workload',
+    oldName: workloadName,
+    newName: trimmedName,
+  });
 }
 
 /**
@@ -1094,13 +1584,11 @@ async function deleteProvider(providerName: string): Promise<void> {
     return;
   }
 
-  if (currentConfig.providers && typeof currentConfig.providers === 'object') {
-    const providers = currentConfig.providers as Record<string, unknown>;
-    delete providers[providerName];
-    markDirty();
-    renderConfig();
-    saveConfig(true);
-  }
+  // Remove from expanded state tracking
+  expandedProviders.delete(providerName);
+
+  // Send deletion request with null value for the provider
+  sendSaveRequest({providers: {[providerName]: null}}, true);
 }
 
 /**
@@ -1112,13 +1600,11 @@ async function deleteWorkload(workloadName: string): Promise<void> {
     return;
   }
 
-  if (currentConfig.workloads && typeof currentConfig.workloads === 'object') {
-    const workloads = currentConfig.workloads as Record<string, unknown>;
-    delete workloads[workloadName];
-    markDirty();
-    renderConfig();
-    saveConfig(true);
-  }
+  // Remove from expanded state tracking
+  expandedWorkloads.delete(workloadName);
+
+  // Send deletion request with null value for the workload
+  sendSaveRequest({workloads: {[workloadName]: null}}, true);
 }
 
 /**
@@ -1184,10 +1670,7 @@ function getConfigValueAtPath(pathParts: string[]): unknown {
  * Mark configuration as dirty
  */
 function markDirty(): void {
-  if (!isDirty) {
-    isDirty = true;
-    saveButton.disabled = false;
-  }
+  isDirty = true;
 }
 
 /**
