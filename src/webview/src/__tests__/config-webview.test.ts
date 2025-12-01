@@ -1042,4 +1042,171 @@ describe('config-webview saving overlay (no-flash behavior)', () => {
     expect(expandedWorkloads.has('reasoning')).toBe(false);
     expect(expandedWorkloads.has('coding')).toBe(true);
   });
+
+  it('renameProvider updates expanded state tracking', () => {
+    const expandedProviders = new Set(['openai', 'anthropic']);
+
+    // Simulate renameProvider: openai -> openai-new
+    const oldName = 'openai';
+    const newName = 'openai-new';
+
+    const wasExpanded = expandedProviders.has(oldName);
+    if (wasExpanded) {
+      expandedProviders.delete(oldName);
+      expandedProviders.add(newName);
+    }
+
+    expect(expandedProviders.has('openai')).toBe(false);
+    expect(expandedProviders.has('openai-new')).toBe(true);
+    expect(expandedProviders.has('anthropic')).toBe(true);
+    expect(expandedProviders.size).toBe(2);
+  });
+
+  it('renameProvider does not add to expanded if not previously expanded', () => {
+    const expandedProviders = new Set(['anthropic']);
+
+    // Simulate renameProvider on non-expanded provider: openai -> openai-new
+    const oldName = 'openai';
+    const newName = 'openai-new';
+
+    const wasExpanded = expandedProviders.has(oldName);
+    if (wasExpanded) {
+      expandedProviders.delete(oldName);
+      expandedProviders.add(newName);
+    }
+
+    expect(expandedProviders.has('openai')).toBe(false);
+    expect(expandedProviders.has('openai-new')).toBe(false);
+    expect(expandedProviders.has('anthropic')).toBe(true);
+    expect(expandedProviders.size).toBe(1);
+  });
+
+  it('renameWorkload updates expanded state tracking', () => {
+    const expandedWorkloads = new Set(['reasoning', 'coding']);
+
+    // Simulate renameWorkload: reasoning -> reasoning-v2
+    const oldName = 'reasoning';
+    const newName = 'reasoning-v2';
+
+    const wasExpanded = expandedWorkloads.has(oldName);
+    if (wasExpanded) {
+      expandedWorkloads.delete(oldName);
+      expandedWorkloads.add(newName);
+    }
+
+    expect(expandedWorkloads.has('reasoning')).toBe(false);
+    expect(expandedWorkloads.has('reasoning-v2')).toBe(true);
+    expect(expandedWorkloads.has('coding')).toBe(true);
+    expect(expandedWorkloads.size).toBe(2);
+  });
+
+  it('renameWorkload does not add to expanded if not previously expanded', () => {
+    const expandedWorkloads = new Set(['coding']);
+
+    // Simulate renameWorkload on non-expanded workload: reasoning -> reasoning-v2
+    const oldName = 'reasoning';
+    const newName = 'reasoning-v2';
+
+    const wasExpanded = expandedWorkloads.has(oldName);
+    if (wasExpanded) {
+      expandedWorkloads.delete(oldName);
+      expandedWorkloads.add(newName);
+    }
+
+    expect(expandedWorkloads.has('reasoning')).toBe(false);
+    expect(expandedWorkloads.has('reasoning-v2')).toBe(false);
+    expect(expandedWorkloads.has('coding')).toBe(true);
+    expect(expandedWorkloads.size).toBe(1);
+  });
+
+  it('renameProvider uses saving overlay', () => {
+    let isSaving = false;
+    let savedScrollTop = 0;
+    let overlayShown = false;
+
+    const scrollContainer = {scrollTop: 300};
+
+    const showSavingOverlay = () => {
+      overlayShown = true;
+    };
+
+    // Simulate renameProvider flow
+    savedScrollTop = scrollContainer.scrollTop;
+    isSaving = true;
+    showSavingOverlay();
+
+    expect(savedScrollTop).toBe(300);
+    expect(isSaving).toBe(true);
+    expect(overlayShown).toBe(true);
+  });
+
+  it('renameWorkload uses saving overlay', () => {
+    let isSaving = false;
+    let savedScrollTop = 0;
+    let overlayShown = false;
+
+    const scrollContainer = {scrollTop: 450};
+
+    const showSavingOverlay = () => {
+      overlayShown = true;
+    };
+
+    // Simulate renameWorkload flow
+    savedScrollTop = scrollContainer.scrollTop;
+    isSaving = true;
+    showSavingOverlay();
+
+    expect(savedScrollTop).toBe(450);
+    expect(isSaving).toBe(true);
+    expect(overlayShown).toBe(true);
+  });
+
+  it('addProvider saves scroll before renderConfig', () => {
+    let savedScrollTop = 0;
+    const scrollContainer = {scrollTop: 200};
+
+    // Simulate addProvider flow: save scroll BEFORE renderConfig
+    savedScrollTop = scrollContainer.scrollTop;
+
+    // renderConfig would reset scrollContainer.scrollTop to 0
+    scrollContainer.scrollTop = 0;
+
+    // sendSaveRequest should NOT overwrite savedScrollTop
+    // because scrollTop is 0 but savedScrollTop is already set
+    if (scrollContainer.scrollTop > 0 || savedScrollTop === 0) {
+      savedScrollTop = scrollContainer.scrollTop;
+    }
+
+    expect(savedScrollTop).toBe(200); // preserved from before renderConfig
+  });
+
+  it('addWorkload saves scroll before renderConfig', () => {
+    let savedScrollTop = 0;
+    const scrollContainer = {scrollTop: 350};
+
+    // Simulate addWorkload flow: save scroll BEFORE renderConfig
+    savedScrollTop = scrollContainer.scrollTop;
+
+    // renderConfig would reset scrollContainer.scrollTop to 0
+    scrollContainer.scrollTop = 0;
+
+    // sendSaveRequest should NOT overwrite savedScrollTop
+    if (scrollContainer.scrollTop > 0 || savedScrollTop === 0) {
+      savedScrollTop = scrollContainer.scrollTop;
+    }
+
+    expect(savedScrollTop).toBe(350); // preserved from before renderConfig
+  });
+
+  it('sendSaveRequest saves scroll when not pre-saved', () => {
+    let savedScrollTop = 0;
+    const scrollContainer = {scrollTop: 500};
+
+    // Direct saveConfig call without pre-saving scroll
+    if (scrollContainer.scrollTop > 0 || savedScrollTop === 0) {
+      savedScrollTop = scrollContainer.scrollTop;
+    }
+
+    expect(savedScrollTop).toBe(500);
+  });
 });

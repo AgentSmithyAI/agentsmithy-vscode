@@ -410,8 +410,12 @@ function loadConfig(): void {
  * Central function to send save request with overlay
  */
 function sendSaveRequest(config: Record<string, unknown>, suppressSuccess = false): void {
-  // Save scroll position before reload
-  savedScrollTop = scrollContainer.scrollTop;
+  // Save scroll position before reload (only if not already saved by caller)
+  // If scrollContainer.scrollTop is 0 but savedScrollTop is non-zero, 
+  // it means caller already saved scroll before renderConfig()
+  if (scrollContainer.scrollTop > 0 || savedScrollTop === 0) {
+    savedScrollTop = scrollContainer.scrollTop;
+  }
 
   // Mark as saving to show overlay instead of full loading
   isSaving = true;
@@ -544,7 +548,7 @@ function renderProvider(name: string, config: Record<string, unknown>, hasApiKey
     html.push('<span class="provider-warning-badge" title="API key not configured">⚠</span>');
   }
 
-  html.push(`<button class="provider-rename" data-provider="${name}" title="Rename provider">✎</button>`);
+  html.push(`<button class="config-item-rename" data-provider="${name}" title="Rename provider">✎</button>`);
   html.push(`<button class="provider-delete" data-provider="${name}" title="Delete provider">×</button>`);
   html.push('</div>');
 
@@ -589,7 +593,7 @@ function renderWorkload(name: string, config: Record<string, unknown>): string {
     );
   }
 
-  html.push(`<button class="provider-rename" data-workload="${name}" title="Rename workload">✎</button>`);
+  html.push(`<button class="config-item-rename" data-workload="${name}" title="Rename workload">✎</button>`);
   html.push(`<button class="provider-delete" data-workload="${name}" title="Delete workload">×</button>`);
   html.push('</div>');
 
@@ -1047,7 +1051,16 @@ function attachEventListeners(): void {
       }
     } else {
       // Text inputs/textareas - update on input, save on blur or paste
-      element.addEventListener('input', updateValue);
+      let saveAfterNextInput = false;
+
+      element.addEventListener('input', () => {
+        updateValue();
+        // If paste triggered this input, save immediately
+        if (saveAfterNextInput) {
+          saveAfterNextInput = false;
+          saveConfig(true);
+        }
+      });
 
       // Save on blur (when user finishes typing and leaves field)
       element.addEventListener('blur', () => {
@@ -1056,13 +1069,9 @@ function attachEventListeners(): void {
         }
       });
 
-      // Save immediately on paste (bulk input)
+      // Mark that next input event should trigger save (paste = bulk input)
       element.addEventListener('paste', () => {
-        // Use setTimeout to let the paste complete first
-        setTimeout(() => {
-          updateValue();
-          saveConfig(true);
-        }, 0);
+        saveAfterNextInput = true;
       });
     }
   }
@@ -1101,7 +1110,7 @@ function attachEventListeners(): void {
   }
 
   // Provider/Workload rename buttons
-  const renameButtons = document.querySelectorAll('.provider-rename');
+  const renameButtons = document.querySelectorAll('.config-item-rename');
   for (const button of renameButtons) {
     button.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -1208,6 +1217,7 @@ function switchModelToCustomInput(selectEl: HTMLSelectElement): void {
 
   // Attach event listeners to new input
   const path = JSON.parse(pathStr) as string[];
+  let saveAfterNextInput = false;
 
   const updateValue = () => {
     removeHighlightFromField(input);
@@ -1215,7 +1225,13 @@ function switchModelToCustomInput(selectEl: HTMLSelectElement): void {
     markDirty();
   };
 
-  input.addEventListener('input', updateValue);
+  input.addEventListener('input', () => {
+    updateValue();
+    if (saveAfterNextInput) {
+      saveAfterNextInput = false;
+      saveConfig(true);
+    }
+  });
 
   input.addEventListener('blur', () => {
     if (isDirty) {
@@ -1224,10 +1240,7 @@ function switchModelToCustomInput(selectEl: HTMLSelectElement): void {
   });
 
   input.addEventListener('paste', () => {
-    setTimeout(() => {
-      updateValue();
-      saveConfig(true);
-    }, 0);
+    saveAfterNextInput = true;
   });
 
   // Attach toggle button listener
@@ -1253,7 +1266,9 @@ function switchModelToDropdown(fieldId: string): void {
 
   // Get provider type from path (path is like ['config', 'workloads', 'workloadName', 'model'])
   const workloadName = path[2];
-  const workloadConfig = currentConfig.workloads?.[workloadName as keyof typeof currentConfig.workloads];
+  const workloadConfig = currentConfig.workloads?.[workloadName as keyof typeof currentConfig.workloads] as
+    | Record<string, unknown>
+    | undefined;
   const providerName =
     workloadConfig && typeof workloadConfig === 'object' && 'provider' in workloadConfig
       ? String(workloadConfig.provider)
@@ -1410,14 +1425,15 @@ async function addProvider(): Promise<void> {
     options: {},
   };
 
+  // Mark as expanded so it will be expanded after reload
+  expandedProviders.add(trimmedName);
+
+  // Save scroll position before render (renderConfig resets scroll)
+  savedScrollTop = scrollContainer.scrollTop;
+
   markDirty();
   renderConfig();
   saveConfig(true);
-
-  // Expand the newly added provider
-  setTimeout(() => {
-    toggleProvider(trimmedName);
-  }, 100);
 }
 
 /**
@@ -1452,14 +1468,15 @@ async function addWorkload(): Promise<void> {
     options: {},
   };
 
+  // Mark as expanded so it will be expanded after reload
+  expandedWorkloads.add(trimmedName);
+
+  // Save scroll position before render (renderConfig resets scroll)
+  savedScrollTop = scrollContainer.scrollTop;
+
   markDirty();
   renderConfig();
   saveConfig(true);
-
-  // Expand the newly added workload
-  setTimeout(() => {
-    toggleWorkload(trimmedName);
-  }, 100);
 }
 
 /**
@@ -1485,6 +1502,18 @@ async function renameProvider(providerName: string): Promise<void> {
       return;
     }
   }
+
+  // Update expanded state tracking for the rename
+  const wasExpanded = expandedProviders.has(providerName);
+  if (wasExpanded) {
+    expandedProviders.delete(providerName);
+    expandedProviders.add(trimmedName);
+  }
+
+  // Save scroll position and show overlay
+  savedScrollTop = scrollContainer.scrollTop;
+  isSaving = true;
+  showSavingOverlay();
 
   // Send rename request to server
   pendingReloadAfterSaveCount += 1;
@@ -1520,6 +1549,18 @@ async function renameWorkload(workloadName: string): Promise<void> {
       return;
     }
   }
+
+  // Update expanded state tracking for the rename
+  const wasExpanded = expandedWorkloads.has(workloadName);
+  if (wasExpanded) {
+    expandedWorkloads.delete(workloadName);
+    expandedWorkloads.add(trimmedName);
+  }
+
+  // Save scroll position and show overlay
+  savedScrollTop = scrollContainer.scrollTop;
+  isSaving = true;
+  showSavingOverlay();
 
   // Send rename request to server
   pendingReloadAfterSaveCount += 1;
