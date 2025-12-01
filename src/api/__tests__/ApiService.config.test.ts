@@ -26,7 +26,7 @@ describe('ApiService - Configuration', () => {
             },
           },
           workloads: {
-            reasoning: {provider: 'openai', model: 'gpt-5', options: {}},
+            reasoning: {provider: 'openai', model: 'gpt-5', kind: 'chat', options: {}},
           },
           models: {
             agents: {
@@ -36,8 +36,9 @@ describe('ApiService - Configuration', () => {
         },
         metadata: {
           provider_types: ['openai', 'anthropic'],
+          workload_kinds: ['chat', 'embeddings'],
           providers: [{name: 'openai', type: 'openai', has_api_key: false, model: null}],
-          workloads: [{name: 'reasoning', provider: 'openai', model: 'gpt-5'}],
+          workloads: [{name: 'reasoning', provider: 'openai', model: 'gpt-5', kind: 'chat'}],
           agent_provider_slots: [{path: 'models.agents.universal.workload', workload: 'reasoning'}],
           model_catalog: {
             openai: {
@@ -212,17 +213,6 @@ describe('ApiService - Configuration', () => {
       });
 
       await expect(apiService.updateConfig(configUpdate)).rejects.toThrow(ApiError);
-
-      try {
-        await apiService.updateConfig(configUpdate);
-      } catch (e) {
-        // Re-mock for second call
-        (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-          ok: false,
-          status: 400,
-          text: async () => JSON.stringify(errorResponse),
-        });
-      }
     });
   });
 
@@ -240,7 +230,7 @@ describe('ApiService - Configuration', () => {
           },
         },
         metadata: {
-          workloads: [{name: 'main-model', provider: 'openai', model: 'gpt-5'}],
+          workloads: [{name: 'main-model', provider: 'openai', model: 'gpt-5', kind: 'chat'}],
         },
       };
 

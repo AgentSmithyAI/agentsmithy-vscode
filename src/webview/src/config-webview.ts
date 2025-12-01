@@ -90,9 +90,10 @@ function showConfirm(message: string): Promise<boolean> {
 let currentConfig: Record<string, unknown> = {};
 let currentMetadata: Record<string, unknown> | null = null;
 let availableProviders: Array<{name: string; type: string; has_api_key: boolean; model: string | null}> = [];
-let availableWorkloads: Array<{name: string; provider: string; model: string}> = [];
+let availableWorkloads: Array<{name: string; provider: string; model: string; kind: string | null}> = [];
 let agentProviderSlots: Array<{path: string; provider?: string; workload?: string}> = [];
 let providerTypes: string[] = [];
+let workloadKinds: string[] = [];
 let modelCatalog: Record<string, Record<string, string[]>> = {};
 let isDirty = false;
 let suppressedSuccessMessages = 0;
@@ -188,6 +189,7 @@ function handleMessage(message: {
               name: typeof w.name === 'string' ? w.name : '',
               provider: typeof w.provider === 'string' ? w.provider : '',
               model: typeof w.model === 'string' ? w.model : '',
+              kind: typeof w.kind === 'string' ? w.kind : null,
             }));
         }
 
@@ -204,6 +206,12 @@ function handleMessage(message: {
 
         if (currentMetadata && Array.isArray(currentMetadata.provider_types)) {
           providerTypes = (currentMetadata.provider_types as unknown[]).filter(
+            (t): t is string => typeof t === 'string',
+          );
+        }
+
+        if (currentMetadata && Array.isArray(currentMetadata.workload_kinds)) {
+          workloadKinds = (currentMetadata.workload_kinds as unknown[]).filter(
             (t): t is string => typeof t === 'string',
           );
         }
@@ -530,6 +538,10 @@ function renderWorkload(name: string, config: Record<string, unknown>): string {
       const providerType = providerMeta?.type || '';
 
       html.push(renderModelDropdown(providerType, value, ['config', 'workloads', name, key]));
+    }
+    // Special handling for 'kind' field - dropdown with workload kinds
+    else if (key === 'kind') {
+      html.push(renderWorkloadKindDropdown(value, ['config', 'workloads', name, key]));
     } else {
       html.push(renderSettingItem(key, value, ['config', 'workloads', name, key]));
     }
@@ -626,6 +638,36 @@ function renderProviderSelectorDropdown(value: unknown, path: string[]): string 
     html.push(
       `<option value="${escapeHtml(provider.name)}" ${selected}>${escapeHtml(provider.name)} (${escapeHtml(provider.type)})${missingKeyBadge}</option>`,
     );
+  }
+
+  html.push('</select>');
+  html.push('</div>');
+  html.push('</div>');
+
+  return html.join('');
+}
+
+/**
+ * Render workload kind dropdown (chat/embeddings)
+ */
+function renderWorkloadKindDropdown(value: unknown, path: string[]): string {
+  const html: string[] = [];
+  const fieldId = path.join('_');
+  const dataPath = JSON.stringify(path);
+  const currentValue = typeof value === 'string' ? value : '';
+
+  html.push('<div class="setting-item">');
+  html.push('<div class="setting-item-label">');
+  html.push('<span class="setting-item-label-text">Kind</span>');
+  html.push('<span class="setting-item-description">Workload type (chat or embeddings)</span>');
+  html.push('</div>');
+  html.push('<div class="setting-item-control">');
+  html.push(`<select id="${fieldId}" class="setting-select config-field" data-path='${dataPath}'>`);
+
+  // Add workload kinds from metadata
+  for (const kind of workloadKinds) {
+    const selected = kind === currentValue ? 'selected' : '';
+    html.push(`<option value="${escapeHtml(kind)}" ${selected}>${escapeHtml(kind)}</option>`);
   }
 
   html.push('</select>');
@@ -760,7 +802,8 @@ function renderWorkloadDropdown(fieldName: string, currentWorkload: string, path
 
       // Find workload info from metadata for display
       const workloadMeta = availableWorkloads.find((w) => w.name === workloadName);
-      const displayInfo = workloadMeta ? ` (${workloadMeta.provider} → ${workloadMeta.model})` : '';
+      const kindLabel = workloadMeta?.kind ? `[${workloadMeta.kind}] ` : '';
+      const displayInfo = workloadMeta ? ` (${kindLabel}${workloadMeta.provider} → ${workloadMeta.model})` : '';
 
       html.push(
         `<option value="${escapeHtml(workloadName)}" ${selected}>${escapeHtml(workloadName)}${displayInfo}</option>`,
