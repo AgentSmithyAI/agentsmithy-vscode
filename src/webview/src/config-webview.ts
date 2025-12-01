@@ -105,13 +105,20 @@ let pendingValidationErrors: string[] = [];
 let highlightedFields: HTMLElement[] = [];
 let highlightedItems: HTMLElement[] = [];
 
+// Track expanded state of providers and workloads
+let expandedProviders: Set<string> = new Set();
+let expandedWorkloads: Set<string> = new Set();
+
+// Track scroll position for restoration after re-render
+let savedScrollTop = 0;
+let scrollContainer: HTMLElement;
+
 // DOM elements
 let errorContainer: HTMLElement;
 let successContainer: HTMLElement;
 let loadingContainer: HTMLElement;
 let configContainer: HTMLElement;
 let validationSummary: HTMLElement;
-let saveButton: HTMLButtonElement;
 let reloadButton: HTMLButtonElement;
 
 /**
@@ -124,14 +131,10 @@ function init(): void {
   loadingContainer = document.getElementById('loadingContainer')!;
   configContainer = document.getElementById('configContainer')!;
   validationSummary = document.getElementById('validationSummary')!;
-  saveButton = document.getElementById('saveButton') as HTMLButtonElement;
   reloadButton = document.getElementById('reloadButton') as HTMLButtonElement;
+  scrollContainer = document.querySelector('.scroll-container') as HTMLElement;
 
   // Set up event listeners
-  saveButton.addEventListener('click', () => {
-    saveConfig(false);
-  });
-
   reloadButton.addEventListener('click', () => {
     loadConfig();
   });
@@ -228,7 +231,6 @@ function handleMessage(message: {
 
     case CONFIG_OUT_MSG.CONFIG_SAVED:
       isDirty = false;
-      saveButton.disabled = true;
 
       // Clear pending validation errors on successful save
       pendingValidationErrors = [];
@@ -252,7 +254,6 @@ function handleMessage(message: {
 
     case CONFIG_OUT_MSG.CONFIG_RENAMED:
       isDirty = false;
-      saveButton.disabled = true;
 
       // Clear pending validation errors on successful rename
       pendingValidationErrors = [];
@@ -319,6 +320,12 @@ function handleMessage(message: {
  * Show loading state
  */
 function showLoading(): void {
+  // Save scroll position before hiding container (only if not already saved by saveConfig)
+  const currentScroll = scrollContainer.scrollTop;
+  if (currentScroll > 0) {
+    savedScrollTop = currentScroll;
+  }
+
   loadingContainer.classList.remove('hidden');
   configContainer.classList.add('hidden');
   errorContainer.innerHTML = '';
@@ -331,6 +338,9 @@ function showLoading(): void {
 function hideLoading(): void {
   loadingContainer.classList.add('hidden');
   configContainer.classList.remove('hidden');
+
+  // Restore scroll position after container is visible
+  scrollContainer.scrollTop = savedScrollTop;
 }
 
 /**
@@ -365,6 +375,9 @@ function loadConfig(): void {
  * Save configuration
  */
 function saveConfig(auto = false): void {
+  // Save scroll position before reload
+  savedScrollTop = scrollContainer.scrollTop;
+
   if (auto) {
     suppressedSuccessMessages += 1;
   }
@@ -448,6 +461,19 @@ function renderConfig(): void {
   // Attach event listeners
   attachEventListeners();
   applyValidationHighlights();
+  restoreExpandedState();
+}
+
+/**
+ * Restore expanded state for providers and workloads after re-render
+ */
+function restoreExpandedState(): void {
+  for (const providerName of expandedProviders) {
+    setProviderExpanded(providerName, true);
+  }
+  for (const workloadName of expandedWorkloads) {
+    setWorkloadExpanded(workloadName, true);
+  }
 }
 
 /**
@@ -931,18 +957,39 @@ function attachEventListeners(): void {
 
     const path = JSON.parse(pathStr) as string[];
 
-    const handleChange = () => {
+    const updateValue = () => {
       removeHighlightFromField(element);
       updateConfigValue(path, element);
       markDirty();
     };
 
-    // For text-like inputs we rely on 'input' for real-time updates.
-    element.addEventListener('input', handleChange);
+    const updateAndSave = () => {
+      updateValue();
+      saveConfig(true);
+    };
 
-    // For selects/checkboxes some browsers only fire 'change', so add it as fallback.
+    // Selects/checkboxes - save immediately on change
     if (element.tagName === 'SELECT' || element.type === 'checkbox' || element.type === 'radio') {
-      element.addEventListener('change', handleChange);
+      element.addEventListener('change', updateAndSave);
+    } else {
+      // Text inputs/textareas - update on input, save on blur or paste
+      element.addEventListener('input', updateValue);
+
+      // Save on blur (when user finishes typing and leaves field)
+      element.addEventListener('blur', () => {
+        if (isDirty) {
+          saveConfig(true);
+        }
+      });
+
+      // Save immediately on paste (bulk input)
+      element.addEventListener('paste', () => {
+        // Use setTimeout to let the paste complete first
+        setTimeout(() => {
+          updateValue();
+          saveConfig(true);
+        }, 0);
+      });
     }
   }
 
@@ -1042,6 +1089,13 @@ function toggleWorkload(workloadName: string): void {
 }
 
 function setProviderExpanded(providerName: string, expanded: boolean): void {
+  // Track expanded state
+  if (expanded) {
+    expandedProviders.add(providerName);
+  } else {
+    expandedProviders.delete(providerName);
+  }
+
   const content = document.getElementById(`provider-${providerName}`);
   const header = document.querySelector(`[data-provider="${providerName}"]`);
   if (!content || !header) {
@@ -1061,6 +1115,13 @@ function setProviderExpanded(providerName: string, expanded: boolean): void {
 }
 
 function setWorkloadExpanded(workloadName: string, expanded: boolean): void {
+  // Track expanded state
+  if (expanded) {
+    expandedWorkloads.add(workloadName);
+  } else {
+    expandedWorkloads.delete(workloadName);
+  }
+
   const content = document.getElementById(`workload-${workloadName}`);
   const header = document.querySelector(`[data-workload="${workloadName}"]`);
   if (!content || !header) {
@@ -1357,10 +1418,7 @@ function getConfigValueAtPath(pathParts: string[]): unknown {
  * Mark configuration as dirty
  */
 function markDirty(): void {
-  if (!isDirty) {
-    isDirty = true;
-    saveButton.disabled = false;
-  }
+  isDirty = true;
 }
 
 /**

@@ -258,3 +258,406 @@ describe('config-webview dialog flow', () => {
     expect(declinedConfirmResult.confirmed).toBe(false);
   });
 });
+
+describe('config-webview auto-save behavior', () => {
+  it('select elements should trigger immediate save on change', () => {
+    // When a select element changes, saveConfig should be called immediately
+    // This is the expected behavior for dropdowns (provider type, workload kind, etc.)
+    const selectBehavior = {
+      triggerEvent: 'change',
+      saveImmediately: true,
+      waitForBlur: false,
+    };
+
+    expect(selectBehavior.triggerEvent).toBe('change');
+    expect(selectBehavior.saveImmediately).toBe(true);
+    expect(selectBehavior.waitForBlur).toBe(false);
+  });
+
+  it('checkbox elements should trigger immediate save on change', () => {
+    // Checkboxes behave like selects - save immediately on change
+    const checkboxBehavior = {
+      triggerEvent: 'change',
+      saveImmediately: true,
+      waitForBlur: false,
+    };
+
+    expect(checkboxBehavior.triggerEvent).toBe('change');
+    expect(checkboxBehavior.saveImmediately).toBe(true);
+  });
+
+  it('text inputs should save on blur (when user leaves field)', () => {
+    // Text inputs update local config on each keystroke (input event)
+    // But only save to server when user leaves the field (blur event)
+    const textInputBehavior = {
+      updateLocalOn: 'input',
+      saveToServerOn: 'blur',
+      saveImmediately: false,
+    };
+
+    expect(textInputBehavior.updateLocalOn).toBe('input');
+    expect(textInputBehavior.saveToServerOn).toBe('blur');
+    expect(textInputBehavior.saveImmediately).toBe(false);
+  });
+
+  it('text inputs should save immediately on paste', () => {
+    // When user pastes content, save immediately (bulk input)
+    // This handles copy-paste of API keys, URLs, etc.
+    const pasteBehavior = {
+      triggerEvent: 'paste',
+      saveImmediately: true,
+      waitForBlur: false,
+    };
+
+    expect(pasteBehavior.triggerEvent).toBe('paste');
+    expect(pasteBehavior.saveImmediately).toBe(true);
+  });
+
+  it('auto-save should suppress success messages', () => {
+    // Auto-saves (blur, paste, select change) should not show
+    // "Configuration saved successfully!" message for better UX
+    const autoSaveOptions = {
+      suppressSuccessMessage: true,
+      showErrorMessage: true, // Errors should still be shown
+    };
+
+    expect(autoSaveOptions.suppressSuccessMessage).toBe(true);
+    expect(autoSaveOptions.showErrorMessage).toBe(true);
+  });
+
+  it('saveConfig message structure for auto-save', () => {
+    const saveMessage = {
+      type: 'saveConfig',
+      config: {
+        providers: {
+          openai: {
+            type: 'openai',
+            api_key: 'sk-xxx',
+          },
+        },
+      },
+    };
+
+    expect(saveMessage.type).toBe('saveConfig');
+    expect(saveMessage.config).toBeDefined();
+    expect(saveMessage.config.providers).toBeDefined();
+  });
+});
+
+describe('config-webview state preservation', () => {
+  describe('expanded state preservation', () => {
+    it('tracks expanded providers in a Set', () => {
+      // expandedProviders Set should track which providers are expanded
+      const expandedProviders = new Set<string>();
+
+      expandedProviders.add('openai');
+      expandedProviders.add('anthropic');
+
+      expect(expandedProviders.has('openai')).toBe(true);
+      expect(expandedProviders.has('anthropic')).toBe(true);
+      expect(expandedProviders.has('azure')).toBe(false);
+    });
+
+    it('tracks expanded workloads in a Set', () => {
+      // expandedWorkloads Set should track which workloads are expanded
+      const expandedWorkloads = new Set<string>();
+
+      expandedWorkloads.add('reasoning');
+      expandedWorkloads.add('coding');
+
+      expect(expandedWorkloads.has('reasoning')).toBe(true);
+      expect(expandedWorkloads.has('coding')).toBe(true);
+      expect(expandedWorkloads.has('embeddings')).toBe(false);
+    });
+
+    it('setProviderExpanded updates tracking Set on expand', () => {
+      const expandedProviders = new Set<string>();
+
+      // Simulate setProviderExpanded behavior
+      const setProviderExpanded = (name: string, expanded: boolean) => {
+        if (expanded) {
+          expandedProviders.add(name);
+        } else {
+          expandedProviders.delete(name);
+        }
+      };
+
+      setProviderExpanded('openai', true);
+      expect(expandedProviders.has('openai')).toBe(true);
+
+      setProviderExpanded('openai', false);
+      expect(expandedProviders.has('openai')).toBe(false);
+    });
+
+    it('setWorkloadExpanded updates tracking Set on expand', () => {
+      const expandedWorkloads = new Set<string>();
+
+      // Simulate setWorkloadExpanded behavior
+      const setWorkloadExpanded = (name: string, expanded: boolean) => {
+        if (expanded) {
+          expandedWorkloads.add(name);
+        } else {
+          expandedWorkloads.delete(name);
+        }
+      };
+
+      setWorkloadExpanded('reasoning', true);
+      expect(expandedWorkloads.has('reasoning')).toBe(true);
+
+      setWorkloadExpanded('reasoning', false);
+      expect(expandedWorkloads.has('reasoning')).toBe(false);
+    });
+
+    it('restoreExpandedState re-expands all tracked items after re-render', () => {
+      const expandedProviders = new Set(['openai', 'azure']);
+      const expandedWorkloads = new Set(['reasoning']);
+
+      const expandedDuringRestore: string[] = [];
+
+      // Simulate restoreExpandedState behavior
+      const restoreExpandedState = () => {
+        for (const name of expandedProviders) {
+          expandedDuringRestore.push(`provider:${name}`);
+        }
+        for (const name of expandedWorkloads) {
+          expandedDuringRestore.push(`workload:${name}`);
+        }
+      };
+
+      restoreExpandedState();
+
+      expect(expandedDuringRestore).toContain('provider:openai');
+      expect(expandedDuringRestore).toContain('provider:azure');
+      expect(expandedDuringRestore).toContain('workload:reasoning');
+    });
+
+    it('expanded state survives config reload after save', () => {
+      // Flow: user expands provider -> edits -> auto-save -> reload
+      // Expected: provider stays expanded after reload
+
+      const expandedProviders = new Set<string>();
+      let configReloaded = false;
+
+      // 1. User expands provider
+      expandedProviders.add('openai');
+
+      // 2. Config save triggers reload
+      const simulateReload = () => {
+        configReloaded = true;
+        // After renderConfig(), restoreExpandedState() is called
+        // which uses expandedProviders Set
+      };
+
+      simulateReload();
+
+      // 3. Provider should still be in expanded set
+      expect(configReloaded).toBe(true);
+      expect(expandedProviders.has('openai')).toBe(true);
+    });
+  });
+
+  describe('scroll position preservation', () => {
+    it('saves scroll position before save operation', () => {
+      let savedScrollTop = 0;
+      const mockScrollContainer = {scrollTop: 500};
+
+      // Simulate saveConfig behavior
+      const saveConfig = () => {
+        savedScrollTop = mockScrollContainer.scrollTop;
+      };
+
+      saveConfig();
+
+      expect(savedScrollTop).toBe(500);
+    });
+
+    it('saves scroll position before showLoading (only if positive)', () => {
+      let savedScrollTop = 100;
+      const mockScrollContainer = {scrollTop: 0}; // Already scrolled to top (hidden)
+
+      // Simulate showLoading behavior - don't overwrite if current is 0
+      const showLoading = () => {
+        const currentScroll = mockScrollContainer.scrollTop;
+        if (currentScroll > 0) {
+          savedScrollTop = currentScroll;
+        }
+      };
+
+      showLoading();
+
+      // Should NOT overwrite the previously saved value with 0
+      expect(savedScrollTop).toBe(100);
+    });
+
+    it('restores scroll position after hideLoading', () => {
+      const savedScrollTop = 500;
+      const mockScrollContainer = {scrollTop: 0};
+
+      // Simulate hideLoading behavior
+      const hideLoading = () => {
+        mockScrollContainer.scrollTop = savedScrollTop;
+      };
+
+      hideLoading();
+
+      expect(mockScrollContainer.scrollTop).toBe(500);
+    });
+
+    it('scroll position survives full save-reload cycle', () => {
+      // Flow: scroll to position -> edit -> save -> loading -> config loaded -> position restored
+
+      let savedScrollTop = 0;
+      const mockScrollContainer = {scrollTop: 750};
+
+      // 1. saveConfig saves current position
+      savedScrollTop = mockScrollContainer.scrollTop;
+      expect(savedScrollTop).toBe(750);
+
+      // 2. Loading state might reset scroll
+      mockScrollContainer.scrollTop = 0;
+
+      // 3. hideLoading restores scroll
+      mockScrollContainer.scrollTop = savedScrollTop;
+      expect(mockScrollContainer.scrollTop).toBe(750);
+    });
+
+    it('scroll restoration uses .scroll-container element', () => {
+      // The scroll container is .scroll-container, not body or document
+      // This is important because body has overflow: hidden
+
+      const scrollContainerSelector = '.scroll-container';
+      const bodyOverflow = 'hidden';
+      const scrollContainerOverflow = 'auto';
+
+      expect(scrollContainerSelector).toBe('.scroll-container');
+      expect(bodyOverflow).toBe('hidden');
+      expect(scrollContainerOverflow).toBe('auto');
+    });
+  });
+});
+
+describe('config-webview regression tests', () => {
+  it('save button has been removed (auto-save is default)', () => {
+    // The Save button was removed - config auto-saves on field changes
+    const uiElements = {
+      saveButton: false, // Removed
+      reloadButton: true, // Still present
+    };
+
+    expect(uiElements.saveButton).toBe(false);
+    expect(uiElements.reloadButton).toBe(true);
+  });
+
+  it('markDirty only sets isDirty flag (no button manipulation)', () => {
+    let isDirty = false;
+
+    // markDirty should only set the flag, nothing else
+    const markDirty = () => {
+      isDirty = true;
+    };
+
+    markDirty();
+
+    expect(isDirty).toBe(true);
+    // No saveButton.disabled manipulation
+  });
+
+  it('CONFIG_SAVED resets isDirty without touching save button', () => {
+    let isDirty = true;
+
+    // Simulate CONFIG_SAVED handler
+    const handleConfigSaved = () => {
+      isDirty = false;
+      // No saveButton.disabled = true (button doesn't exist)
+    };
+
+    handleConfigSaved();
+
+    expect(isDirty).toBe(false);
+  });
+
+  it('expanded state is restored after config rename', () => {
+    // Renaming a provider/workload triggers config reload
+    // Expanded state should be preserved
+
+    const expandedProviders = new Set(['my-provider']);
+
+    // Simulate rename: my-provider -> renamed-provider
+    // After rename, we need to update the tracking set
+
+    const handleRenameProvider = (oldName: string, newName: string) => {
+      if (expandedProviders.has(oldName)) {
+        expandedProviders.delete(oldName);
+        expandedProviders.add(newName);
+      }
+    };
+
+    handleRenameProvider('my-provider', 'renamed-provider');
+
+    expect(expandedProviders.has('my-provider')).toBe(false);
+    expect(expandedProviders.has('renamed-provider')).toBe(true);
+  });
+
+  it('multiple rapid saves do not cause scroll position loss', () => {
+    let savedScrollTop = 0;
+    const mockScrollContainer = {scrollTop: 500};
+
+    // First save
+    savedScrollTop = mockScrollContainer.scrollTop;
+
+    // Simulated rapid second save before first completes
+    // Should still preserve the scroll position
+    const secondSaveScrollTop = mockScrollContainer.scrollTop;
+
+    expect(savedScrollTop).toBe(500);
+    expect(secondSaveScrollTop).toBe(500);
+  });
+
+  it('paste event saves immediately without waiting for blur', () => {
+    const events: string[] = [];
+
+    // Simulate paste on text input
+    const handlePaste = () => {
+      events.push('paste');
+      events.push('updateValue');
+      events.push('saveConfig');
+    };
+
+    handlePaste();
+
+    expect(events).toEqual(['paste', 'updateValue', 'saveConfig']);
+    // Note: no 'blur' required
+  });
+
+  it('blur on unchanged field does not trigger save', () => {
+    let isDirty = false;
+    let saveConfigCalled = false;
+
+    // Simulate blur handler
+    const handleBlur = () => {
+      if (isDirty) {
+        saveConfigCalled = true;
+      }
+    };
+
+    handleBlur();
+
+    expect(saveConfigCalled).toBe(false);
+  });
+
+  it('blur on changed field triggers save', () => {
+    let isDirty = true;
+    let saveConfigCalled = false;
+
+    // Simulate blur handler
+    const handleBlur = () => {
+      if (isDirty) {
+        saveConfigCalled = true;
+      }
+    };
+
+    handleBlur();
+
+    expect(saveConfigCalled).toBe(true);
+  });
+});

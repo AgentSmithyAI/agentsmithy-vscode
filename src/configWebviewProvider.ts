@@ -768,7 +768,6 @@ export class ConfigWebviewProvider implements vscode.Disposable {
 
   <div class="footer-toolbar">
     <div class="container" style="width: 100%; display: flex; gap: 8px; padding: 0;">
-      <button id="saveButton" class="btn" disabled>Save Configuration</button>
       <button id="reloadButton" class="btn btn-secondary">Reload</button>
     </div>
   </div>
