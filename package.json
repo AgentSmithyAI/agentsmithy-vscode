@@ -210,7 +210,7 @@
     "eslint-plugin-sonarjs": "^3.0.1",
     "eslint-plugin-unicorn": "^62.0.0",
     "jsdom": "^27.2.0",
-    "ovsx": "^0.9.0",
+    "ovsx": "^0.10.7",
     "prettier": "^3.3.3",
     "typescript": "^5.9.2",
     "typescript-eslint": "^8.48.0",
