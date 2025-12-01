@@ -540,6 +540,31 @@ export class ConfigWebviewProvider implements vscode.Disposable {
       font-family: var(--vscode-editor-font-family);
     }
 
+    .model-field-wrapper {
+      display: flex;
+      gap: 4px;
+      align-items: center;
+    }
+
+    .model-field-wrapper .setting-select,
+    .model-field-wrapper .setting-input {
+      flex: 1;
+    }
+
+    .model-toggle-btn {
+      padding: 4px 8px;
+      background-color: var(--vscode-button-secondaryBackground);
+      color: var(--vscode-button-secondaryForeground);
+      border: none;
+      cursor: pointer;
+      font-size: 10px;
+      line-height: 20px;
+    }
+
+    .model-toggle-btn:hover {
+      background-color: var(--vscode-button-secondaryHoverBackground);
+    }
+
     .setting-checkbox-container {
       display: flex;
       align-items: center;

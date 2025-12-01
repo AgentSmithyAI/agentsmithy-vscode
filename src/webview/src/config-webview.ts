@@ -777,16 +777,35 @@ function renderModelDropdown(providerType: string, value: unknown, path: string[
   html.push('<div class="setting-item-control">');
 
   if (uniqueModels.length > 0) {
-    // Render as dropdown
-    html.push(`<select id="${fieldId}" class="setting-select config-field" data-path='${dataPath}'>`);
-    html.push(`<option value="">-- None (use provider default) --</option>`);
+    // Check if current value is a custom model (not in catalog)
+    const isCustomValue = currentValue !== '' && !uniqueModels.includes(currentValue);
 
-    for (const model of uniqueModels) {
-      const selected = model === currentValue ? 'selected' : '';
-      html.push(`<option value="${escapeHtml(model)}" ${selected}>${escapeHtml(model)}</option>`);
+    // Wrapper for select/input switching
+    html.push(`<div class="model-field-wrapper" id="${fieldId}_wrapper" data-path='${dataPath}'>`);
+
+    if (isCustomValue) {
+      // Show input for custom value
+      html.push(
+        `<input type="text" id="${fieldId}" class="setting-input config-field model-custom-input" data-path='${dataPath}' value="${escapeHtml(currentValue)}" placeholder="e.g., gpt-4">`,
+      );
+      html.push(
+        `<button type="button" class="model-toggle-btn" data-field-id="${fieldId}" title="Switch to catalog selection">▼</button>`,
+      );
+    } else {
+      // Show dropdown
+      html.push(`<select id="${fieldId}" class="setting-select config-field model-select" data-path='${dataPath}'>`);
+      html.push(`<option value="">-- None (use provider default) --</option>`);
+
+      for (const model of uniqueModels) {
+        const selected = model === currentValue ? 'selected' : '';
+        html.push(`<option value="${escapeHtml(model)}" ${selected}>${escapeHtml(model)}</option>`);
+      }
+
+      html.push(`<option value="__custom__">Custom...</option>`);
+      html.push('</select>');
     }
 
-    html.push('</select>');
+    html.push('</div>');
   } else {
     // Fallback to text input if no catalog
     html.push(
@@ -970,7 +989,19 @@ function attachEventListeners(): void {
 
     // Selects/checkboxes - save immediately on change
     if (element.tagName === 'SELECT' || element.type === 'checkbox' || element.type === 'radio') {
-      element.addEventListener('change', updateAndSave);
+      // Special handling for model selects with "Custom..." option
+      if (element.classList.contains('model-select')) {
+        element.addEventListener('change', () => {
+          const selectEl = element as HTMLSelectElement;
+          if (selectEl.value === '__custom__') {
+            switchModelToCustomInput(selectEl);
+          } else {
+            updateAndSave();
+          }
+        });
+      } else {
+        element.addEventListener('change', updateAndSave);
+      }
     } else {
       // Text inputs/textareas - update on input, save on blur or paste
       element.addEventListener('input', updateValue);
@@ -991,6 +1022,17 @@ function attachEventListeners(): void {
         }, 0);
       });
     }
+  }
+
+  // Model toggle buttons (switch back from custom input to dropdown)
+  const modelToggleBtns = document.querySelectorAll('.model-toggle-btn');
+  for (const btn of modelToggleBtns) {
+    btn.addEventListener('click', () => {
+      const fieldId = (btn as HTMLElement).getAttribute('data-field-id');
+      if (fieldId) {
+        switchModelToDropdown(fieldId);
+      }
+    });
   }
 
   // Provider header clicks (expand/collapse)
@@ -1086,6 +1128,148 @@ function toggleWorkload(workloadName: string): void {
   }
   const shouldExpand = !content.classList.contains('expanded');
   setWorkloadExpanded(workloadName, shouldExpand);
+}
+
+/**
+ * Switch model field from dropdown to custom text input
+ */
+function switchModelToCustomInput(selectEl: HTMLSelectElement): void {
+  const wrapper = selectEl.closest('.model-field-wrapper');
+  if (!wrapper) return;
+
+  const pathStr = selectEl.getAttribute('data-path');
+  if (!pathStr) return;
+
+  const fieldId = selectEl.id;
+
+  // Create input element
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.id = fieldId;
+  input.className = 'setting-input config-field model-custom-input';
+  input.setAttribute('data-path', pathStr);
+  input.placeholder = 'Enter custom model name';
+
+  // Create toggle button
+  const toggleBtn = document.createElement('button');
+  toggleBtn.type = 'button';
+  toggleBtn.className = 'model-toggle-btn';
+  toggleBtn.setAttribute('data-field-id', fieldId);
+  toggleBtn.title = 'Switch to catalog selection';
+  toggleBtn.textContent = '▼';
+
+  // Replace select with input and button
+  wrapper.innerHTML = '';
+  wrapper.appendChild(input);
+  wrapper.appendChild(toggleBtn);
+
+  // Attach event listeners to new input
+  const path = JSON.parse(pathStr) as string[];
+
+  const updateValue = () => {
+    removeHighlightFromField(input);
+    updateConfigValue(path, input);
+    markDirty();
+  };
+
+  input.addEventListener('input', updateValue);
+
+  input.addEventListener('blur', () => {
+    if (isDirty) {
+      saveConfig(true);
+    }
+  });
+
+  input.addEventListener('paste', () => {
+    setTimeout(() => {
+      updateValue();
+      saveConfig(true);
+    }, 0);
+  });
+
+  // Attach toggle button listener
+  toggleBtn.addEventListener('click', () => {
+    switchModelToDropdown(fieldId);
+  });
+
+  // Focus the input
+  input.focus();
+}
+
+/**
+ * Switch model field from custom input back to dropdown
+ */
+function switchModelToDropdown(fieldId: string): void {
+  const wrapper = document.getElementById(`${fieldId}_wrapper`);
+  if (!wrapper) return;
+
+  const pathStr = wrapper.getAttribute('data-path');
+  if (!pathStr) return;
+
+  const path = JSON.parse(pathStr) as string[];
+
+  // Get provider type from path (path is like ['config', 'workloads', 'workloadName', 'model'])
+  const workloadName = path[2];
+  const workloadConfig = currentConfig.workloads?.[workloadName as keyof typeof currentConfig.workloads];
+  const providerName =
+    workloadConfig && typeof workloadConfig === 'object' && 'provider' in workloadConfig
+      ? String(workloadConfig.provider)
+      : '';
+  const providerMeta = availableProviders.find((p) => p.name === providerName);
+  const providerType = providerMeta?.type || '';
+
+  // Get models from catalog
+  const models: string[] = [];
+  if (providerType && modelCatalog[providerType]) {
+    const catalog = modelCatalog[providerType];
+    if (catalog.chat && Array.isArray(catalog.chat)) {
+      models.push(...catalog.chat.filter((m) => typeof m === 'string'));
+    }
+    if (catalog.embeddings && Array.isArray(catalog.embeddings)) {
+      models.push(...catalog.embeddings.filter((m) => typeof m === 'string'));
+    }
+  }
+  const uniqueModels = Array.from(new Set(models));
+
+  // Create select element
+  const select = document.createElement('select');
+  select.id = fieldId;
+  select.className = 'setting-select config-field model-select';
+  select.setAttribute('data-path', pathStr);
+
+  // Add options
+  const noneOption = document.createElement('option');
+  noneOption.value = '';
+  noneOption.textContent = '-- None (use provider default) --';
+  select.appendChild(noneOption);
+
+  for (const model of uniqueModels) {
+    const option = document.createElement('option');
+    option.value = model;
+    option.textContent = model;
+    select.appendChild(option);
+  }
+
+  const customOption = document.createElement('option');
+  customOption.value = '__custom__';
+  customOption.textContent = 'Custom...';
+  select.appendChild(customOption);
+
+  // Replace wrapper content
+  wrapper.innerHTML = '';
+  wrapper.appendChild(select);
+
+  // Attach event listener
+  select.addEventListener('change', () => {
+    if (select.value === '__custom__') {
+      switchModelToCustomInput(select);
+    } else {
+      removeHighlightFromField(select);
+      updateConfigValue(path, select);
+      markDirty();
+      saveConfig(true);
+    }
+  });
 }
 
 function setProviderExpanded(providerName: string, expanded: boolean): void {

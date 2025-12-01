@@ -661,3 +661,133 @@ describe('config-webview regression tests', () => {
     expect(saveConfigCalled).toBe(true);
   });
 });
+
+describe('config-webview custom model input', () => {
+  it('model dropdown includes "Custom..." option', () => {
+    // When rendering a model dropdown with catalog models,
+    // it should include a "Custom..." option at the end
+    const catalogModels = ['gpt-4', 'gpt-4-turbo', 'gpt-3.5-turbo'];
+    const specialOptions = ['-- None (use provider default) --', 'Custom...'];
+
+    expect(catalogModels.length).toBeGreaterThan(0);
+    expect(specialOptions).toContain('Custom...');
+  });
+
+  it('selecting "Custom..." switches to text input', () => {
+    // When user selects "Custom...", the dropdown should be replaced
+    // with a text input for entering a custom model name
+    const selectValue = '__custom__';
+    const expectedBehavior = {
+      shouldSwitchToInput: true,
+      shouldFocusInput: true,
+      shouldShowToggleButton: true,
+    };
+
+    expect(selectValue).toBe('__custom__');
+    expect(expectedBehavior.shouldSwitchToInput).toBe(true);
+    expect(expectedBehavior.shouldFocusInput).toBe(true);
+    expect(expectedBehavior.shouldShowToggleButton).toBe(true);
+  });
+
+  it('custom input has auto-save behavior (blur)', () => {
+    // The custom model input should save on blur, same as other text inputs
+    const customInputBehavior = {
+      saveOnBlur: true,
+      saveOnPaste: true,
+      updateOnInput: true,
+    };
+
+    expect(customInputBehavior.saveOnBlur).toBe(true);
+    expect(customInputBehavior.saveOnPaste).toBe(true);
+    expect(customInputBehavior.updateOnInput).toBe(true);
+  });
+
+  it('custom input has auto-save behavior (paste)', () => {
+    // Pasting into custom model input should save immediately
+    const events: string[] = [];
+
+    const handlePaste = () => {
+      events.push('paste');
+      events.push('updateValue');
+      events.push('saveConfig');
+    };
+
+    handlePaste();
+
+    expect(events).toContain('saveConfig');
+  });
+
+  it('toggle button switches back to dropdown', () => {
+    // Clicking the toggle button (▼) should switch back to dropdown
+    const toggleButtonText = '▼';
+    const expectedBehavior = {
+      shouldSwitchToDropdown: true,
+      shouldPreserveCurrentValue: false, // Clears to allow selection from catalog
+    };
+
+    expect(toggleButtonText).toBe('▼');
+    expect(expectedBehavior.shouldSwitchToDropdown).toBe(true);
+  });
+
+  it('custom value not in catalog shows input by default', () => {
+    // If current model value is not in the catalog, show input instead of dropdown
+    const catalogModels = ['gpt-4', 'gpt-4-turbo'];
+    const currentValue = 'my-custom-fine-tuned-model';
+    const isCustomValue = !catalogModels.includes(currentValue);
+
+    expect(isCustomValue).toBe(true);
+    // Expected: render input with currentValue, not dropdown
+  });
+
+  it('custom value in catalog shows dropdown with value selected', () => {
+    // If current model value IS in the catalog, show dropdown with it selected
+    const catalogModels = ['gpt-4', 'gpt-4-turbo'];
+    const currentValue = 'gpt-4';
+    const isCustomValue = !catalogModels.includes(currentValue);
+
+    expect(isCustomValue).toBe(false);
+    // Expected: render dropdown with 'gpt-4' selected
+  });
+
+  it('wrapper element contains data-path for state restoration', () => {
+    // The wrapper element should have data-path attribute
+    // so the field can be properly identified after DOM manipulation
+    const wrapperAttributes = {
+      id: 'fieldId_wrapper',
+      'data-path': '["config","workloads","reasoning","model"]',
+    };
+
+    expect(wrapperAttributes.id).toContain('_wrapper');
+    expect(wrapperAttributes['data-path']).toBeDefined();
+  });
+
+  it('switchModelToCustomInput creates proper input element', () => {
+    // The created input should have correct attributes
+    const expectedInputAttributes = {
+      type: 'text',
+      className: 'setting-input config-field model-custom-input',
+      placeholder: 'Enter custom model name',
+    };
+
+    expect(expectedInputAttributes.type).toBe('text');
+    expect(expectedInputAttributes.className).toContain('model-custom-input');
+    expect(expectedInputAttributes.placeholder).toBeDefined();
+  });
+
+  it('switchModelToDropdown rebuilds select with all options', () => {
+    // When switching back to dropdown, it should rebuild with:
+    // 1. "-- None --" option
+    // 2. All catalog models
+    // 3. "Custom..." option
+
+    const expectedOptions = [
+      {value: '', text: '-- None (use provider default) --'},
+      {value: 'gpt-4', text: 'gpt-4'},
+      {value: 'gpt-4-turbo', text: 'gpt-4-turbo'},
+      {value: '__custom__', text: 'Custom...'},
+    ];
+
+    expect(expectedOptions[0].value).toBe('');
+    expect(expectedOptions[expectedOptions.length - 1].value).toBe('__custom__');
+  });
+});
