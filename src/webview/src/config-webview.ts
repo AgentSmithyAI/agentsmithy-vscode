@@ -197,7 +197,7 @@ function handleMessage(message: {
               name: typeof w.name === 'string' ? w.name : '',
               provider: typeof w.provider === 'string' ? w.provider : '',
               model: typeof w.model === 'string' ? w.model : '',
-              kind: typeof w.kind === 'string' ? w.kind : null,
+              kind: typeof w.kind === 'string' ? w.kind : null, // null is valid for legacy workloads without kind
             }));
         }
 
@@ -331,7 +331,7 @@ function showLoading(): void {
     return;
   }
 
-  // Save scroll position before hiding container (only if not already saved by saveConfig)
+  // Save scroll position before hiding container (only if not already saved by another operation)
   const currentScroll = scrollContainer.scrollTop;
   if (currentScroll > 0) {
     savedScrollTop = currentScroll;
@@ -411,7 +411,7 @@ function loadConfig(): void {
  */
 function sendSaveRequest(config: Record<string, unknown>, suppressSuccess = false): void {
   // Save scroll position before reload (only if not already saved by caller)
-  // If scrollContainer.scrollTop is 0 but savedScrollTop is non-zero, 
+  // If scrollContainer.scrollTop is 0 but savedScrollTop is non-zero,
   // it means caller already saved scroll before renderConfig()
   if (scrollContainer.scrollTop > 0 || savedScrollTop === 0) {
     savedScrollTop = scrollContainer.scrollTop;

@@ -16,7 +16,7 @@ export class ApiError extends Error {
    * Expected format: { detail: { message?: string, errors?: string[] } }
    */
   static fromResponse = (responseText: string, status: number): ApiError => {
-    let errorMessage = `HTTP ${status}`;
+    let errorMessage = `Request failed with status ${status}`;
     let errors: string[] | undefined;
 
     try {
