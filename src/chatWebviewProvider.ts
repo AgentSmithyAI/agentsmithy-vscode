@@ -92,6 +92,10 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider, vscode.D
   private readonly _serverManager: {waitForReady: () => Promise<void>; hasWorkspace: () => boolean};
   private _selectedWorkload: string = '';
 
+  // Event emitter for config changes (when workload is selected)
+  private readonly _onDidChangeConfig = new vscode.EventEmitter<void>();
+  public readonly onDidChangeConfig = this._onDidChangeConfig.event;
+
   constructor(
     private readonly _extensionUri: vscode.Uri,
     private readonly _stream: StreamService,
@@ -210,6 +214,16 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider, vscode.D
     // Trigger data reload (server is already ready when this is called)
     this._outputChannel.appendLine('[refreshAfterServerStart] Reloading data...');
     await this._handleWebviewReady();
+  }
+
+  /**
+   * Refresh workloads selector after config changes
+   */
+  public async refreshWorkloads(): Promise<void> {
+    if (!this._view) {
+      return;
+    }
+    await this._loadAndSendWorkloads();
   }
 
   public resolveWebviewView(
@@ -333,39 +347,29 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider, vscode.D
     }
   };
 
-  private _handleSelectWorkload = async (modelName: string): Promise<void> => {
-    this._selectedWorkload = modelName;
+  private _handleSelectWorkload = async (workloadName: string): Promise<void> => {
+    this._selectedWorkload = workloadName;
 
     try {
-      const configResp = await this._apiService.getConfig();
-      const config = configResp.config as unknown as AppConfig;
-
-      // 1. Determine which workload is used for reasoning
-      let reasoningWorkloadName = 'reasoning';
-      if (config.models?.agents?.reasoning?.workload && typeof config.models.agents.reasoning.workload === 'string') {
-        reasoningWorkloadName = config.models.agents.reasoning.workload;
-      }
-
-      // 2. Update the model in that workload safely
-      const updatedWorkloads = {
-        ...config.workloads,
-        [reasoningWorkloadName]: {
-          ...config.workloads?.[reasoningWorkloadName],
-          provider: config.workloads?.[reasoningWorkloadName]?.provider || 'openai',
-          model: modelName,
-        },
-      };
-
+      // Update models.agents.universal.workload
       await this._apiService.updateConfig({
-        ...config,
-        workloads: updatedWorkloads,
-      } as Record<string, unknown>);
+        models: {
+          agents: {
+            universal: {
+              workload: workloadName,
+            },
+          },
+        },
+      });
 
       // Refresh workloads to ensure UI is in sync with saved config
       await this._loadAndSendWorkloads();
+
+      // Notify listeners that config changed
+      this._onDidChangeConfig.fire();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      void vscode.window.showErrorMessage(`Failed to update model: ${msg}`);
+      void vscode.window.showErrorMessage(`Failed to update workload: ${msg}`);
     }
   };
 
@@ -1207,87 +1211,59 @@ export class ChatWebviewProvider implements vscode.WebviewViewProvider, vscode.D
       const config = configResp.config as unknown as AppConfig;
       const metadata = configResp.metadata as unknown as ConfigMetadata;
 
-      const reasoningWorkloadName = this._extractReasoningWorkloadName(config);
-      const {providerType, currentModel} = this._findProviderInfo(config, metadata, reasoningWorkloadName);
-      const modelsList = this._getModelsFromCatalog(metadata, providerType);
+      // Get chat workloads from metadata (already has kind field)
+      const chatWorkloads = this._getChatWorkloadsFromMetadata(metadata);
 
-      // If no models found (or no provider selected), try to show at least current one
-      if (modelsList.length === 0 && currentModel) {
-        modelsList.push({name: currentModel, displayName: currentModel});
-      }
-
-      // Use current model as selected
-      this._selectedWorkload = currentModel;
+      // Get currently selected workload from models.agents.universal.workload
+      const selectedWorkload = this._getUniversalWorkload(config);
+      this._selectedWorkload = selectedWorkload;
 
       this._postMessage({
         type: WEBVIEW_OUT_MSG.WORKLOADS_UPDATE,
-        workloads: modelsList,
-        selected: currentModel,
+        workloads: chatWorkloads,
+        selected: selectedWorkload,
       });
     } catch (e: unknown) {
-      // Silently fail
       const msg = e instanceof Error ? e.message : String(e);
-      this._outputChannel.appendLine(`Error loading models: ${msg}`);
+      this._outputChannel.appendLine(`Error loading workloads: ${msg}`);
     }
   };
 
-  private _extractReasoningWorkloadName = (config: AppConfig): string => {
+  private _getUniversalWorkload = (config: AppConfig): string => {
+    // Check models.agents.universal.workload first
+    if (config.models?.agents?.universal?.workload && typeof config.models.agents.universal.workload === 'string') {
+      return config.models.agents.universal.workload;
+    }
+    // Fallback to legacy reasoning
     if (config.models?.agents?.reasoning?.workload && typeof config.models.agents.reasoning.workload === 'string') {
       return config.models.agents.reasoning.workload;
     }
-    return 'reasoning';
+    return '';
   };
 
-  private _findProviderInfo = (
-    config: AppConfig,
-    metadata: ConfigMetadata,
-    workloadName: string,
-  ): {providerType: string; currentModel: string} => {
-    let providerType = '';
-    let currentModel = '';
+  private _getChatWorkloadsFromMetadata = (metadata: ConfigMetadata): Array<{name: string; displayName: string}> => {
+    const workloadsList: Array<{name: string; displayName: string}> = [];
 
-    if (config.workloads?.[workloadName]) {
-      const workloadConfig = config.workloads[workloadName];
-      const providerName = workloadConfig.provider;
-      currentModel = workloadConfig.model || '';
-
-      // Find provider type from available providers
-      if (metadata.providers && Array.isArray(metadata.providers)) {
-        const provider = metadata.providers.find((p) => p.name === providerName);
-        if (provider) {
-          providerType = provider.type;
-        }
-      }
-    }
-    return {providerType, currentModel};
-  };
-
-  private _getModelsFromCatalog = (
-    metadata: ConfigMetadata,
-    providerType: string,
-  ): Array<{name: string; displayName: string}> => {
-    const modelsList: Array<{name: string; displayName: string}> = [];
-
-    if (providerType && metadata.model_catalog?.[providerType]) {
-      const catalog = metadata.model_catalog[providerType];
-      const chatModels = catalog.chat || [];
-
-      for (const model of chatModels) {
-        if (typeof model === 'string') {
-          modelsList.push({
-            name: model,
-            displayName: model,
+    if (metadata.workloads && Array.isArray(metadata.workloads)) {
+      for (const workload of metadata.workloads) {
+        // Only include chat workloads
+        if (workload.kind === 'chat' && workload.name) {
+          workloadsList.push({
+            name: workload.name,
+            displayName: workload.name,
           });
         }
       }
     }
-    return modelsList;
+
+    return workloadsList;
   };
 
   /**
    * Dispose resources to prevent memory leaks
    */
   dispose(): void {
+    this._onDidChangeConfig.dispose();
     this._outputChannel.dispose();
   }
 }

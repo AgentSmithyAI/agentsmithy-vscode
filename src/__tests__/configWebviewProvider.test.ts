@@ -422,4 +422,83 @@ describe('ConfigWebviewProvider - validation refresh', () => {
     expect((provider as any).pendingValidationErrors).toEqual([]);
     expect(mockPanel.webview.postMessage).toHaveBeenCalledWith({type: 'validationErrors', errors: []});
   });
+
+  it('fires onDidChangeConfig event after successful save', async () => {
+    apiService.updateConfig.mockResolvedValue({config: {}});
+
+    (provider as any).panel = mockPanel;
+    (provider as any).webviewReady = true;
+
+    const listener = vi.fn();
+    provider.onDidChangeConfig(listener);
+
+    await (provider as any).saveConfig({providers: {}});
+
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  it('fires onDidChangeConfig event after successful rename', async () => {
+    apiService.renameConfig.mockResolvedValue({
+      success: true,
+      config: {},
+      metadata: null,
+    });
+
+    (provider as any).panel = mockPanel;
+    (provider as any).webviewReady = true;
+
+    const listener = vi.fn();
+    provider.onDidChangeConfig(listener);
+
+    await (provider as any).renameConfig('workload', 'old', 'new');
+
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not fire onDidChangeConfig on save error', async () => {
+    apiService.updateConfig.mockRejectedValue(new Error('save failed'));
+
+    (provider as any).panel = mockPanel;
+    (provider as any).webviewReady = true;
+
+    const listener = vi.fn();
+    provider.onDidChangeConfig(listener);
+
+    await (provider as any).saveConfig({});
+
+    expect(listener).not.toHaveBeenCalled();
+  });
+
+  it('reloadConfig triggers loadConfig when panel is open and ready', async () => {
+    apiService.getConfig.mockResolvedValue({config: {test: 'data'}, metadata: null});
+    apiService.getHealth.mockResolvedValue({config_valid: true, config_errors: []});
+
+    (provider as any).panel = mockPanel;
+    (provider as any).webviewReady = true;
+
+    provider.reloadConfig();
+
+    // Wait for async loadConfig to complete
+    await new Promise(process.nextTick);
+
+    expect(apiService.getConfig).toHaveBeenCalled();
+    expect(mockPanel.webview.postMessage).toHaveBeenCalledWith(expect.objectContaining({type: 'configLoaded'}));
+  });
+
+  it('reloadConfig does nothing when panel is not open', () => {
+    (provider as any).panel = undefined;
+
+    provider.reloadConfig();
+
+    expect(apiService.getConfig).not.toHaveBeenCalled();
+  });
+
+  it('reloadConfig does nothing when webview is not ready', () => {
+    (provider as any).panel = mockPanel;
+    (provider as any).webviewReady = false;
+
+    provider.reloadConfig();
+
+    expect(apiService.getConfig).not.toHaveBeenCalled();
+  });
 });

@@ -1,6 +1,7 @@
 export interface WorkloadConfig {
   provider?: string;
   model?: string;
+  kind?: string; // "chat" or "embeddings"
   purpose?: string;
   name?: string; // From metadata
   [key: string]: unknown;
@@ -12,7 +13,9 @@ export interface AgentModelConfig {
 }
 
 export interface AgentsConfig {
-  reasoning?: AgentModelConfig;
+  universal?: AgentModelConfig;
+  inspector?: AgentModelConfig;
+  reasoning?: AgentModelConfig; // Legacy
   [key: string]: unknown;
 }
 
@@ -39,8 +42,16 @@ export interface ModelCatalog {
   [key: string]: unknown;
 }
 
+export interface WorkloadMetadata {
+  name: string;
+  provider: string;
+  model: string;
+  kind: string; // "chat" or "embeddings"
+}
+
 export interface ConfigMetadata {
-  workloads?: WorkloadConfig[];
+  workloads?: WorkloadMetadata[];
+  workload_kinds?: string[];
   providers?: ProviderMetadata[];
   model_catalog?: Record<string, ModelCatalog>;
   [key: string]: unknown;

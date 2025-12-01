@@ -60,10 +60,23 @@ export class ConfigWebviewProvider implements vscode.Disposable {
   private pendingValidationErrors: string[] = [];
   private webviewReady = false;
 
+  // Event emitter for config changes
+  private readonly _onDidChangeConfig = new vscode.EventEmitter<void>();
+  public readonly onDidChangeConfig = this._onDidChangeConfig.event;
+
   constructor(
     private readonly extensionUri: vscode.Uri,
     private readonly apiService: ApiService,
   ) {}
+
+  /**
+   * Reload config if panel is open
+   */
+  public reloadConfig(): void {
+    if (this.panel && this.webviewReady) {
+      void this.loadConfig();
+    }
+  }
 
   /**
    * Show configuration panel
@@ -285,6 +298,9 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         type: CONFIG_OUT_MSG.CONFIG_SAVED,
         data: result,
       });
+
+      // Notify listeners that config changed
+      this._onDidChangeConfig.fire();
     } catch (error) {
       const errorMsg = getErrorMessage(error, DEFAULT_ERROR_MESSAGE);
       this.postMessage({
@@ -315,6 +331,9 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         type: CONFIG_OUT_MSG.CONFIG_RENAMED,
         data: result,
       });
+
+      // Notify listeners that config changed
+      this._onDidChangeConfig.fire();
     } catch (error) {
       const errorMsg = getErrorMessage(error, DEFAULT_ERROR_MESSAGE);
       this.postMessage({
@@ -775,6 +794,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
    * Dispose resources
    */
   public dispose(): void {
+    this._onDidChangeConfig.dispose();
     this.panel?.dispose();
     for (const disposable of this.disposables) {
       disposable.dispose();
