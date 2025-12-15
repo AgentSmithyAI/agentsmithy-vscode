@@ -145,7 +145,7 @@ jobs:
     if: needs.build_vsix.result == 'success' && needs.semver.outputs.new_release_published == 'true'
     steps:
       - name: Download artifacts
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           pattern: agentsmithy-*
           merge-multiple: true
@@ -163,7 +163,7 @@ jobs:
     if: needs.build_vsix.result == 'success' && needs.semver.outputs.new_release_published == 'true'
     steps:
       - name: Download VSIX artifact
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           pattern: agentsmithy-*
           merge-multiple: true
@@ -183,7 +183,7 @@ jobs:
     if: needs.build_vsix.result == 'success' && needs.semver.outputs.new_release_published == 'true'
     steps:
       - name: Download VSIX artifact
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           pattern: agentsmithy-*
           merge-multiple: true
