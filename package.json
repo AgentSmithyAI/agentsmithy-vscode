@@ -193,7 +193,7 @@
     "publish:prepare": "npm run package && echo 'Package ready! To publish to Open VSX, run: npm run publish:ovsx'"
   },
   "devDependencies": {
-    "@eslint/js": "^9.39.1",
+    "@eslint/js": "^9.39.2",
     "@stylistic/eslint-plugin": "^5.5.0",
     "@types/diff": "^8.0.0",
     "@types/jsdom": "^27.0.0",
@@ -204,7 +204,7 @@
     "@vscode/vsce": "^3.7.1",
     "concurrently": "^9.2.1",
     "esbuild": "^0.27.0",
-    "eslint": "^9.39.1",
+    "eslint": "^9.39.2",
     "eslint-plugin-import": "^2.31.0",
     "eslint-plugin-prefer-arrow-functions": "^3.5.2",
     "eslint-plugin-sonarjs": "^3.0.1",
@@ -213,7 +213,7 @@
     "ovsx": "^0.9.0",
     "prettier": "^3.3.3",
     "typescript": "^5.9.2",
-    "typescript-eslint": "^8.48.0",
+    "typescript-eslint": "^8.49.0",
     "vitest": "^4.0.3"
   },
   "dependencies": {
